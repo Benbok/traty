@@ -1,0 +1,66 @@
+package ru.my.traty.data
+
+import android.content.Context
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+
+enum class LlmProvider(val title: String) {
+    DEEPSEEK("DeepSeek"),
+    YANDEX("YandexGPT"),
+    OFFLINE("Без ИИ (простой разбор)"),
+}
+
+data class AppSettings(
+    val provider: LlmProvider = LlmProvider.DEEPSEEK,
+    val deepseekKey: String = "",
+    val deepseekModel: String = "deepseek-chat",
+    val yandexKey: String = "",
+    val yandexFolderId: String = "",
+    val yandexModel: String = "yandexgpt-lite/latest",
+)
+
+private val Context.dataStore by preferencesDataStore(name = "settings")
+
+/**
+ * Ключи хранятся в приватном хранилище приложения (другим приложениям недоступно,
+ * allowBackup=false). Для личного APK этого достаточно.
+ */
+class SettingsRepository(private val context: Context) {
+    private object K {
+        val provider = stringPreferencesKey("provider")
+        val dsKey = stringPreferencesKey("deepseek_key")
+        val dsModel = stringPreferencesKey("deepseek_model")
+        val yaKey = stringPreferencesKey("yandex_key")
+        val yaFolder = stringPreferencesKey("yandex_folder")
+        val yaModel = stringPreferencesKey("yandex_model")
+    }
+
+    val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
+        val d = AppSettings()
+        AppSettings(
+            provider = p[K.provider]?.let { runCatching { LlmProvider.valueOf(it) }.getOrNull() } ?: d.provider,
+            deepseekKey = p[K.dsKey] ?: "",
+            deepseekModel = p[K.dsModel] ?: d.deepseekModel,
+            yandexKey = p[K.yaKey] ?: "",
+            yandexFolderId = p[K.yaFolder] ?: "",
+            yandexModel = p[K.yaModel] ?: d.yandexModel,
+        )
+    }
+
+    suspend fun current(): AppSettings = flow.first()
+
+    suspend fun save(s: AppSettings) {
+        context.dataStore.edit { p ->
+            p[K.provider] = s.provider.name
+            p[K.dsKey] = s.deepseekKey.trim()
+            p[K.dsModel] = s.deepseekModel.trim()
+            p[K.yaKey] = s.yandexKey.trim()
+            p[K.yaFolder] = s.yandexFolderId.trim()
+            p[K.yaModel] = s.yandexModel.trim()
+        }
+    }
+}
