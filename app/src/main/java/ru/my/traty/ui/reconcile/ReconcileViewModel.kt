@@ -157,6 +157,9 @@ class ReconcileViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 redoing = false
                 redoMode = false
+                // Следующее «Переделать» заменит именно эту сверку.
+                replacedActualKopecks = actual
+                isFirst = false
                 result = ReconcileResultState(outcome, actual)
             } catch (e: ReconcileException) {
                 message = e.message
