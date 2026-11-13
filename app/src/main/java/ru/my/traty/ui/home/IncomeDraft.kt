@@ -16,6 +16,7 @@ data class IncomeDraftItem(
 
 data class IncomeDraft(val items: List<IncomeDraftItem>, val rawText: String, val origin: String)
 
+// Обычные пробелы плюс неразрывный (U+00A0) и узкий неразрывный (U+202F)
 private val spaceLike = Regex("[\\s  ]")
 
 /**

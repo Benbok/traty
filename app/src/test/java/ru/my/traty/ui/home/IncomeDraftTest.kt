@@ -16,11 +16,16 @@ class IncomeDraftTest {
     private fun item(amount: String, source: String = "Зарплата", note: String = "", date: String = today.toString()) =
         IncomeDraftItem(amount, source, note, date)
 
+    private fun kopecks(amount: String): Long? =
+        item(amount).toIncome(IncomeOrigin.TEXT, zone, today)?.amountKopecks
+
     @Test
     fun toIncomeParsesCommaAndSpaces() {
-        assertEquals(8_000_050L, item("80 000,50").toIncome(IncomeOrigin.TEXT, zone, today)?.amountKopecks)
-        assertEquals(8_000_050L, item("80 000,50").toIncome(IncomeOrigin.TEXT, zone, today)?.amountKopecks)
-        assertEquals(3_000_000L, item("30000").toIncome(IncomeOrigin.TEXT, zone, today)?.amountKopecks)
+        assertEquals(8_000_050L, kopecks("80 000,50"))
+        assertEquals(8_000_050L, kopecks("80 000,50"))
+        assertEquals(8_000_050L, kopecks("80 000,50"))
+        assertEquals(150L, kopecks("1,5"))
+        assertEquals(3_000_000L, kopecks("30000"))
     }
 
     @Test

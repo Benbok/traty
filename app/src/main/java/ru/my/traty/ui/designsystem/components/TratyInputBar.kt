@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -86,12 +84,10 @@ fun TratyInputBar(
             // Переключатель режима: «−» трата (по умолчанию), «+» пополнение
             if (onToggleIncomeMode != null) {
                 val modeLabel = if (isIncomeMode) "Режим: пополнение" else "Режим: трата"
+                // Зона нажатия 48dp, визуально — компактная плашка 32dp
                 Box(
                     modifier = Modifier
-                        .height(32.dp)
-                        .widthIn(min = 32.dp)
-                        .clip(TratyTheme.shapes.small)
-                        .background(if (isIncomeMode) TratyTheme.colors.income else TratyTheme.colors.expenseContainer)
+                        .size(48.dp)
                         .clickable(onClick = onToggleIncomeMode)
                         .semantics {
                             contentDescription = modeLabel
@@ -99,14 +95,21 @@ fun TratyInputBar(
                         },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = if (isIncomeMode) "+" else "−",
-                        style = TratyTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isIncomeMode) TratyTheme.colors.onPrimary else TratyTheme.colors.expense,
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(TratyTheme.shapes.small)
+                            .background(if (isIncomeMode) TratyTheme.colors.income else TratyTheme.colors.expenseContainer),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = if (isIncomeMode) "+" else "−",
+                            style = TratyTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isIncomeMode) TratyTheme.colors.onPrimary else TratyTheme.colors.expense,
+                        )
+                    }
                 }
-                Spacer(Modifier.width(TratyTheme.spacing.sm))
             }
 
             // Поле ввода с мягким фоном
