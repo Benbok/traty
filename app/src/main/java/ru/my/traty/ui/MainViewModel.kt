@@ -341,12 +341,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun exportCsv(uri: Uri) = viewModelScope.launch {
         val all = c.db.expenses().getAllWithCategory()
+        val incomes = c.db.incomes().getAll()
         withContext(Dispatchers.IO) {
             getApplication<Application>().contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { w ->
-                CsvBackup.write(all, zone, w)
+                CsvBackup.write(all, incomes, zone, w)
             }
         }
-        message = "Экспортировано записей: ${all.size}"
+        message = "Экспортировано записей: ${all.size + incomes.size}"
     }
 
     /** Восстановление из CSV (своего экспорта или пересохранённого в Excel). Уже существующие траты пропускаются. */

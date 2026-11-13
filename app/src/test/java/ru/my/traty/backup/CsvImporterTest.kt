@@ -15,6 +15,7 @@ import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.DefaultCategories
 import ru.my.traty.data.ExpenseSource
+import ru.my.traty.data.IncomeOrigin
 
 @RunWith(RobolectricTestRunner::class)
 class CsvImporterTest {
@@ -83,6 +84,42 @@ class CsvImporterTest {
         } catch (_: CsvFormatException) {
         }
         assertTrue(db.expenses().getAllWithCategory().isEmpty())
+    }
+
+    private fun income(ts: Long, amount: Long = 5_000_000, kind: String = "Зарплата", note: String? = null) =
+        CsvRow(ts, amount, "RUB", kind, null, null, note, null, CsvRow.INCOME)
+
+    @Test
+    fun importsIncomesAndSkipsTheirDuplicates() = runTest {
+        val parsed = CsvParseResult(
+            listOf(income(t0, note = "октябрь"), income(t0 + day, amount = 100, kind = "неведомое"), row(t0)),
+            emptyList(),
+        )
+        val first = importer.import(parsed)
+        assertEquals(3, first.imported)
+        val incomes = db.incomes().getAll()
+        assertEquals(listOf(5_000_000L, 100L), incomes.map { it.amountKopecks })
+        assertEquals(listOf("Зарплата", "Прочее"), incomes.map { it.source })
+        assertEquals("октябрь", incomes[0].note)
+        assertEquals(t0, incomes[0].timestamp)
+        assertTrue(incomes.all { it.origin == IncomeOrigin.MANUAL && it.currency == "RUB" })
+        assertEquals(1, db.expenses().getAllWithCategory().size)
+
+        val second = importer.import(parsed)
+        assertEquals(0, second.imported)
+        assertEquals(3, second.duplicates)
+        assertEquals(2, db.incomes().getAll().size)
+        assertEquals(1, db.expenses().getAllWithCategory().size)
+    }
+
+    @Test
+    fun incomeAndExpenseWithSameAmountAreNotDuplicates() = runTest {
+        importer.import(CsvParseResult(listOf(row(t0, amount = 5_000_000)), emptyList()))
+        val r = importer.import(CsvParseResult(listOf(income(t0, amount = 5_000_000)), emptyList()))
+        assertEquals(1, r.imported)
+        assertEquals(0, r.duplicates)
+        assertEquals(1, db.incomes().getAll().size)
+        assertEquals(1, db.expenses().getAllWithCategory().size)
     }
 
     @Test

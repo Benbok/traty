@@ -5,6 +5,9 @@ import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.Expense
 import ru.my.traty.data.ExpenseSource
+import ru.my.traty.data.Income
+import ru.my.traty.data.IncomeOrigin
+import ru.my.traty.data.IncomeSources
 
 data class ImportResult(val imported: Int, val duplicates: Int, val badLines: List<Int>)
 
@@ -22,7 +25,26 @@ class CsvImporter(private val db: AppDatabase, private val categories: CategoryR
     private suspend fun insert(parsed: CsvParseResult): ImportResult = db.withTransaction {
         var duplicates = 0
         // Дубли ищем по состоянию базы до импорта: две одинаковые строки внутри одного файла — две траты
+        val incomesToInsert = mutableListOf<Income>()
         val toInsert = parsed.rows.mapNotNull { r ->
+            if (r.type == CsvRow.INCOME) {
+                val near = db.incomes().countNear(
+                    r.amountKopecks, r.timestamp - DUPLICATE_WINDOW_MS, r.timestamp + DUPLICATE_WINDOW_MS,
+                )
+                if (near > 0) {
+                    duplicates++
+                } else {
+                    incomesToInsert += Income(
+                        amountKopecks = r.amountKopecks,
+                        currency = r.currency,
+                        source = IncomeSources.normalize(r.category),
+                        note = r.note,
+                        timestamp = r.timestamp,
+                        origin = IncomeOrigin.MANUAL,
+                    )
+                }
+                return@mapNotNull null
+            }
             val ids = categories.resolveForSave(r.category, null, r.subcategory)
             val near = db.expenses().countNear(
                 ids.categoryId, r.amountKopecks, r.timestamp - DUPLICATE_WINDOW_MS, r.timestamp + DUPLICATE_WINDOW_MS,
@@ -45,7 +67,8 @@ class CsvImporter(private val db: AppDatabase, private val categories: CategoryR
             }
         }
         db.expenses().insertAll(toInsert)
-        ImportResult(toInsert.size, duplicates, parsed.badLines)
+        db.incomes().insertAll(incomesToInsert)
+        ImportResult(toInsert.size + incomesToInsert.size, duplicates, parsed.badLines)
     }
 
     private companion object {

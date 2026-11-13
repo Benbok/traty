@@ -5,6 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.my.traty.data.Expense
 import ru.my.traty.data.ExpenseWithCategory
+import ru.my.traty.data.Income
 import java.io.StringWriter
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -25,9 +26,11 @@ class CsvBackupTest {
         categoryName = category, categoryEmoji = "🛒", subcategoryName = sub,
     )
 
-    private fun roundTrip(vararg rows: ExpenseWithCategory): CsvParseResult {
+    private fun roundTrip(vararg rows: ExpenseWithCategory): CsvParseResult = roundTrip(rows.toList(), emptyList())
+
+    private fun roundTrip(rows: List<ExpenseWithCategory>, incomes: List<Income>): CsvParseResult {
         val w = StringWriter()
-        CsvBackup.write(rows.toList(), zone, w)
+        CsvBackup.write(rows, incomes, zone, w)
         return CsvBackup.parse(w.toString(), zone)
     }
 
@@ -114,6 +117,58 @@ class CsvBackupTest {
         // Excel с запятой вместо «;» — заголовок не распознаётся
         assertEquals(false, CsvBackup.parse(CsvBackup.HEADER.replace(';', ',') + "\n", zone).hasHeader)
         assertEquals(true, CsvBackup.parse("\n" + CsvBackup.HEADER + "\n", zone).hasHeader)
+    }
+
+    @Test
+    fun roundTripWithIncomes() {
+        val income = Income(amountKopecks = 5_000_000, source = "Зарплата", note = "за октябрь", timestamp = 1_700_000_000_000)
+        val r = roundTrip(listOf(row(ts = 1_700_000_100_000)), listOf(income))
+        assertTrue(r.badLines.isEmpty())
+        // по времени: сначала пополнение, потом трата
+        assertEquals(listOf(CsvRow.INCOME, CsvRow.EXPENSE), r.rows.map { it.type })
+        val i = r.rows[0]
+        assertEquals(5_000_000L, i.amountKopecks)
+        assertEquals(1_700_000_000_000L, i.timestamp)
+        assertEquals("Зарплата", i.category)
+        assertEquals(null, i.subcategory)
+        assertEquals(null, i.place)
+        assertEquals("за октябрь", i.note)
+        assertEquals(null, i.rawText)
+        val e = r.rows[1]
+        assertEquals("Продукты", e.category)
+        assertEquals(25000L, e.amountKopecks)
+    }
+
+    @Test
+    fun oldFormatWithoutTypeColumnParsesAsExpenses() {
+        val oldHeader = "дата;сумма;валюта;категория;подкатегория;место;заметка;исходная фраза"
+        val r = CsvBackup.parse(oldHeader + "\n2026-11-13T10:00;250;RUB;Продукты;;;;\n", zone)
+        assertTrue(r.hasHeader)
+        assertTrue(r.badLines.isEmpty())
+        assertEquals(CsvRow.EXPENSE, r.rows.single().type)
+        // неизвестный или пустой тип — трата; регистр типа не важен
+        val t = CsvBackup.parse(
+            CsvBackup.HEADER + "\n2026-11-13T10:00;1;RUB;Продукты;;;;;\n2026-11-13T10:01;2;RUB;Продукты;;;;;что-то\n" +
+                "2026-11-13T10:02;3;RUB;Зарплата;;;;;ПОПОЛНЕНИЕ\n",
+            zone,
+        )
+        assertEquals(listOf(CsvRow.EXPENSE, CsvRow.EXPENSE, CsvRow.INCOME), t.rows.map { it.type })
+    }
+
+    @Test
+    fun incomeRowWithoutCategoryIsAccepted() {
+        val text = CsvBackup.HEADER + "\n" +
+            "13.11.2026 14:03;1 234,50;RUB;;;;подарок;;пополнение\n" +
+            "2026-11-13T12:00;100;RUB;;;;;;трата\n"
+        val r = CsvBackup.parse(text, zone)
+        // у траты категория обязательна, у пополнения — нет
+        assertEquals(listOf(3), r.badLines)
+        val i = r.rows.single()
+        assertEquals(CsvRow.INCOME, i.type)
+        assertEquals("Прочее", i.category)
+        assertEquals(123450L, i.amountKopecks)
+        assertEquals(ts(2026, 11, 13, 14, 3), i.timestamp)
+        assertEquals("подарок", i.note)
     }
 
     @Test

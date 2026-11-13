@@ -309,6 +309,10 @@ interface IncomeDao {
     @Query("DELETE FROM incomes WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    /** Для поиска дублей при импорте CSV: пополнения на ту же сумму в окне по времени. */
+    @Query("SELECT COUNT(*) FROM incomes WHERE amountKopecks = :amountKopecks AND timestamp >= :fromTs AND timestamp <= :toTs")
+    suspend fun countNear(amountKopecks: Long, fromTs: Long, toTs: Long): Int
+
     @Query("SELECT MIN(timestamp) FROM incomes")
     suspend fun getFirstTimestamp(): Long?
 }

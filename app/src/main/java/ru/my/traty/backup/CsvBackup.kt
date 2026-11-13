@@ -1,6 +1,8 @@
 package ru.my.traty.backup
 
 import ru.my.traty.data.ExpenseWithCategory
+import ru.my.traty.data.Income
+import ru.my.traty.data.IncomeSources
 import java.io.Writer
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -24,7 +26,14 @@ data class CsvRow(
     val place: String?,
     val note: String?,
     val rawText: String?,
-)
+    /** [EXPENSE] или [INCOME]; для пополнения [category] — вид пополнения. */
+    val type: String = EXPENSE,
+) {
+    companion object {
+        const val EXPENSE = "трата"
+        const val INCOME = "пополнение"
+    }
+}
 
 /**
  * [badLines] — номера строк файла (с 1), которые не удалось разобрать.
@@ -40,21 +49,35 @@ class CsvFormatException(message: String) : Exception(message)
  * Разбор понимает и собственный формат, и файл, пересохранённый в Excel.
  */
 object CsvBackup {
-    const val HEADER = "дата;сумма;валюта;категория;подкатегория;место;заметка;исходная фраза"
+    const val HEADER = "дата;сумма;валюта;категория;подкатегория;место;заметка;исходная фраза;тип"
 
-    fun write(rows: List<ExpenseWithCategory>, zone: ZoneId, out: Writer) {
+    /** Траты и пополнения вперемешку по времени (от старых к новым). */
+    fun write(rows: List<ExpenseWithCategory>, incomes: List<Income>, zone: ZoneId, out: Writer) {
         out.write("﻿")
         out.write(HEADER + "\n")
-        rows.forEach { row ->
-            val e = row.expense
-            val cols = listOf(
-                LocalDateTime.ofInstant(Instant.ofEpochMilli(e.timestamp), zone).toString(),
-                BigDecimal.valueOf(e.amountKopecks).movePointLeft(2).toPlainString().replace('.', ','),
-                e.currency, row.categoryName, row.subcategoryName, e.place, e.note, e.rawText,
-            )
+        val all = rows.map { it.expense.timestamp to expenseColumns(it, zone) } +
+            incomes.map { it.timestamp to incomeColumns(it, zone) }
+        all.sortedBy { it.first }.forEach { (_, cols) ->
             out.write(cols.joinToString(";") { v -> "\"" + (v ?: "").replace("\"", "\"\"") + "\"" } + "\n")
         }
     }
+
+    private fun dateText(ts: Long, zone: ZoneId) = LocalDateTime.ofInstant(Instant.ofEpochMilli(ts), zone).toString()
+
+    private fun amountText(kopecks: Long) = BigDecimal.valueOf(kopecks).movePointLeft(2).toPlainString().replace('.', ',')
+
+    private fun expenseColumns(row: ExpenseWithCategory, zone: ZoneId): List<String?> {
+        val e = row.expense
+        return listOf(
+            dateText(e.timestamp, zone), amountText(e.amountKopecks), e.currency, row.categoryName, row.subcategoryName,
+            e.place, e.note, e.rawText, CsvRow.EXPENSE,
+        )
+    }
+
+    private fun incomeColumns(i: Income, zone: ZoneId): List<String?> = listOf(
+        dateText(i.timestamp, zone), amountText(i.amountKopecks), i.currency, IncomeSources.normalize(i.source), null,
+        null, i.note, null, CsvRow.INCOME,
+    )
 
     /**
      * Байты файла → текст. BOM — UTF-8; иначе строгий UTF-8, а если байты в нём невалидны —
@@ -95,8 +118,13 @@ object CsvBackup {
         fun at(i: Int) = f.getOrNull(i)?.trim()?.ifEmpty { null }
         val ts = at(0)?.let { parseTimestamp(it, zone) } ?: return null
         val amount = at(1)?.let(::parseKopecks) ?: return null
+        val currency = at(2) ?: "RUB"
+        // Нет колонки «тип» (старые файлы), пустой или незнакомый тип — трата
+        if (at(8)?.lowercase() == CsvRow.INCOME) {
+            return CsvRow(ts, amount, currency, IncomeSources.normalize(at(3)), null, null, at(6), null, CsvRow.INCOME)
+        }
         val category = at(3) ?: return null
-        return CsvRow(ts, amount, at(2) ?: "RUB", category, at(4), at(5), at(6), at(7))
+        return CsvRow(ts, amount, currency, category, at(4), at(5), at(6), at(7), CsvRow.EXPENSE)
     }
 
     private val dateTimeFormats = listOf("dd.MM.yyyy H:mm:ss", "dd.MM.yyyy H:mm", "yyyy-MM-dd H:mm:ss", "yyyy-MM-dd H:mm")
