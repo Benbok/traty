@@ -26,13 +26,15 @@ import ru.my.traty.ui.designsystem.theme.TratyTheme
 /** Сверка баланса поверх вкладок: шаг 1 - калькулятор остатка, шаг 2 - итог. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReconcileScreen(onBack: () -> Unit) {
+fun ReconcileScreen(mode: ReconcileMode, onBack: () -> Unit) {
     // Свой ViewModel на каждое открытие: прошлый итог не должен показываться снова.
     val key = rememberSaveable { System.nanoTime().toString() }
     val vm: ReconcileViewModel = viewModel(key = key)
     BackHandler(onBack = onBack)
     val history by vm.history.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+
+    LaunchedEffect(mode) { vm.startIn(mode) }
 
     LaunchedEffect(vm.message) {
         vm.message?.let { snackbar.showSnackbar(it); vm.message = null }
@@ -66,6 +68,7 @@ fun ReconcileScreen(onBack: () -> Unit) {
                 lines = vm.lines,
                 totalKopecks = vm.totalKopecks,
                 isFirst = vm.isFirst,
+                replacedActualKopecks = vm.replacedActualKopecks.takeIf { vm.redoMode },
                 canConfirm = vm.canConfirm,
                 saving = vm.savingUi,
                 onName = vm::setName,

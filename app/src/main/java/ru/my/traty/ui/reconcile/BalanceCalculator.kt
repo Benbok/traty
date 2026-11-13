@@ -30,6 +30,7 @@ fun BalanceCalculator(
     lines: List<CalcLine>,
     totalKopecks: Long,
     isFirst: Boolean,
+    replacedActualKopecks: Long?,
     canConfirm: Boolean,
     saving: Boolean,
     onName: (Int, String) -> Unit,
@@ -54,6 +55,13 @@ fun BalanceCalculator(
             style = TratyTheme.typography.bodyMedium,
             color = TratyTheme.colors.onSurfaceVariant,
         )
+        if (replacedActualKopecks != null) {
+            Text(
+                "Последняя сверка: фактически ${formatRub(replacedActualKopecks)} — введите верную сумму",
+                style = TratyTheme.typography.bodyMedium,
+                color = TratyTheme.colors.onSurface,
+            )
+        }
         lines.forEach { line ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm)) {
                 OutlinedTextField(
@@ -68,6 +76,12 @@ fun BalanceCalculator(
                     value = line.amountText,
                     onValueChange = { onAmount(line.id, it) },
                     label = { Text("Сумма, ₽") },
+                    isError = ReconcilePolicy.isInvalidAmount(line.amountText),
+                    supportingText = if (ReconcilePolicy.isInvalidAmount(line.amountText)) {
+                        { Text("Не число") }
+                    } else {
+                        null
+                    },
                     singleLine = true,
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),

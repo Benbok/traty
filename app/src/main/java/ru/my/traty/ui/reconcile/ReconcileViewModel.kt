@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,11 @@ import ru.my.traty.ui.formatPeriod
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+
+/** Как открыт экран сверки: обычная сверка или сразу «Переделать последнюю». */
+enum class ReconcileMode { NORMAL, REDO }
+
+const val SAVE_FAILED_MESSAGE = "Не удалось сохранить сверку. Попробуйте ещё раз."
 
 const val DEFAULT_LINE_NAME = "Всего"
 
@@ -65,9 +71,16 @@ class ReconcileViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var message by mutableStateOf<String?>(null)
     private var redoing = false
+    /** Фактический остаток заменяемой сверки (для строки «Последняя сверка…» в режиме переделки). */
+    var replacedActualKopecks by mutableStateOf<Long?>(null)
+        private set
+    var redoMode by mutableStateOf(false)
+        private set
 
     val totalKopecks: Long get() = lines.sumOf { ReconcilePolicy.parseKopecks(it.amountText) ?: 0L }
-    val canConfirm: Boolean get() = lines.any { ReconcilePolicy.parseKopecks(it.amountText) != null }
+    val canConfirm: Boolean
+        get() = lines.any { ReconcilePolicy.parseKopecks(it.amountText) != null } &&
+            !ReconcilePolicy.hasInvalidLine(lines.map { it.amountText })
 
     /** Последние (до 6) сверки с расхождением «Неучтённые», новые первыми. */
     val history: StateFlow<List<HistoryItem>> = c.reconciliations.observeAll().map { all ->
@@ -84,7 +97,9 @@ class ReconcileViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val names = c.settings.current().calculatorLines
             if (names.isNotEmpty()) lines = names.map { CalcLine(nextId++, it, "") }
-            isFirst = c.reconciliations.last() == null
+            val last = c.reconciliations.last()
+            isFirst = last == null
+            replacedActualKopecks = last?.actualKopecks
             loaded = true
         }
     }
@@ -105,9 +120,15 @@ class ReconcileViewModel(app: Application) : AndroidViewModel(app) {
         lines = lines.filterNot { it.id == id }.ifEmpty { listOf(CalcLine(nextId++, DEFAULT_LINE_NAME, "")) }
     }
 
+    /** Открыть сразу в режиме переделки (из Настроек); безопасно вызывать повторно. */
+    fun startIn(mode: ReconcileMode) {
+        if (mode == ReconcileMode.REDO && !redoing && result == null) redo()
+    }
+
     /** Вернуться к калькулятору, чтобы пересчитать; следующее «Готово» заменит последнюю сверку. */
     fun redo() {
         redoing = true
+        redoMode = true
         result = null
         lines = lines.map { it.copy(amountText = "") }
     }
@@ -127,11 +148,22 @@ class ReconcileViewModel(app: Application) : AndroidViewModel(app) {
                 } else {
                     c.reconciliations.reconcile(actual, now, entryDateFor(c.reconciliations.last()), zone)
                 }
-                c.settings.setCalculatorLines(names)
+                // Сверка уже записана: сбой запоминания названий строк не должен её скрывать.
+                try {
+                    c.settings.setCalculatorLines(names)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                }
                 redoing = false
+                redoMode = false
                 result = ReconcileResultState(outcome, actual)
             } catch (e: ReconcileException) {
                 message = e.message
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                message = SAVE_FAILED_MESSAGE
             } finally {
                 saving = false
                 savingUi = false
@@ -164,6 +196,10 @@ class ReconcilePromptViewModel(app: Application) : AndroidViewModel(app) {
         val snooze = s.reconcileSnoozeUntilEpochDay.takeIf { it > 0 }?.let(LocalDate::ofEpochDay)
         ReconcilePolicy.shouldPrompt(LocalDate.now(zone), s.periodStartDay, reference, snooze)
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** Есть ли хотя бы одна сверка: тогда в Настройках доступно «Переделать последнюю». */
+    val hasReconciliation: StateFlow<Boolean> = c.reconciliations.observeAll().map { it.isNotEmpty() }
+        .distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /** Пересчитать (например, при возврате в приложение: мог начаться новый день). */
     fun refresh() = tick.update { it + 1 }

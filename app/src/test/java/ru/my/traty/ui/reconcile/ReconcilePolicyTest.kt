@@ -85,6 +85,20 @@ class ReconcilePolicyTest {
     }
 
     @Test
+    fun garbledAmountIsInvalid() {
+        assertTrue(ReconcilePolicy.isInvalidAmount("15 0OO"))
+        assertTrue(ReconcilePolicy.hasInvalidLine(listOf("1 500", "15 0OO")))
+    }
+
+    @Test
+    fun blankAndValidAmountsAreNotInvalid() {
+        val nbsp = 0x00A0.toChar()
+        assertFalse(ReconcilePolicy.hasInvalidLine(listOf("", "  ")))
+        assertFalse(ReconcilePolicy.hasInvalidLine(listOf("1 500,50")))
+        assertFalse(ReconcilePolicy.hasInvalidLine(listOf("1${nbsp}500,50")))
+    }
+
+    @Test
     fun entryDateFallsBackToFirstRecordDateAndToday() {
         val today = LocalDate.of(2026, 12, 12)
         assertEquals(LocalDate.of(2026, 12, 9), ReconcilePolicy.entryDate(today, 10, null, LocalDate.of(2026, 11, 20)))

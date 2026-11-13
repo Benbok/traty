@@ -43,6 +43,11 @@ object ReconcilePolicy {
             ?.toLong()
     }
 
+    /** Непустая строка, которая не разбирается как сумма (например, буква «О» вместо нуля). */
+    fun isInvalidAmount(text: String): Boolean = text.isNotBlank() && parseKopecks(text) == null
+
+    fun hasInvalidLine(amountTexts: List<String>): Boolean = amountTexts.any(::isInvalidAmount)
+
     private fun periodIsOver(today: LocalDate, startDay: Int, reference: LocalDate): Boolean =
         BillingPeriod.containing(today, startDay).startDate
             .isAfter(BillingPeriod.containing(reference, startDay).startDate)

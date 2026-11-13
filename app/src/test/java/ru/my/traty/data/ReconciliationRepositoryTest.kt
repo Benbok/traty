@@ -79,6 +79,50 @@ class ReconciliationRepositoryTest {
     }
 
     @Test
+    fun incomeAddedTodayAfterMorningAnchorIsCounted() = runTest {
+        val today = LocalDate.of(2026, 11, 13)
+        repo.reconcile(20_000_00, millis(2026, 11, 13, 9), today, zone)
+        // salary at 15:00 the same day: today means the current time, not midnight
+        val ts = entryTimestamp(today, zone, today, java.time.LocalTime.of(15, 0))
+        addIncome(77_000_00, ts)
+
+        val e = repo.expectation()!!
+
+        assertEquals(77_000_00L, e.incomesKopecks)
+        assertEquals(97_000_00L, e.expectedKopecks)
+    }
+
+    @Test
+    fun redoCountsMovementsRecordedAfterRemovedAnchor() = runTest {
+        openedWithMovements()
+        repo.reconcile(25_500_00, t1, LocalDate.of(2026, 9, 20), zone) // Unaccounted 3 000
+        addIncome(10_000_00, t1 + 1_000)
+        addExpense(4_000_00, t1 + 2_000)
+
+        // after removing the t1 reconciliation the anchor is t0: 20 000 + 80 000 + 10 000 - 71 500 - 4 000 = 34 500
+        val outcome = repo.redoLast(34_500_00, t2, zone)
+
+        assertEquals(ReconcileOutcome.Matched, outcome)
+        assertEquals(34_500_00L, repo.last()!!.expectedKopecks)
+        assertTrue(allExpenses().none { it.expense.source == ExpenseSource.RECONCILE })
+    }
+
+    @Test
+    fun redoToSurplusReplacesUnaccountedEntry() = runTest {
+        openedWithMovements()
+        repo.reconcile(25_500_00, t1, LocalDate.of(2026, 9, 20), zone)
+
+        val outcome = repo.redoLast(30_000_00, t2, zone)
+
+        assertEquals(ReconcileOutcome.Surplus(1_500_00), outcome)
+        assertTrue(allExpenses().none { it.expense.source == ExpenseSource.RECONCILE })
+        val inc = db.incomes().getAll().single { it.origin == IncomeOrigin.RECONCILE }
+        assertEquals(1_500_00L, inc.amountKopecks)
+        assertEquals(millis(2026, 9, 20, 12), inc.timestamp)
+        assertEquals(2, db.reconciliations().getAll().size)
+    }
+
+    @Test
     fun redoOfMatchedUsesFallbackEntryDate() = runTest {
         matchedAtT1()
 

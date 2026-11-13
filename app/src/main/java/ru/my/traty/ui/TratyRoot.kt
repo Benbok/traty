@@ -30,6 +30,7 @@ import ru.my.traty.ui.home.ConfirmDialog
 import ru.my.traty.ui.home.HomeScreen
 import ru.my.traty.ui.home.IncomeConfirmDialog
 import ru.my.traty.ui.navigation.TratyNavTab
+import ru.my.traty.ui.reconcile.ReconcileMode
 import ru.my.traty.ui.reconcile.ReconcileScreen
 import ru.my.traty.ui.settings.SettingsScreen
 import ru.my.traty.ui.stats.StatsScreen
@@ -42,7 +43,8 @@ import ru.my.traty.ui.stats.StatsScreen
 fun TratyRoot(vm: MainViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(TratyNavTab.HOME) }
     var showCategories by rememberSaveable { mutableStateOf(false) }
-    var showReconcile by rememberSaveable { mutableStateOf(false) }
+    // null - экран сверки закрыт
+    var reconcileMode by rememberSaveable { mutableStateOf<ReconcileMode?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val categories by vm.categories.collectAsStateWithLifecycle()
 
@@ -87,13 +89,14 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                     .fillMaxSize(),
             ) {
                 when (tab) {
-                    TratyNavTab.HOME -> HomeScreen(vm, onOpenReconcile = { showReconcile = true })
+                    TratyNavTab.HOME -> HomeScreen(vm, onOpenReconcile = { reconcileMode = ReconcileMode.NORMAL })
                     TratyNavTab.CHARTS -> ChartsScreen()
                     TratyNavTab.STATS -> StatsScreen(vm)
                     TratyNavTab.SETTINGS -> SettingsScreen(
                         vm,
                         onOpenCategories = { showCategories = true },
-                        onOpenReconcile = { showReconcile = true },
+                        onOpenReconcile = { reconcileMode = ReconcileMode.NORMAL },
+                        onRedoReconcile = { reconcileMode = ReconcileMode.REDO },
                     )
                 }
             }
@@ -106,9 +109,9 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             }
         }
 
-        if (showReconcile) {
+        reconcileMode?.let { mode ->
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
-                ReconcileScreen(onBack = { showReconcile = false })
+                ReconcileScreen(mode = mode, onBack = { reconcileMode = null })
             }
         }
     }
