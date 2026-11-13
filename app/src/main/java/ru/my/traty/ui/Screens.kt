@@ -92,6 +92,11 @@ private enum class Tab(val title: String, val icon: ImageVector) {
 @Composable
 fun TratyRoot(vm: MainViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
+    var showCategories by rememberSaveable { mutableStateOf(false) }
+    if (showCategories) {
+        CategoriesScreen(onBack = { showCategories = false })
+        return
+    }
     val snackbar = remember { SnackbarHostState() }
     val categories by vm.categories.collectAsStateWithLifecycle()
 
@@ -129,7 +134,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             when (tab) {
                 Tab.HOME -> HomeScreen(vm)
                 Tab.STATS -> StatsScreen(vm)
-                Tab.SETTINGS -> SettingsScreen(vm)
+                Tab.SETTINGS -> SettingsScreen(vm, onOpenCategories = { showCategories = true })
             }
         }
     }
@@ -572,7 +577,7 @@ private fun deltaText(cur: Long, prev: Long): String {
 // ---------------------------------------------------------------- Настройки
 
 @Composable
-private fun SettingsScreen(vm: MainViewModel) {
+private fun SettingsScreen(vm: MainViewModel, onOpenCategories: () -> Unit) {
     val saved by vm.settings.collectAsStateWithLifecycle()
     var s by remember(saved) { mutableStateOf<AppSettings>(saved) }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
@@ -665,6 +670,24 @@ private fun SettingsScreen(vm: MainViewModel) {
         Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md)) {
             TratyButton(onClick = { vm.saveSettings(s) }) { Text("Сохранить") }
             TratyOutlinedButton(onClick = { vm.testConnection(s) }) { Text("Проверить") }
+        }
+
+        // Секция: Категории
+        TratyCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = TratyTheme.colors.surface,
+        ) {
+            Column(Modifier.padding(TratyTheme.spacing.lg)) {
+                Text("Категории", style = TratyTheme.typography.titleMedium)
+                Spacer(Modifier.height(TratyTheme.spacing.xs))
+                Text(
+                    "Переименование, эмодзи, порядок, архив, объединение и подкатегории.",
+                    style = TratyTheme.typography.bodySmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(TratyTheme.spacing.md))
+                TratyOutlinedButton(onClick = onOpenCategories) { Text("Категории и подкатегории") }
+            }
         }
 
         // Секция: Резервная копия

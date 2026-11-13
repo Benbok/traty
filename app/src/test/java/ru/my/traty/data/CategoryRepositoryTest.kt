@@ -7,6 +7,8 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,6 +35,14 @@ class CategoryRepositoryTest {
         db.categories().getAllWithSubs().single { it.category.name == name }
 
     private suspend fun categoryCount() = db.categories().getAllWithSubs().size
+
+    private suspend fun assertCategoryError(block: suspend () -> Unit) {
+        try {
+            block()
+            fail("Ожидалась CategoryException")
+        } catch (_: CategoryException) {
+        }
+    }
 
     @Test
     fun resolvesExistingCategoryAndSubcategory() = runTest {
@@ -90,5 +100,104 @@ class CategoryRepositoryTest {
         val active = db.categories().getActiveWithSubs()
         assertEquals(25, active.size)
         assertEquals(DefaultCategories.OTHER, active.last().category.name)
+    }
+
+    // --- Редактор категорий ---
+
+    private suspend fun addExpense(categoryId: Long, subcategoryId: Long? = null, amount: Long = 100): Expense {
+        val e = Expense(amountKopecks = amount, categoryId = categoryId, subcategoryId = subcategoryId, timestamp = 1000)
+        db.expenses().insertAll(listOf(e))
+        return db.expenses().getAllWithCategory().last().expense
+    }
+
+    private suspend fun expensesOf(categoryId: Long) =
+        db.expenses().getAllWithCategory().filter { it.expense.categoryId == categoryId }
+
+    @Test
+    fun renameRejectsDuplicateIgnoringCase() = runTest {
+        val hobby = cat("Хобби").category
+        assertCategoryError { repo.updateCategory(hobby.id, "продукты", hobby.emoji, null) }
+        assertEquals("Хобби", db.categories().getAllWithSubs().single { it.category.id == hobby.id }.category.name)
+    }
+
+    @Test
+    fun renameOtherIsForbidden() = runTest {
+        val other = cat(DefaultCategories.OTHER).category
+        assertCategoryError { repo.updateCategory(other.id, "Разное", other.emoji, null) }
+    }
+
+    @Test
+    fun archivedHiddenFromActiveButExpensesKept() = runTest {
+        val hobby = cat("Хобби").category
+        addExpense(hobby.id)
+        repo.setArchived(hobby.id, true)
+        assertTrue(db.categories().getActiveWithSubs().none { it.category.id == hobby.id })
+        assertTrue(db.categories().getAllWithSubs().any { it.category.id == hobby.id })
+        assertEquals(1, expensesOf(hobby.id).size)
+    }
+
+    @Test
+    fun archiveOtherIsForbidden() = runTest {
+        val other = cat(DefaultCategories.OTHER).category
+        assertCategoryError { repo.setArchived(other.id, true) }
+    }
+
+    @Test
+    fun moveSwapsWithNeighbourAndKeepsOtherLast() = runTest {
+        repo.move(cat("Кафе и рестораны").category.id, up = true)
+        val names = db.categories().getActiveWithSubs().map { it.category.name }
+        assertEquals(listOf("Кафе и рестораны", "Продукты"), names.take(2))
+
+        val beforeLast = names[names.size - 2]
+        repo.move(cat(beforeLast).category.id, up = false)
+        val after = db.categories().getActiveWithSubs().map { it.category.name }
+        assertEquals(names, after)
+        assertEquals(DefaultCategories.OTHER, after.last())
+    }
+
+    @Test
+    fun mergeMovesExpensesAndSubcategories() = runTest {
+        val delivery = cat("Доставка еды").category
+        val rolls = repo.addSubcategory(delivery.id, "Роллы")
+        addExpense(delivery.id)
+        addExpense(delivery.id, rolls)
+        val cafe = cat("Кафе и рестораны").category
+
+        assertEquals(2, repo.merge(delivery.id, cafe.id))
+        assertEquals(2, expensesOf(cafe.id).size)
+        assertEquals(cafe.id, cat("Кафе и рестораны").subs.single { it.name == "Роллы" }.categoryId)
+        assertTrue(db.categories().getAllWithSubs().none { it.category.id == delivery.id })
+    }
+
+    @Test
+    fun mergeUnifiesSameNamedSubcategory() = runTest {
+        val delivery = cat("Доставка еды").category
+        val srcLunch = repo.addSubcategory(delivery.id, "обед")
+        addExpense(delivery.id, srcLunch)
+        val cafe = cat("Кафе и рестораны")
+        val dstLunch = cafe.subs.single { it.name == "Обед" }.id
+
+        repo.merge(delivery.id, cafe.category.id)
+        val subs = cat("Кафе и рестораны").subs
+        assertEquals(1, subs.count { it.name.lowercase() == "обед" })
+        assertEquals(dstLunch, expensesOf(cafe.category.id).single().expense.subcategoryId)
+    }
+
+    @Test
+    fun mergeIntoItselfOrFromOtherIsForbidden() = runTest {
+        val a = cat("Хобби").category.id
+        val other = cat(DefaultCategories.OTHER).category.id
+        assertCategoryError { repo.merge(a, a) }
+        assertCategoryError { repo.merge(other, a) }
+    }
+
+    @Test
+    fun deleteSubcategoryNullsExpenseLink() = runTest {
+        val products = cat("Продукты")
+        val market = products.subs.single { it.name == "Рынок" }.id
+        addExpense(products.category.id, market)
+        repo.deleteSubcategory(market)
+        val e = expensesOf(products.category.id).single().expense
+        assertNull(e.subcategoryId)
     }
 }
