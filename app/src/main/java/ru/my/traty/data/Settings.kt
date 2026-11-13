@@ -3,6 +3,7 @@ package ru.my.traty.data
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -33,7 +34,17 @@ data class AppSettings(
     val yandexModel: String = "yandexgpt-lite/latest",
     /** День месяца (1..28), с которого начинается расчётный период. */
     val periodStartDay: Int = MIN_PERIOD_START_DAY,
+    /** Последний день (epoch day), в который карточка сверки скрыта кнопкой «Напомнить завтра»; 0 - нет. */
+    val reconcileSnoozeUntilEpochDay: Long = 0,
+    /** Названия строк калькулятора остатка (без сумм). */
+    val calculatorLines: List<String> = emptyList(),
 )
+
+internal fun encodeLines(lines: List<String>): String =
+    lines.map { it.replace('\n', ' ').trim() }.filter { it.isNotEmpty() }.joinToString("\n")
+
+internal fun decodeLines(raw: String?): List<String> =
+    raw.orEmpty().split('\n').map { it.trim() }.filter { it.isNotEmpty() }
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
@@ -51,6 +62,8 @@ class SettingsRepository(private val context: Context) {
         val yaFolder = stringPreferencesKey("yandex_folder")
         val yaModel = stringPreferencesKey("yandex_model")
         val periodStartDay = intPreferencesKey("period_start_day")
+        val reconcileSnooze = longPreferencesKey("reconcile_snooze_until")
+        val calculatorLines = stringPreferencesKey("calculator_lines")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -65,6 +78,8 @@ class SettingsRepository(private val context: Context) {
             yandexModel = p[K.yaModel] ?: d.yandexModel,
             periodStartDay = (p[K.periodStartDay] ?: d.periodStartDay)
                 .coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY),
+            reconcileSnoozeUntilEpochDay = (p[K.reconcileSnooze] ?: 0L).coerceAtLeast(0L),
+            calculatorLines = decodeLines(p[K.calculatorLines]),
         )
     }
 
@@ -87,6 +102,14 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { p ->
             p[K.periodStartDay] = day.coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY)
         }
+    }
+
+    suspend fun setReconcileSnoozeUntil(epochDay: Long) {
+        context.dataStore.edit { p -> p[K.reconcileSnooze] = epochDay.coerceAtLeast(0L) }
+    }
+
+    suspend fun setCalculatorLines(lines: List<String>) {
+        context.dataStore.edit { p -> p[K.calculatorLines] = encodeLines(lines) }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {

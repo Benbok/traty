@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.data.Income
+import ru.my.traty.data.isUserEditable
 import ru.my.traty.ui.charts.components.AddIncomeDialog
 import ru.my.traty.ui.charts.components.BalanceAreaChart
 import ru.my.traty.ui.charts.components.ChartKpiCard
@@ -314,14 +315,22 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                 )
             },
             confirmButton = {
-                TratyTextButton(
-                    onClick = {
-                        vm.deleteIncome(inc)
-                        incomeToDelete = null
-                    },
-                    contentColor = TratyTheme.colors.expense,
-                ) {
-                    Text("Удалить")
+                if (inc.isUserEditable) {
+                    TratyTextButton(
+                        onClick = {
+                            vm.deleteIncome(inc)
+                            incomeToDelete = null
+                        },
+                        contentColor = TratyTheme.colors.expense,
+                    ) {
+                        Text("Удалить")
+                    }
+                } else {
+                    Text(
+                        "Запись сверки",
+                        style = TratyTheme.typography.labelLarge,
+                        color = TratyTheme.colors.onSurfaceVariant,
+                    )
                 }
             },
             dismissButton = {

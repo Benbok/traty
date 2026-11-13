@@ -54,7 +54,7 @@ import ru.my.traty.ui.designsystem.theme.TratyTheme
  * Экран настроек приложения: тема, провайдер ИИ, категории, резервная копия.
  */
 @Composable
-fun SettingsScreen(vm: MainViewModel, onOpenCategories: () -> Unit) {
+fun SettingsScreen(vm: MainViewModel, onOpenCategories: () -> Unit, onOpenReconcile: () -> Unit) {
     val saved by vm.settings.collectAsStateWithLifecycle()
     var s by remember(saved) { mutableStateOf<AppSettings>(saved) }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
@@ -276,6 +276,8 @@ fun SettingsScreen(vm: MainViewModel, onOpenCategories: () -> Unit) {
                 TratyOutlinedButton(onClick = onOpenCategories) { Text("Категории и подкатегории") }
             }
         }
+
+        ReconcileSettingsCard(onOpenReconcile)
 
         // Секция: Резервная копия
         TratyCard(

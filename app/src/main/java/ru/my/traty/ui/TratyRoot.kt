@@ -30,6 +30,7 @@ import ru.my.traty.ui.home.ConfirmDialog
 import ru.my.traty.ui.home.HomeScreen
 import ru.my.traty.ui.home.IncomeConfirmDialog
 import ru.my.traty.ui.navigation.TratyNavTab
+import ru.my.traty.ui.reconcile.ReconcileScreen
 import ru.my.traty.ui.settings.SettingsScreen
 import ru.my.traty.ui.stats.StatsScreen
 
@@ -41,6 +42,7 @@ import ru.my.traty.ui.stats.StatsScreen
 fun TratyRoot(vm: MainViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(TratyNavTab.HOME) }
     var showCategories by rememberSaveable { mutableStateOf(false) }
+    var showReconcile by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val categories by vm.categories.collectAsStateWithLifecycle()
 
@@ -85,10 +87,14 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                     .fillMaxSize(),
             ) {
                 when (tab) {
-                    TratyNavTab.HOME -> HomeScreen(vm)
+                    TratyNavTab.HOME -> HomeScreen(vm, onOpenReconcile = { showReconcile = true })
                     TratyNavTab.CHARTS -> ChartsScreen()
                     TratyNavTab.STATS -> StatsScreen(vm)
-                    TratyNavTab.SETTINGS -> SettingsScreen(vm, onOpenCategories = { showCategories = true })
+                    TratyNavTab.SETTINGS -> SettingsScreen(
+                        vm,
+                        onOpenCategories = { showCategories = true },
+                        onOpenReconcile = { showReconcile = true },
+                    )
                 }
             }
         }
@@ -97,6 +103,12 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
         if (showCategories) {
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
                 CategoriesScreen(onBack = { showCategories = false })
+            }
+        }
+
+        if (showReconcile) {
+            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                ReconcileScreen(onBack = { showReconcile = false })
             }
         }
     }

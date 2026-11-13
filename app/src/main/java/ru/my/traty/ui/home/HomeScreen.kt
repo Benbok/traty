@@ -35,8 +35,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import ru.my.traty.ui.reconcile.ReconcileCard
+import ru.my.traty.ui.reconcile.ReconcilePromptViewModel
 import ru.my.traty.data.ExpenseWithCategory
+import ru.my.traty.data.isUserEditable
 import ru.my.traty.speech.SystemSpeech
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.designsystem.components.TratyButton
@@ -58,7 +64,9 @@ import java.time.ZoneId
  * фильтрацию по дню и быстрый ввод трат текстом/голосом.
  */
 @Composable
-fun HomeScreen(vm: MainViewModel) {
+fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: ReconcilePromptViewModel = viewModel()) {
+    val showReconcileCard by prompt.showCard.collectAsStateWithLifecycle()
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { prompt.refresh() }
     val expenses by vm.expenses.collectAsStateWithLifecycle()
     val period by vm.period.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -144,6 +152,11 @@ fun HomeScreen(vm: MainViewModel) {
         }
 
         LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+            if (showReconcileCard) {
+                item(key = "reconcile-card") {
+                    ReconcileCard(onReconcile = onOpenReconcile, onSnooze = prompt::snooze)
+                }
+            }
             if (displayedExpenses.isEmpty()) {
                 item {
                     if (selectedDate != null) {
@@ -221,11 +234,19 @@ fun HomeScreen(vm: MainViewModel) {
                 )
             },
             confirmButton = {
-                TratyTextButton(
-                    onClick = { vm.delete(e.expense); toDelete = null },
-                    contentColor = TratyTheme.colors.expense,
-                ) {
-                    Text("Удалить")
+                if (e.expense.isUserEditable) {
+                    TratyTextButton(
+                        onClick = { vm.delete(e.expense); toDelete = null },
+                        contentColor = TratyTheme.colors.expense,
+                    ) {
+                        Text("Удалить")
+                    }
+                } else {
+                    Text(
+                        "Запись сверки",
+                        style = TratyTheme.typography.labelLarge,
+                        color = TratyTheme.colors.onSurfaceVariant,
+                    )
                 }
             },
             dismissButton = {

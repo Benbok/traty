@@ -37,6 +37,7 @@ import ru.my.traty.data.Expense
 import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.IncomeOrigin
+import ru.my.traty.data.isUserEditable
 import ru.my.traty.data.IncomeSources
 import ru.my.traty.ui.home.IncomeDraft
 import ru.my.traty.ui.home.IncomeDraftItem
@@ -283,7 +284,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun delete(e: Expense) = viewModelScope.launch { c.db.expenses().delete(e) }
+    fun delete(e: Expense) = viewModelScope.launch { if (e.isUserEditable) c.db.expenses().delete(e) }
 
     fun setThemeMode(mode: ThemeMode) = viewModelScope.launch {
         c.settings.setThemeMode(mode)
@@ -325,7 +326,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             insight = try {
                 client.complete(
                     system = "Ты личный финансовый помощник. По сводке трат дай 3–5 коротких наблюдений на русском: " +
-                        "что выросло или снизилось, где можно сэкономить. Без вступлений, маркированным списком.",
+                        "что выросло или снизилось, где можно сэкономить. Без вступлений, маркированным списком. " +
+                        "Если в сводке есть категория «Неучтённые» — говори о ней спокойно и поддерживающе, без упрёков; " +
+                        "это деньги, потраченные вне записей.",
                     user = summary,
                     jsonMode = false,
                 )
