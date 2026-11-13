@@ -2,11 +2,14 @@ package ru.my.traty.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import ru.my.traty.data.period.MAX_PERIOD_START_DAY
+import ru.my.traty.data.period.MIN_PERIOD_START_DAY
 
 enum class ThemeMode(val title: String) {
     SYSTEM("Системная"),
@@ -28,6 +31,8 @@ data class AppSettings(
     val yandexKey: String = "",
     val yandexFolderId: String = "",
     val yandexModel: String = "yandexgpt-lite/latest",
+    /** День месяца (1..28), с которого начинается расчётный период. */
+    val periodStartDay: Int = MIN_PERIOD_START_DAY,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -45,6 +50,7 @@ class SettingsRepository(private val context: Context) {
         val yaKey = stringPreferencesKey("yandex_key")
         val yaFolder = stringPreferencesKey("yandex_folder")
         val yaModel = stringPreferencesKey("yandex_model")
+        val periodStartDay = intPreferencesKey("period_start_day")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -57,6 +63,8 @@ class SettingsRepository(private val context: Context) {
             yandexKey = p[K.yaKey] ?: "",
             yandexFolderId = p[K.yaFolder] ?: "",
             yandexModel = p[K.yaModel] ?: d.yandexModel,
+            periodStartDay = (p[K.periodStartDay] ?: d.periodStartDay)
+                .coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY),
         )
     }
 
@@ -71,6 +79,13 @@ class SettingsRepository(private val context: Context) {
             p[K.yaKey] = s.yandexKey.trim()
             p[K.yaFolder] = s.yandexFolderId.trim()
             p[K.yaModel] = s.yandexModel.trim()
+            p[K.periodStartDay] = s.periodStartDay.coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY)
+        }
+    }
+
+    suspend fun setPeriodStartDay(day: Int) {
+        context.dataStore.edit { p ->
+            p[K.periodStartDay] = day.coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY)
         }
     }
 

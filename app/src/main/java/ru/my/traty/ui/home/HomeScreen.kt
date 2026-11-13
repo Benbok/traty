@@ -46,6 +46,7 @@ import ru.my.traty.ui.designsystem.components.TratyMonthPicker
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatDate
+import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
 import java.time.Instant
 import java.time.LocalDate
@@ -53,13 +54,14 @@ import java.time.ZoneId
 
 /**
  * Главный экран списка трат (HomeScreen).
- * Поддерживает просмотр трат за месяц, выбор конкретной даты в календаре,
+ * Поддерживает просмотр трат за расчётный период, выбор конкретной даты в календаре,
  * фильтрацию по дню и быстрый ввод трат текстом/голосом.
  */
 @Composable
 fun HomeScreen(vm: MainViewModel) {
     val expenses by vm.expenses.collectAsStateWithLifecycle()
-    val month by vm.month.collectAsStateWithLifecycle()
+    val period by vm.period.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
     val selectedDate by vm.selectedDate.collectAsStateWithLifecycle()
     val zone = remember { ZoneId.systemDefault() }
 
@@ -88,7 +90,7 @@ fun HomeScreen(vm: MainViewModel) {
 
     Column(Modifier.fillMaxSize().imePadding()) {
         TratyMonthPicker(
-            month = month,
+            periodLabel = formatPeriod(period, settings.periodStartDay),
             totalKopecks = displayedExpenses.sumOf { it.expense.amountKopecks },
             selectedDate = selectedDate,
             onPrev = vm::prevPeriod,
@@ -136,7 +138,7 @@ fun HomeScreen(vm: MainViewModel) {
                 TratyTextButton(
                     onClick = vm::clearSelectedDate,
                 ) {
-                    Text("Все за месяц", style = TratyTheme.typography.labelSmall)
+                    Text("Весь период", style = TratyTheme.typography.labelSmall)
                 }
             }
         }
@@ -152,11 +154,11 @@ fun HomeScreen(vm: MainViewModel) {
                             TratyEmptyState(
                                 icon = Icons.AutoMirrored.Filled.ReceiptLong,
                                 title = "За ${formatDate(selectedDate!!)} трат нет",
-                                description = "Нажмите «Показать весь месяц», чтобы увидеть все траты месяца.",
+                                description = "Нажмите «Показать весь период», чтобы увидеть все траты периода.",
                             )
                             Spacer(Modifier.height(TratyTheme.spacing.md))
                             TratyButton(onClick = vm::clearSelectedDate) {
-                                Text("Показать весь месяц")
+                                Text("Показать весь период")
                             }
                         }
                     } else {

@@ -8,12 +8,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ru.my.traty.TratyApp
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Income
+import ru.my.traty.data.period.BillingPeriod
 import ru.my.traty.ui.RU
 import ru.my.traty.ui.charts.model.BalancePoint
 import ru.my.traty.ui.charts.model.CategoryCreditShare
@@ -30,7 +33,9 @@ import kotlin.math.roundToLong
 
 data class ChartsUiState(
     val period: ChartPeriod = ChartPeriod.MONTH,
-    val month: YearMonth = YearMonth.now(),
+    /** Расчётный период вкладки «Месяц» (остальные вкладки — календарные месяцы). */
+    val billingPeriod: BillingPeriod = BillingPeriod.containing(LocalDate.now(), 1),
+    val periodStartDay: Int = 1,
     val summary: ChartSummary = ChartSummary(0, 0, 0, null, 0, 0, 0),
     val balancePoints: List<BalancePoint> = emptyList(),
     val debitCreditBars: List<DebitCreditBar> = emptyList(),
@@ -46,15 +51,25 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
     private val zone: ZoneId = ZoneId.systemDefault()
 
     val period = MutableStateFlow(ChartPeriod.MONTH)
-    val month = MutableStateFlow(YearMonth.now())
+    private val startDay = MutableStateFlow(1)
+    val billingPeriod = MutableStateFlow(BillingPeriod.containing(LocalDate.now(), 1))
 
-    private val rangeFlow = combine(period, month) { p, m ->
+    init {
+        viewModelScope.launch {
+            c.settings.flow.map { it.periodStartDay }.distinctUntilChanged().collect { d ->
+                if (d != startDay.value) {
+                    billingPeriod.value = BillingPeriod.containing(LocalDate.now(), d)
+                    startDay.value = d
+                }
+            }
+        }
+    }
+
+    private val rangeFlow = combine(period, billingPeriod) { p, bp ->
         val now = LocalDate.now()
         when (p) {
             ChartPeriod.MONTH -> {
-                val start = m.atDay(1)
-                val end = m.plusMonths(1).atDay(1)
-                ChartRange(start.toStartMillis(), end.toStartMillis(), start, m.atEndOfMonth())
+                ChartRange(bp.startMillis(zone), bp.endMillisExclusive(zone), bp.startDate, bp.endDate)
             }
             ChartPeriod.QUARTER -> {
                 val endMonth = YearMonth.from(now)
@@ -87,14 +102,16 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
         c.db.incomes().observeRange(r.startMillis, r.endMillis)
     }
 
+    private val selection = combine(billingPeriod, startDay) { bp, d -> bp to d }
+
     val uiState: StateFlow<ChartsUiState> = combine(
         period,
-        month,
+        selection,
         rangeFlow,
         expensesFlow,
         incomesFlow,
-    ) { p, m, range, expenses, incomes ->
-        processUiState(p, m, range, expenses, incomes)
+    ) { p, sel, range, expenses, incomes ->
+        processUiState(p, sel.first, sel.second, range, expenses, incomes)
     }.stateIn(
         viewModelScope,
         SharingStarted.Eagerly,
@@ -105,12 +122,12 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
         period.value = newPeriod
     }
 
-    fun prevMonth() {
-        month.value = month.value.minusMonths(1)
+    fun prevBillingPeriod() {
+        billingPeriod.value = billingPeriod.value.previous(startDay.value)
     }
 
-    fun nextMonth() {
-        month.value = month.value.plusMonths(1)
+    fun nextBillingPeriod() {
+        billingPeriod.value = billingPeriod.value.next(startDay.value)
     }
 
     fun addIncome(amountRub: Double, source: String, note: String?, date: LocalDate) {
@@ -136,7 +153,8 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun processUiState(
         p: ChartPeriod,
-        m: YearMonth,
+        bp: BillingPeriod,
+        startDay: Int,
         range: ChartRange,
         expenses: List<ExpenseWithCategory>,
         incomes: List<Income>,
@@ -167,7 +185,8 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
 
         return ChartsUiState(
             period = p,
-            month = m,
+            billingPeriod = bp,
+            periodStartDay = startDay,
             summary = summary,
             balancePoints = balancePoints,
             debitCreditBars = debitCreditBars,

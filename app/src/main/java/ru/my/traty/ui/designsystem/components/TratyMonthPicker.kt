@@ -23,17 +23,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatDate
-import ru.my.traty.ui.formatMonth
 import java.time.LocalDate
-import java.time.YearMonth
 
 /**
- * Заголовочный компонент переключения месяца/дня и отображения итоговой суммы.
+ * Заголовочный компонент переключения расчётного периода/дня и отображения итоговой суммы.
  * Поддерживает выбор конкретной даты в календаре при нажатии на заголовок даты.
  */
 @Composable
 fun TratyMonthPicker(
-    month: YearMonth,
+    periodLabel: String,
     totalKopecks: Long,
     onPrev: () -> Unit,
     onNext: () -> Unit,
@@ -59,7 +57,7 @@ fun TratyMonthPicker(
         ) {
             TratyIconButton(
                 icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                contentDescription = if (selectedDate != null) "Предыдущий день" else "Предыдущий месяц",
+                contentDescription = if (selectedDate != null) "Предыдущий день" else "Предыдущий период",
                 onClick = onPrev,
                 containerColor = TratyTheme.colors.surfaceContainer,
                 modifier = Modifier.size(40.dp),
@@ -84,7 +82,7 @@ fun TratyMonthPicker(
                     )
                     Spacer(Modifier.width(TratyTheme.spacing.xs))
                     Text(
-                        text = if (selectedDate != null) formatDate(selectedDate) else formatMonth(month),
+                        text = if (selectedDate != null) formatDate(selectedDate) else periodLabel,
                         style = TratyTheme.typography.titleSmall,
                         color = if (selectedDate != null) TratyTheme.colors.primary else TratyTheme.colors.onSurfaceVariant,
                     )
@@ -106,7 +104,7 @@ fun TratyMonthPicker(
 
                 if (selectedDate != null && onClearDate != null) {
                     Text(
-                        text = "Показать весь месяц ✕",
+                        text = "Показать весь период ✕",
                         style = TratyTheme.typography.labelSmall,
                         color = TratyTheme.colors.primary,
                         modifier = Modifier
@@ -125,7 +123,7 @@ fun TratyMonthPicker(
 
             TratyIconButton(
                 icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = if (selectedDate != null) "Следующий день" else "Следующий месяц",
+                contentDescription = if (selectedDate != null) "Следующий день" else "Следующий период",
                 onClick = onNext,
                 containerColor = TratyTheme.colors.surfaceContainer,
                 modifier = Modifier.size(40.dp),

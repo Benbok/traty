@@ -53,7 +53,7 @@ import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyProgressBar
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
-import ru.my.traty.ui.formatMonth
+import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
 import ru.my.traty.ui.formatTime
 import kotlin.math.roundToInt
@@ -134,21 +134,21 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                 ) {
                     TratyIconButton(
                         icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                        contentDescription = "Предыдущий месяц",
-                        onClick = vm::prevMonth,
+                        contentDescription = "Предыдущий период",
+                        onClick = vm::prevBillingPeriod,
                         containerColor = TratyTheme.colors.surfaceContainer,
                         modifier = Modifier.size(36.dp),
                     )
                     Text(
-                        text = formatMonth(state.month),
+                        text = formatPeriod(state.billingPeriod, state.periodStartDay),
                         style = TratyTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = TratyTheme.colors.onSurface,
                     )
                     TratyIconButton(
                         icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = "Следующий месяц",
-                        onClick = vm::nextMonth,
+                        contentDescription = "Следующий период",
+                        onClick = vm::nextBillingPeriod,
                         containerColor = TratyTheme.colors.surfaceContainer,
                         modifier = Modifier.size(36.dp),
                     )

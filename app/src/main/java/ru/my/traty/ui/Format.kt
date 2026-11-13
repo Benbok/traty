@@ -1,5 +1,6 @@
 package ru.my.traty.ui
 
+import ru.my.traty.data.period.BillingPeriod
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -23,6 +24,19 @@ fun formatRubSigned(kopecks: Long): String {
 
 fun formatMonth(m: YearMonth): String =
     m.month.getDisplayName(TextStyle.FULL_STANDALONE, RU).replaceFirstChar { it.uppercase() } + " " + m.year
+
+private val SHORT_MONTHS = listOf("янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек")
+
+/**
+ * Подпись расчётного периода: при дне начала 1 — «Ноябрь 2026», иначе «10 ноя — 9 дек»
+ * (с годом, если период пересекает границу года: «10 дек — 9 янв 2027»).
+ */
+fun formatPeriod(p: BillingPeriod, startDay: Int): String {
+    if (startDay == 1) return formatMonth(YearMonth.from(p.startDate))
+    fun short(d: LocalDate) = "${d.dayOfMonth} ${SHORT_MONTHS[d.monthValue - 1]}"
+    val year = if (p.startDate.year != p.endDate.year) " ${p.endDate.year}" else ""
+    return "${short(p.startDate)} — ${short(p.endDate)}$year"
+}
 
 fun formatDate(d: LocalDate): String =
     "${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.FULL, RU)} ${d.year}"

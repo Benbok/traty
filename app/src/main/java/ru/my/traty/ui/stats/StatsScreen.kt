@@ -37,6 +37,7 @@ import ru.my.traty.ui.designsystem.components.TratyEmptyState
 import ru.my.traty.ui.designsystem.components.TratyMonthPicker
 import ru.my.traty.ui.designsystem.components.TratyProgressBar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
+import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
 import kotlin.math.roundToInt
 
@@ -45,7 +46,8 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun StatsScreen(vm: MainViewModel) {
-    val month by vm.month.collectAsStateWithLifecycle()
+    val period by vm.period.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
     val totals by vm.totals.collectAsStateWithLifecycle()
     val prev by vm.prevTotals.collectAsStateWithLifecycle()
     val prevMap = remember(prev) { prev.associate { it.categoryId to it.total } }
@@ -53,16 +55,16 @@ fun StatsScreen(vm: MainViewModel) {
     val prevSum = prev.sumOf { it.total }
 
     val deltaDescription = if (prevSum > 0) {
-        "Прошлый месяц: ${formatRub(prevSum)} (${deltaText(sum, prevSum)})"
+        "Прошлый период: ${formatRub(prevSum)} (${deltaText(sum, prevSum)})"
     } else null
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             TratyMonthPicker(
-                month = month,
+                periodLabel = formatPeriod(period, settings.periodStartDay),
                 totalKopecks = sum,
-                onPrev = vm::prevMonth,
-                onNext = vm::nextMonth,
+                onPrev = vm::prevBillingPeriod,
+                onNext = vm::nextBillingPeriod,
                 deltaText = deltaDescription,
             )
         }
@@ -72,7 +74,7 @@ fun StatsScreen(vm: MainViewModel) {
                 TratyEmptyState(
                     icon = Icons.Filled.PieChart,
                     title = "Нет статистики",
-                    description = "В этом месяце пока нет зарегистрированных трат.",
+                    description = "В этом периоде пока нет зарегистрированных трат.",
                 )
             }
         }

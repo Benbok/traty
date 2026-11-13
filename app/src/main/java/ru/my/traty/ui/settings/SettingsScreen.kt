@@ -17,9 +17,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -33,14 +35,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.LlmProvider
 import ru.my.traty.data.ThemeMode
+import ru.my.traty.data.period.MAX_PERIOD_START_DAY
+import ru.my.traty.data.period.MIN_PERIOD_START_DAY
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
+import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyOutlinedButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
@@ -123,6 +129,51 @@ fun SettingsScreen(vm: MainViewModel, onOpenCategories: () -> Unit) {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // Секция: День начала расчётного периода
+        TratyCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = TratyTheme.colors.surface,
+        ) {
+            Column(Modifier.padding(TratyTheme.spacing.lg)) {
+                Text("День начала периода", style = TratyTheme.typography.titleMedium)
+                Spacer(Modifier.height(TratyTheme.spacing.xs))
+                Text(
+                    "1 — обычный календарный месяц; укажите день зарплаты, чтобы вести учёт от зарплаты до зарплаты",
+                    style = TratyTheme.typography.bodySmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(TratyTheme.spacing.md))
+                val day = saved.periodStartDay
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    TratyIconButton(
+                        icon = Icons.Filled.Remove,
+                        contentDescription = "Уменьшить день начала периода",
+                        onClick = { vm.setPeriodStartDay(day - 1) },
+                        enabled = day > MIN_PERIOD_START_DAY,
+                        containerColor = TratyTheme.colors.surfaceContainer,
+                    )
+                    Text(
+                        text = day.toString(),
+                        style = TratyTheme.typography.headlineLarge,
+                        color = TratyTheme.colors.onSurface,
+                        modifier = Modifier.width(72.dp),
+                        textAlign = TextAlign.Center,
+                    )
+                    TratyIconButton(
+                        icon = Icons.Filled.Add,
+                        contentDescription = "Увеличить день начала периода",
+                        onClick = { vm.setPeriodStartDay(day + 1) },
+                        enabled = day < MAX_PERIOD_START_DAY,
+                        containerColor = TratyTheme.colors.surfaceContainer,
+                    )
                 }
             }
         }

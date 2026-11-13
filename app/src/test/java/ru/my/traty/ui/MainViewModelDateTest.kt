@@ -12,7 +12,7 @@ import org.robolectric.annotation.Config
 import ru.my.traty.TestTratyApp
 import ru.my.traty.TratyApp
 import java.time.LocalDate
-import java.time.YearMonth
+import ru.my.traty.data.period.BillingPeriod
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = TestTratyApp::class)
@@ -33,7 +33,7 @@ class MainViewModelDateTest {
         vm.selectDate(targetDate)
 
         assertEquals(targetDate, vm.selectedDate.value)
-        assertEquals(YearMonth.of(2026, 8), vm.month.value)
+        assertEquals(BillingPeriod.containing(targetDate, 1), vm.period.value)
 
         // Day navigation
         vm.prevPeriod()
@@ -42,20 +42,20 @@ class MainViewModelDateTest {
         vm.nextPeriod()
         assertEquals(targetDate, vm.selectedDate.value)
 
-        // Month navigation clears date filter
-        vm.nextMonth()
+        // Period navigation clears date filter
+        vm.nextBillingPeriod()
         assertNull(vm.selectedDate.value)
-        assertEquals(YearMonth.of(2026, 9), vm.month.value)
+        assertEquals(BillingPeriod.containing(LocalDate.of(2026, 9, 1), 1), vm.period.value)
 
         vm.selectDate(LocalDate.of(2026, 9, 20))
-        vm.prevMonth()
+        vm.prevBillingPeriod()
         assertNull(vm.selectedDate.value)
-        assertEquals(YearMonth.of(2026, 8), vm.month.value)
+        assertEquals(BillingPeriod.containing(targetDate, 1), vm.period.value)
 
         // Clear date filter manually
         vm.selectDate(LocalDate.of(2026, 8, 5))
         vm.clearSelectedDate()
         assertNull(vm.selectedDate.value)
-        assertEquals(YearMonth.of(2026, 8), vm.month.value)
+        assertEquals(BillingPeriod.containing(targetDate, 1), vm.period.value)
     }
 }

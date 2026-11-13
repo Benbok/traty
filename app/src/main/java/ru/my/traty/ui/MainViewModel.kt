@@ -12,7 +12,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,10 +34,10 @@ import ru.my.traty.data.Expense
 import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.normalizeName
+import ru.my.traty.data.period.BillingPeriod
 import ru.my.traty.data.sameName
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.YearMonth
 import java.time.ZoneId
 import kotlin.math.roundToLong
 
@@ -66,22 +68,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val categories: StateFlow<List<CategoryWithSubs>> =
         c.db.categories().observeActiveWithSubs().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    private val _month = MutableStateFlow(YearMonth.now())
-    val month: StateFlow<YearMonth> = _month
+    /** День начала расчётного периода из настроек (1 — календарный месяц). */
+    private var startDay = 1
+    private val _period = MutableStateFlow(BillingPeriod.containing(LocalDate.now(), startDay))
+    val period: StateFlow<BillingPeriod> = _period
 
     private val _selectedDate = MutableStateFlow<LocalDate?>(null)
     val selectedDate: StateFlow<LocalDate?> = _selectedDate
 
-    val expenses: StateFlow<List<ExpenseWithCategory>> = _month.flatMapLatest { m ->
-        c.db.expenses().observeRange(m.startMillis(), m.plusMonths(1).startMillis())
+    val expenses: StateFlow<List<ExpenseWithCategory>> = _period.flatMapLatest { p ->
+        c.db.expenses().observeRange(p.startMillis(zone), p.endMillisExclusive(zone))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val totals: StateFlow<List<CategoryTotal>> = _month.flatMapLatest { m ->
-        c.db.expenses().observeTotals(m.startMillis(), m.plusMonths(1).startMillis())
+    val totals: StateFlow<List<CategoryTotal>> = _period.flatMapLatest { p ->
+        c.db.expenses().observeTotals(p.startMillis(zone), p.endMillisExclusive(zone))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val prevTotals: StateFlow<List<CategoryTotal>> = _month.flatMapLatest { m ->
-        c.db.expenses().observeTotals(m.minusMonths(1).startMillis(), m.startMillis())
+    val prevTotals: StateFlow<List<CategoryTotal>> = _period.flatMapLatest { p ->
+        val prev = p.previous(startDay)
+        c.db.expenses().observeTotals(prev.startMillis(zone), prev.endMillisExclusive(zone))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // --- Состояние экрана ---
@@ -97,14 +102,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var insightBusy by mutableStateOf(false)
         private set
 
+    init {
+        // Смена дня начала периода в настройках: пересчитываем текущий период
+        viewModelScope.launch {
+            settings.map { it.periodStartDay }.distinctUntilChanged().collect { day ->
+                if (day != startDay) {
+                    startDay = day
+                    _period.value = BillingPeriod.containing(_selectedDate.value ?: LocalDate.now(), day)
+                    insight = null
+                }
+            }
+        }
+    }
+
     fun selectDate(date: LocalDate?) {
         _selectedDate.value = date
-        if (date != null) {
-            val ym = YearMonth.from(date)
-            if (_month.value != ym) {
-                _month.value = ym
-                insight = null
-            }
+        if (date != null && date !in _period.value) {
+            _period.value = BillingPeriod.containing(date, startDay)
+            insight = null
         }
     }
 
@@ -117,7 +132,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (cur != null) {
             selectDate(cur.minusDays(1))
         } else {
-            prevMonth()
+            prevBillingPeriod()
         }
     }
 
@@ -126,19 +141,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (cur != null) {
             selectDate(cur.plusDays(1))
         } else {
-            nextMonth()
+            nextBillingPeriod()
         }
     }
 
-    fun prevMonth() {
+    fun prevBillingPeriod() {
         _selectedDate.value = null
-        _month.value = _month.value.minusMonths(1)
+        _period.value = _period.value.previous(startDay)
         insight = null
     }
 
-    fun nextMonth() {
+    fun nextBillingPeriod() {
         _selectedDate.value = null
-        _month.value = _month.value.plusMonths(1)
+        _period.value = _period.value.next(startDay)
         insight = null
     }
 
@@ -221,6 +236,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.settings.setThemeMode(mode)
     }
 
+    fun setPeriodStartDay(day: Int) = viewModelScope.launch {
+        c.settings.setPeriodStartDay(day)
+    }
+
     fun saveSettings(s: AppSettings) = viewModelScope.launch {
         c.settings.save(s)
         message = "Настройки сохранены"
@@ -241,12 +260,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun requestInsight() {
         val client = clientFor(settings.value) ?: run { message = "Для комментария нужен ИИ (Настройки)"; return }
         val cur = totals.value
-        if (cur.isEmpty()) { message = "За этот месяц трат нет"; return }
+        if (cur.isEmpty()) { message = "За этот период трат нет"; return }
         val prev = prevTotals.value.associate { it.categoryId to it.total }
         val summary = buildString {
-            appendLine("Месяц: ${_month.value}. Траты по категориям (₽), в скобках — прошлый месяц:")
+            appendLine("Период: ${formatPeriod(_period.value, startDay)}. Траты по категориям (₽), в скобках — прошлый период:")
             cur.forEach { t -> appendLine("- ${t.name}: ${t.total / 100} (${(prev[t.categoryId] ?: 0) / 100})") }
-            appendLine("Итого: ${cur.sumOf { it.total } / 100} (прошлый месяц ${prev.values.sum() / 100})")
+            appendLine("Итого: ${cur.sumOf { it.total } / 100} (прошлый период ${prev.values.sum() / 100})")
         }
         viewModelScope.launch {
             insightBusy = true
@@ -296,8 +315,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // --- Преобразования ---
-    private fun YearMonth.startMillis(): Long = atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
-
     private fun emptyItem() = DraftItem("", DefaultCategories.OTHER, "", "", "", LocalDate.now().toString())
 
     private fun ParsedExpense.toDraft(cats: List<CategoryWithSubs>): DraftItem {

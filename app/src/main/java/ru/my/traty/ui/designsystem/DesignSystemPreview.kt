@@ -31,7 +31,6 @@ import ru.my.traty.ui.designsystem.components.TratyMonthPicker
 import ru.my.traty.ui.designsystem.components.TratyOutlinedButton
 import ru.my.traty.ui.designsystem.components.TratyProgressBar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
-import java.time.YearMonth
 
 @Composable
 fun TratyDesignSystemShowcase() {
@@ -51,11 +50,11 @@ fun TratyDesignSystemShowcase() {
 
         // Month Picker
         TratyMonthPicker(
-            month = YearMonth.of(2026, 11),
+            periodLabel = "Ноябрь 2026",
             totalKopecks = 1425000,
             onPrev = {},
             onNext = {},
-            deltaText = "Прошлый месяц: 12 400 ₽ (+15%)",
+            deltaText = "Прошлый период: 12 400 ₽ (+15%)",
         )
 
         // Amounts
