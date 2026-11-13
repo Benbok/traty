@@ -5,7 +5,12 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -15,6 +20,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import ru.my.traty.TestTratyApp
 import ru.my.traty.TratyApp
 import ru.my.traty.data.Expense
 import ru.my.traty.ui.charts.ChartsViewModel
@@ -24,15 +30,23 @@ import java.time.ZoneId
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(application = TratyApp::class)
+@Config(application = TestTratyApp::class)
 class ChartsViewModelTest {
     private lateinit var app: TratyApp
     private lateinit var vm: ChartsViewModel
 
     @Before
     fun setUp() {
+        // runTest блокирует главный поток Robolectric, поэтому viewModelScope (Dispatchers.Main)
+        // не получил бы управление и uiState никогда бы не обновился.
+        Dispatchers.setMain(UnconfinedTestDispatcher())
         app = ApplicationProvider.getApplicationContext<TratyApp>()
         vm = ChartsViewModel(app)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     @Test
@@ -45,7 +59,7 @@ class ChartsViewModelTest {
     }
 
     @Test
-    fun testAddIncomeAndCalculateBalance() = runTest {
+    fun testAddIncomeAndCalculateBalance() = runTest(timeout = 20.seconds) {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.uiState.collect {}
         }
@@ -73,7 +87,9 @@ class ChartsViewModelTest {
         advanceUntilIdle()
 
         // Wait for uiState flow emission
-        val state = vm.uiState.filter { it.summary.totalDebitKopecks > 0L }.first()
+        val state = vm.uiState
+            .filter { it.summary.totalDebitKopecks > 0L && it.summary.totalCreditKopecks > 0L }
+            .first()
 
         assertEquals(50_000_00L, state.summary.totalDebitKopecks)
         assertEquals(20_000_00L, state.summary.totalCreditKopecks)

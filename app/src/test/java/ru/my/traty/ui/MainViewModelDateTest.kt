@@ -9,12 +9,13 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import ru.my.traty.TestTratyApp
 import ru.my.traty.TratyApp
 import java.time.LocalDate
 import java.time.YearMonth
 
 @RunWith(RobolectricTestRunner::class)
-@Config(application = TratyApp::class)
+@Config(application = TestTratyApp::class)
 class MainViewModelDateTest {
     private lateinit var vm: MainViewModel
 

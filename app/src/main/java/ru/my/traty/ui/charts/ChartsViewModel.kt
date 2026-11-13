@@ -137,7 +137,7 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
     private fun processUiState(
         p: ChartPeriod,
         m: YearMonth,
-        range: Range,
+        range: ChartRange,
         expenses: List<ExpenseWithCategory>,
         incomes: List<Income>,
     ): ChartsUiState {
@@ -178,7 +178,7 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun calculateBalancePoints(
         period: ChartPeriod,
-        range: Range,
+        range: ChartRange,
         expenses: List<ExpenseWithCategory>,
         incomes: List<Income>,
     ): List<BalancePoint> {
@@ -253,7 +253,7 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun calculateDebitCreditBars(
         period: ChartPeriod,
-        range: Range,
+        range: ChartRange,
         expenses: List<ExpenseWithCategory>,
         incomes: List<Income>,
     ): List<DebitCreditBar> {

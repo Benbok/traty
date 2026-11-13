@@ -10,20 +10,27 @@ import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.SettingsRepository
 
-class TratyApp : Application() {
+open class TratyApp : Application() {
     lateinit var container: AppContainer
         private set
 
     override fun onCreate() {
         super.onCreate()
-        container = AppContainer(this)
-        container.seedIfEmpty()
+        container = createContainer()
+        if (seedOnStart) container.seedIfEmpty()
     }
+
+    protected open val seedOnStart: Boolean get() = true
+
+    /** Тестовый шов: тесты подменяют контейнер (например, БД в памяти). */
+    protected open fun createContainer(): AppContainer = AppContainer(this)
 }
 
 /** Простейший «DI»: все общие объекты создаются здесь один раз. */
-class AppContainer(context: Context) {
-    val db: AppDatabase = AppDatabase.build(context)
+class AppContainer(
+    context: Context,
+    val db: AppDatabase = AppDatabase.build(context),
+) {
     val settings = SettingsRepository(context)
     val categories = CategoryRepository(db)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
