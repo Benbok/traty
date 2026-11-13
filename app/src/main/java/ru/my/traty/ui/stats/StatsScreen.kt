@@ -20,13 +20,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.ui.MainViewModel
+import ru.my.traty.ui.charts.components.DateRangePickerModal
 import ru.my.traty.ui.designsystem.components.AmountSize
 import ru.my.traty.ui.designsystem.components.TratyAmountText
 import ru.my.traty.ui.designsystem.components.TratyButton
@@ -37,35 +41,58 @@ import ru.my.traty.ui.designsystem.components.TratyEmptyState
 import ru.my.traty.ui.designsystem.components.TratyMonthPicker
 import ru.my.traty.ui.designsystem.components.TratyProgressBar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
+import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
+import java.time.LocalDate
 import kotlin.math.roundToInt
 
 /**
  * Экран статистики по категориям трат и комментария ИИ.
  */
 @Composable
-fun StatsScreen(vm: MainViewModel) {
+fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
     val period by vm.period.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
-    val totals by vm.totals.collectAsStateWithLifecycle()
-    val prev by vm.prevTotals.collectAsStateWithLifecycle()
+    val periodTotals by vm.totals.collectAsStateWithLifecycle()
+    val periodPrev by vm.prevTotals.collectAsStateWithLifecycle()
+    val range by rangeVm.range.collectAsStateWithLifecycle()
+    val customTotals by rangeVm.totals.collectAsStateWithLifecycle()
+    val customPrev by rangeVm.prevTotals.collectAsStateWithLifecycle()
+    var showRangePicker by remember { mutableStateOf(false) }
+
+    // Режим «Даты» (range != null) не влияет на период ленты трат: он живёт только на этом экране
+    val custom = range != null
+    val totals = if (custom) customTotals else periodTotals
+    val prev = if (custom) customPrev else periodPrev
     val prevMap = remember(prev) { prev.associate { it.categoryId to it.total } }
     val sum = totals.sumOf { it.total }
     val prevSum = prev.sumOf { it.total }
 
     val deltaDescription = if (prevSum > 0) {
-        "Прошлый период: ${formatRub(prevSum)} (${deltaText(sum, prevSum)})"
+        val label = if (custom) "Предыдущие такие же даты" else "Прошлый период"
+        "$label: ${formatRub(prevSum)} (${deltaText(sum, prevSum)})"
     } else null
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
+            StatsModeChips(
+                customSelected = custom,
+                onPeriod = rangeVm::clear,
+                onDates = { showRangePicker = true },
+            )
+        }
+
+        item {
             TratyMonthPicker(
-                periodLabel = formatPeriod(period, settings.periodStartDay),
+                periodLabel = range?.let { "${formatDate(it.first)} — ${formatDate(it.second)}" }
+                    ?: formatPeriod(period, settings.periodStartDay),
                 totalKopecks = sum,
-                onPrev = vm::prevBillingPeriod,
-                onNext = vm::nextBillingPeriod,
+                onPrev = if (custom) { { rangeVm.shift(-1) } } else vm::prevBillingPeriod,
+                onNext = if (custom) { { rangeVm.shift(1) } } else vm::nextBillingPeriod,
                 deltaText = deltaDescription,
+                // В режиме «Даты» нажатие на подпись открывает календарь выбора диапазона
+                onDateClick = if (custom) { { showRangePicker = true } } else null,
             )
         }
 
@@ -74,7 +101,11 @@ fun StatsScreen(vm: MainViewModel) {
                 TratyEmptyState(
                     icon = Icons.Filled.PieChart,
                     title = "Нет статистики",
-                    description = "В этом периоде пока нет зарегистрированных трат.",
+                    description = if (custom) {
+                        "В выбранных датах трат нет."
+                    } else {
+                        "В этом периоде пока нет зарегистрированных трат."
+                    },
                 )
             }
         }
@@ -137,7 +168,8 @@ fun StatsScreen(vm: MainViewModel) {
             }
         }
 
-        item {
+        // Комментарий ИИ считается по расчётному периоду, поэтому в режиме «Даты» его не показываем
+        if (!custom) item {
             TratyCard(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -189,6 +221,29 @@ fun StatsScreen(vm: MainViewModel) {
             }
         }
     }
+
+    if (showRangePicker) {
+        StatsRangeDialog(
+            range = range,
+            onSelected = rangeVm::setRange,
+            onDismiss = { showRangePicker = false },
+        )
+    }
+}
+
+@Composable
+private fun StatsRangeDialog(
+    range: Pair<LocalDate, LocalDate>?,
+    onSelected: (LocalDate, LocalDate) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val today = LocalDate.now()
+    DateRangePickerModal(
+        initialStart = range?.first ?: today.minusDays(29),
+        initialEnd = range?.second ?: today,
+        onRangeSelected = onSelected,
+        onDismiss = onDismiss,
+    )
 }
 
 private fun deltaText(cur: Long, prev: Long): String {
