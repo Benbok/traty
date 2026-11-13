@@ -7,7 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import ru.my.traty.data.AppDatabase
-import ru.my.traty.data.DefaultCategories
+import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.SettingsRepository
 
 class TratyApp : Application() {
@@ -25,11 +25,10 @@ class TratyApp : Application() {
 class AppContainer(context: Context) {
     val db: AppDatabase = AppDatabase.build(context)
     val settings = SettingsRepository(context)
+    val categories = CategoryRepository(db)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun seedIfEmpty() {
-        scope.launch {
-            if (db.categories().count() == 0) db.categories().upsert(DefaultCategories.list)
-        }
+        scope.launch { categories.seedIfEmpty() }
     }
 }

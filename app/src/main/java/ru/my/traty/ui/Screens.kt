@@ -64,8 +64,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.data.AppSettings
-import ru.my.traty.data.Category
-import ru.my.traty.data.Expense
+import ru.my.traty.data.CategoryWithSubs
+import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.LlmProvider
 import ru.my.traty.speech.SystemSpeech
 import ru.my.traty.ui.designsystem.components.AmountSize
@@ -145,24 +145,19 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
 private fun HomeScreen(vm: MainViewModel) {
     val expenses by vm.expenses.collectAsStateWithLifecycle()
     val month by vm.month.collectAsStateWithLifecycle()
-    val categories by vm.categories.collectAsStateWithLifecycle()
-    val emojiOf = remember(categories) { categories.associate { it.name to it.emoji } }
-    var toDelete by remember { mutableStateOf<Expense?>(null) }
+    var toDelete by remember { mutableStateOf<ExpenseWithCategory?>(null) }
 
     val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         if (res.resultCode == Activity.RESULT_OK) {
             val text = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-            if (!text.isNullOrBlank()) {
-                vm.input = text
-                vm.parseInput() // сразу разбираем — подтверждение всё равно будет
-            }
+            if (!text.isNullOrBlank()) vm.onVoiceResult(text)
         }
     }
 
     Column(Modifier.fillMaxSize().imePadding()) {
         TratyMonthPicker(
             month = month,
-            totalKopecks = expenses.sumOf { it.amountKopecks },
+            totalKopecks = expenses.sumOf { it.expense.amountKopecks },
             onPrev = vm::prevMonth,
             onNext = vm::nextMonth,
         )
@@ -177,8 +172,8 @@ private fun HomeScreen(vm: MainViewModel) {
                     )
                 }
             }
-            items(expenses, key = { it.id }) { e ->
-                ExpenseRow(e, emojiOf[e.category] ?: "📦") { toDelete = e }
+            items(expenses, key = { it.expense.id }) { e ->
+                ExpenseRow(e) { toDelete = e }
                 HorizontalDivider(
                     color = TratyTheme.colors.borderSubtle,
                     modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg),
@@ -210,13 +205,13 @@ private fun HomeScreen(vm: MainViewModel) {
             title = { Text("Удалить трату?", style = TratyTheme.typography.titleMedium) },
             text = {
                 Text(
-                    "${e.category}: ${formatRub(e.amountKopecks)}\n${e.note ?: e.rawText ?: ""}",
+                    "${e.categoryName}: ${formatRub(e.expense.amountKopecks)}\n${e.expense.note ?: e.expense.rawText ?: ""}",
                     style = TratyTheme.typography.bodyMedium,
                 )
             },
             confirmButton = {
                 TratyTextButton(
-                    onClick = { vm.delete(e); toDelete = null },
+                    onClick = { vm.delete(e.expense); toDelete = null },
                     contentColor = TratyTheme.colors.expense,
                 ) {
                     Text("Удалить")
@@ -232,7 +227,8 @@ private fun HomeScreen(vm: MainViewModel) {
 }
 
 @Composable
-private fun ExpenseRow(e: Expense, emoji: String, onClick: () -> Unit) {
+private fun ExpenseRow(row: ExpenseWithCategory, onClick: () -> Unit) {
+    val e = row.expense
     Row(
         Modifier
             .fillMaxWidth()
@@ -241,13 +237,13 @@ private fun ExpenseRow(e: Expense, emoji: String, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TratyCategoryBadge(
-            emoji = emoji,
-            categoryName = e.category,
+            emoji = row.categoryEmoji,
+            categoryName = row.categoryName,
             size = 42.dp,
         )
         Spacer(Modifier.width(TratyTheme.spacing.md))
         Column(Modifier.weight(1f)) {
-            val title = listOfNotNull(e.subcategory ?: e.category, e.place).joinToString(" · ")
+            val title = listOfNotNull(row.subcategoryName ?: row.categoryName, e.place).joinToString(" · ")
             Text(
                 text = title,
                 style = TratyTheme.typography.titleSmall,
@@ -273,7 +269,7 @@ private fun ExpenseRow(e: Expense, emoji: String, onClick: () -> Unit) {
 @Composable
 private fun ConfirmDialog(
     draft: Draft,
-    categories: List<Category>,
+    categories: List<CategoryWithSubs>,
     onDismiss: () -> Unit,
     onSave: (Draft) -> Unit,
 ) {
@@ -383,13 +379,14 @@ private fun ConfirmDialog(
 @Composable
 private fun CategoryPicker(
     selected: String,
-    categories: List<Category>,
-    suggested: Category?,
+    categoryList: List<CategoryWithSubs>,
+    suggested: NewCategory?,
     onPick: (String) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
+    val categories = categoryList.map { it.category }
     // Предложение модели показываем, только если такой категории ещё нет в базе
-    val newOne = suggested?.takeIf { s -> categories.none { it.name.equals(s.name, ignoreCase = true) } }
+    val newOne = suggested?.takeIf { s -> categories.none { it.name.lowercase() == s.name.lowercase() } }
     val isNew = newOne != null && selected == newOne.name
     val emoji = categories.firstOrNull { it.name == selected }?.emoji ?: newOne?.takeIf { isNew }?.emoji ?: ""
     Box {
@@ -425,9 +422,7 @@ private fun StatsScreen(vm: MainViewModel) {
     val month by vm.month.collectAsStateWithLifecycle()
     val totals by vm.totals.collectAsStateWithLifecycle()
     val prev by vm.prevTotals.collectAsStateWithLifecycle()
-    val categories by vm.categories.collectAsStateWithLifecycle()
-    val emojiOf = remember(categories) { categories.associate { it.name to it.emoji } }
-    val prevMap = remember(prev) { prev.associate { it.category to it.total } }
+    val prevMap = remember(prev) { prev.associate { it.categoryId to it.total } }
     val sum = totals.sumOf { it.total }
     val prevSum = prev.sumOf { it.total }
 
@@ -456,9 +451,9 @@ private fun StatsScreen(vm: MainViewModel) {
             }
         }
 
-        items(totals, key = { it.category }) { t ->
+        items(totals, key = { it.categoryId }) { t ->
             val frac = if (sum > 0) t.total.toFloat() / sum else 0f
-            val p = prevMap[t.category]
+            val p = prevMap[t.categoryId]
 
             Column(
                 Modifier
@@ -467,13 +462,13 @@ private fun StatsScreen(vm: MainViewModel) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TratyCategoryBadge(
-                        emoji = emojiOf[t.category] ?: "📦",
-                        categoryName = t.category,
+                        emoji = t.emoji,
+                        categoryName = t.name,
                         size = 36.dp,
                     )
                     Spacer(Modifier.width(TratyTheme.spacing.md))
                     Text(
-                        text = t.category,
+                        text = t.name,
                         style = TratyTheme.typography.titleSmall,
                         modifier = Modifier.weight(1f),
                     )
