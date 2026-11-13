@@ -59,7 +59,7 @@ class ChartsViewModelTest {
     }
 
     @Test
-    fun testAddIncomeAndCalculateBalance() = runTest(timeout = 20.seconds) {
+    fun testIncomeBalanceAndDelete() = runTest(timeout = 20.seconds) {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.uiState.collect {}
         }
@@ -82,8 +82,15 @@ class ChartsViewModelTest {
             )
         )
 
-        // Add income via ViewModel: 50 000 руб
-        vm.addIncome(50000.0, "Зарплата", "Оклад за месяц", today)
+        // Пополнение появляется в базе (ввод — через строку «+» или сверку, не через экран графиков): 50 000 руб
+        app.container.db.incomes().insert(
+            ru.my.traty.data.Income(
+                amountKopecks = 50_000_00L,
+                source = "Зарплата",
+                note = "Оклад за месяц",
+                timestamp = timestamp,
+            )
+        )
         advanceUntilIdle()
 
         // Wait for uiState flow emission

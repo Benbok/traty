@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PieChart
@@ -40,14 +39,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.data.Income
 import ru.my.traty.data.isUserEditable
-import ru.my.traty.ui.charts.components.AddIncomeDialog
 import ru.my.traty.ui.charts.components.BalanceAreaChart
 import ru.my.traty.ui.charts.components.ChartKpiCard
 import ru.my.traty.ui.charts.components.DebitCreditBarChart
 import ru.my.traty.ui.charts.model.ChartPeriod
 import ru.my.traty.ui.designsystem.components.AmountSize
 import ru.my.traty.ui.designsystem.components.TratyAmountText
-import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyCategoryBadge
 import ru.my.traty.ui.designsystem.components.TratyIconButton
@@ -62,7 +59,6 @@ import kotlin.math.roundToInt
 @Composable
 fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
     val state by vm.uiState.collectAsStateWithLifecycle()
-    var showAddIncome by remember { mutableStateOf(false) }
     var incomeToDelete by remember { mutableStateOf<Income?>(null) }
 
     LazyColumn(
@@ -74,24 +70,12 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
         // Шапка и переключатель периодов
         item {
             Spacer(Modifier.height(TratyTheme.spacing.xs))
-            Row(
+            Text(
+                text = "Финансовая аналитика",
+                style = TratyTheme.typography.headlineLarge,
+                color = TratyTheme.colors.onSurface,
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Финансовая аналитика",
-                    style = TratyTheme.typography.headlineLarge,
-                    color = TratyTheme.colors.onSurface,
-                )
-                TratyButton(
-                    onClick = { showAddIncome = true },
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Доход")
-                }
-            }
+            )
         }
 
         // Чипсы выбора периода
@@ -290,16 +274,6 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
         item {
             Spacer(Modifier.height(TratyTheme.spacing.lg))
         }
-    }
-
-    if (showAddIncome) {
-        AddIncomeDialog(
-            onDismiss = { showAddIncome = false },
-            onSave = { amount, source, note, date ->
-                vm.addIncome(amount, source, note, date)
-                showAddIncome = false
-            },
-        )
     }
 
     incomeToDelete?.let { inc ->

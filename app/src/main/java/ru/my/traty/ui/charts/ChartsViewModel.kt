@@ -30,7 +30,6 @@ import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
-import kotlin.math.roundToLong
 
 data class ChartsUiState(
     val period: ChartPeriod = ChartPeriod.MONTH,
@@ -129,21 +128,6 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun nextBillingPeriod() {
         billingPeriod.value = billingPeriod.value.next(startDay.value)
-    }
-
-    fun addIncome(amountRub: Double, source: String, note: String?, date: LocalDate) {
-        val amountKopecks = (amountRub * 100).roundToLong()
-        val timestamp = ru.my.traty.data.entryTimestamp(date, zone)
-        viewModelScope.launch {
-            c.db.incomes().insert(
-                Income(
-                    amountKopecks = amountKopecks,
-                    source = source,
-                    note = note,
-                    timestamp = timestamp,
-                ),
-            )
-        }
     }
 
     fun deleteIncome(income: Income) {
