@@ -67,7 +67,7 @@ class DatabaseUpgradeTest {
     }
 
     /** База в формате v3 — SQL взят дословно из app/schemas/.../3.json. */
-    private fun createV3Database() {
+    private fun createV3Database(extraCategory: String? = null) {
         val file = context.getDatabasePath(dbName).apply { parentFile?.mkdirs(); delete() }
         SQLiteDatabase.openOrCreateDatabase(file, null).use { v3 ->
             v3.execSQL(
@@ -100,6 +100,9 @@ class DatabaseUpgradeTest {
             )
             v3.execSQL("CREATE INDEX IF NOT EXISTS `index_incomes_timestamp` ON `incomes` (`timestamp`)")
             v3.execSQL("INSERT INTO categories (id, name, emoji, color, sortOrder, isArchived) VALUES (1, 'Продукты', '🛒', NULL, 0, 0)")
+            extraCategory?.let {
+                v3.execSQL("INSERT INTO categories (id, name, emoji, color, sortOrder, isArchived) VALUES (2, '$it', '❓', NULL, 1, 0)")
+            }
             v3.execSQL(
                 "INSERT INTO expenses (id, amountKopecks, currency, categoryId, subcategoryId, place, note, timestamp, rawText, source) " +
                     "VALUES (1, 35000, 'RUB', 1, NULL, 'Магнит', 'Молоко', 1000, NULL, 'manual')"
@@ -137,6 +140,20 @@ class DatabaseUpgradeTest {
                 )
             )
             assertEquals(listOf(id), db.reconciliations().getAll().map { it.id })
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun v3WithCaseVariantUnaccountedDoesNotGetDuplicate() = runTest {
+        createV3Database(extraCategory = "неучтённые")
+        val db = AppDatabase.build(context, dbName)
+        try {
+            val matches = db.categories().getAllWithSubs().filter { sameName(it.category.name, DefaultCategories.UNACCOUNTED) }
+            assertEquals(1, matches.size)
+            assertEquals(2L, matches[0].category.id)
+            assertEquals(2L, CategoryRepository(db).ensureUnaccounted())
         } finally {
             db.close()
         }

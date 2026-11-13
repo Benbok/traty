@@ -349,12 +349,18 @@ abstract class AppDatabase : RoomDatabase() {
                         "`differenceKopecks` INTEGER NOT NULL, `expenseId` INTEGER, `incomeId` INTEGER, `isOpening` INTEGER NOT NULL)"
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_reconciliations_timestamp` ON `reconciliations` (`timestamp`)")
-                db.execSQL(
-                    "INSERT INTO `categories` (`name`, `emoji`, `color`, `sortOrder`, `isArchived`) " +
-                        "SELECT '${DefaultCategories.UNACCOUNTED}', '${DefaultCategories.UNACCOUNTED_EMOJI}', NULL, " +
-                        "COALESCE((SELECT MAX(`sortOrder`) FROM `categories` WHERE `name` <> '${DefaultCategories.OTHER}'), -1) + 1, 0 " +
-                        "WHERE NOT EXISTS (SELECT 1 FROM `categories` WHERE `name` = '${DefaultCategories.UNACCOUNTED}')"
-                )
+                // Сравнение имён без учёта регистра — в Kotlin (sameName); вариант пользователя не трогаем.
+                var exists = false
+                db.query("SELECT `name` FROM `categories`").use { c ->
+                    while (c.moveToNext()) if (sameName(c.getString(0), DefaultCategories.UNACCOUNTED)) exists = true
+                }
+                if (!exists) {
+                    db.execSQL(
+                        "INSERT INTO `categories` (`name`, `emoji`, `color`, `sortOrder`, `isArchived`) " +
+                            "SELECT '${DefaultCategories.UNACCOUNTED}', '${DefaultCategories.UNACCOUNTED_EMOJI}', NULL, " +
+                            "COALESCE((SELECT MAX(`sortOrder`) FROM `categories` WHERE `name` <> '${DefaultCategories.OTHER}'), -1) + 1, 0"
+                    )
+                }
             }
         }
 
