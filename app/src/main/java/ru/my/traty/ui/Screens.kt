@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -128,7 +129,8 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             }
         },
     ) { pad ->
-        Box(Modifier.padding(pad).fillMaxSize()) {
+        // consumeWindowInsets: отступ под нижнюю панель уже учтён — imePadding ниже добавит только остаток высоты клавиатуры
+        Box(Modifier.padding(pad).consumeWindowInsets(pad).fillMaxSize()) {
             when (tab) {
                 Tab.HOME -> HomeScreen(vm)
                 Tab.STATS -> StatsScreen(vm)
