@@ -8,6 +8,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.CategoryRepository
+import ru.my.traty.data.ReconciliationRepository
 import ru.my.traty.data.SettingsRepository
 
 open class TratyApp : Application() {
@@ -33,6 +34,7 @@ class AppContainer(
 ) {
     val settings = SettingsRepository(context)
     val categories = CategoryRepository(db)
+    val reconciliations = ReconciliationRepository(db, categories)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun seedIfEmpty() {

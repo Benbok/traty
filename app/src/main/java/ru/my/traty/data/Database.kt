@@ -139,6 +139,9 @@ private const val CATEGORY_ORDER = "ORDER BY (name = 'Прочее'), sortOrder,
 @Dao
 interface ExpenseDao {
     @Insert
+    suspend fun insert(item: Expense): Long
+
+    @Insert
     suspend fun insertAll(items: List<Expense>)
 
     @Update
