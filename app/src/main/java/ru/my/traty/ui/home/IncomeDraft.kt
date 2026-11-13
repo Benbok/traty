@@ -16,8 +16,10 @@ data class IncomeDraftItem(
 
 data class IncomeDraft(val items: List<IncomeDraftItem>, val rawText: String, val origin: String)
 
-// Обычные пробелы плюс неразрывный (U+00A0) и узкий неразрывный (U+202F)
-private val spaceLike = Regex("[\\s  ]")
+// Неразрывный пробел (U+00A0) и узкий неразрывный пробел (U+202F) — из кодов, чтобы не прятать их в исходнике
+private val NBSP: Char = 0x00A0.toChar()
+private val NNBSP: Char = 0x202F.toChar()
+private val spaceLike = Regex("[\\s$NBSP$NNBSP]")
 
 /**
  * Черновик → запись [Income] или null, если сумма некорректна/неположительна.

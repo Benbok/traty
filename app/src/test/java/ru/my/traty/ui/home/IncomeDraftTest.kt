@@ -12,6 +12,8 @@ import java.time.ZoneId
 class IncomeDraftTest {
     private val zone = ZoneId.of("Europe/Moscow")
     private val today = LocalDate.of(2026, 11, 13)
+    private val nbsp: Char = 0x00A0.toChar()
+    private val nnbsp: Char = 0x202F.toChar()
 
     private fun item(amount: String, source: String = "Зарплата", note: String = "", date: String = today.toString()) =
         IncomeDraftItem(amount, source, note, date)
@@ -22,8 +24,8 @@ class IncomeDraftTest {
     @Test
     fun toIncomeParsesCommaAndSpaces() {
         assertEquals(8_000_050L, kopecks("80 000,50"))
-        assertEquals(8_000_050L, kopecks("80 000,50"))
-        assertEquals(8_000_050L, kopecks("80 000,50"))
+        assertEquals(8_000_050L, kopecks("80${nbsp}000,50"))
+        assertEquals(8_000_050L, kopecks("80${nnbsp}000,50"))
         assertEquals(150L, kopecks("1,5"))
         assertEquals(3_000_000L, kopecks("30000"))
     }
