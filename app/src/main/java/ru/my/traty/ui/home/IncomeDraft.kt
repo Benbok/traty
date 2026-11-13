@@ -1,8 +1,8 @@
 package ru.my.traty.ui.home
 
 import ru.my.traty.data.Income
+import ru.my.traty.data.entryTimestamp
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.ZoneId
 import kotlin.math.roundToLong
 
@@ -31,12 +31,11 @@ fun IncomeDraftItem.toIncome(origin: String, zone: ZoneId, today: LocalDate = Lo
     val kopecks = (amount * 100).roundToLong()
     if (kopecks <= 0) return null
     val day = runCatching { LocalDate.parse(dateText.trim()) }.getOrNull() ?: today
-    val time = if (day == today) LocalTime.now() else LocalTime.NOON
     return Income(
         amountKopecks = kopecks,
         source = source,
         note = note.trim().ifBlank { null },
-        timestamp = day.atTime(time).atZone(zone).toInstant().toEpochMilli(),
+        timestamp = entryTimestamp(day, zone, today),
         origin = origin,
     )
 }

@@ -47,7 +47,6 @@ import ru.my.traty.data.selectable
 import ru.my.traty.data.period.BillingPeriod
 import ru.my.traty.data.sameName
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.ZoneId
 import kotlin.math.roundToLong
 
@@ -399,7 +398,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (amount <= 0) return null
         val day = runCatching { LocalDate.parse(dateText.trim()) }.getOrNull() ?: LocalDate.now()
         // Для сегодняшних трат берём текущее время, для прошлых дат — полдень
-        val time = if (day == LocalDate.now()) LocalTime.now() else LocalTime.NOON
-        return (amount * 100).roundToLong() to day.atTime(time).atZone(zone).toInstant().toEpochMilli()
+        return (amount * 100).roundToLong() to ru.my.traty.data.entryTimestamp(day, zone)
     }
 }

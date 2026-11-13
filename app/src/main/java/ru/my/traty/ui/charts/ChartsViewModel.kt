@@ -133,7 +133,7 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun addIncome(amountRub: Double, source: String, note: String?, date: LocalDate) {
         val amountKopecks = (amountRub * 100).roundToLong()
-        val timestamp = date.atStartOfDay(zone).toInstant().toEpochMilli()
+        val timestamp = ru.my.traty.data.entryTimestamp(date, zone)
         viewModelScope.launch {
             c.db.incomes().insert(
                 Income(
