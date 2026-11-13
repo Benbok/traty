@@ -27,19 +27,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import ru.my.traty.data.IncomeSources
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import java.time.LocalDate
-
-private val INCOME_SOURCES = listOf(
-    "Зарплата" to "💼",
-    "Аванс" to "💰",
-    "Перевод" to "💳",
-    "Возврат" to "↩️",
-    "Подработка" to "🛠️",
-    "Прочее" to "📦",
-)
 
 /**
  * Диалог добавления дохода / пополнения (дебет).
@@ -100,7 +92,7 @@ fun AddIncomeDialog(
                     horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
                     verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
                 ) {
-                    INCOME_SOURCES.forEach { (name, emoji) ->
+                    IncomeSources.ALL.forEach { (name, emoji) ->
                         val isSelected = selectedSource == name
                         Surface(
                             shape = TratyTheme.shapes.small,
