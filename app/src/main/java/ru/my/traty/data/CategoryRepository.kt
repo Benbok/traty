@@ -25,6 +25,18 @@ class CategoryRepository(private val db: AppDatabase) {
         }
     }
 
+    /** Id категории «Неучтённые»; создаёт её (и разархивирует), если её нет. */
+    suspend fun ensureUnaccounted(): Long = db.withTransaction {
+        val all = dao.getAllWithSubs()
+        val found = all.firstOrNull { sameName(it.category.name, DefaultCategories.UNACCOUNTED) }?.category
+        if (found != null) {
+            if (found.isArchived) dao.update(found.copy(isArchived = false))
+            return@withTransaction found.id
+        }
+        val order = (all.filter { it.category.name != DefaultCategories.OTHER }.maxOfOrNull { it.category.sortOrder } ?: -1) + 1
+        dao.insert(Category(name = DefaultCategories.UNACCOUNTED, emoji = DefaultCategories.UNACCOUNTED_EMOJI, sortOrder = order))
+    }
+
     /**
      * Находит категорию и подкатегорию по названию (без учёта регистра) или создаёт их.
      * Пустая категория → «Прочее». Архивная категория переиспользуется как есть.
@@ -72,8 +84,8 @@ class CategoryRepository(private val db: AppDatabase) {
     suspend fun updateCategory(id: Long, name: String, emoji: String, color: Int?) = db.withTransaction {
         val all = dao.getAllWithSubs()
         val cur = find(all, id)
-        val n = if (isOther(cur)) {
-            if (!sameName(name, cur.name)) throw CategoryException("«${DefaultCategories.OTHER}» нельзя переименовать")
+        val n = if (isSystem(cur)) {
+            if (!sameName(name, cur.name)) throw CategoryException("«${cur.name}» нельзя переименовать")
             cur.name
         } else {
             validateName(name, all, exceptId = id)
@@ -83,13 +95,13 @@ class CategoryRepository(private val db: AppDatabase) {
 
     suspend fun setArchived(id: Long, archived: Boolean) = db.withTransaction {
         val cur = find(dao.getAllWithSubs(), id)
-        if (archived && isOther(cur)) throw CategoryException("«${DefaultCategories.OTHER}» нельзя убрать в архив")
+        if (archived && isSystem(cur)) throw CategoryException("«${cur.name}» нельзя убрать в архив")
         dao.update(cur.copy(isArchived = archived))
     }
 
-    /** Меняет местами с соседом среди активных; «Прочее» не двигается. */
+    /** Меняет местами с соседом среди активных; системные («Прочее», «Неучтённые») не двигаются. */
     suspend fun move(id: Long, up: Boolean) = db.withTransaction {
-        val list = dao.getActiveWithSubs().map { it.category }.filterNot(::isOther).toMutableList()
+        val list = dao.getActiveWithSubs().map { it.category }.filterNot(::isSystem).toMutableList()
         val i = list.indexOfFirst { it.id == id }
         val j = if (up) i - 1 else i + 1
         if (i < 0 || j !in list.indices) return@withTransaction
@@ -103,7 +115,8 @@ class CategoryRepository(private val db: AppDatabase) {
         val all = dao.getAllWithSubs()
         val from = all.firstOrNull { it.category.id == fromId } ?: throw CategoryException("Категория не найдена")
         val into = all.firstOrNull { it.category.id == intoId } ?: throw CategoryException("Категория не найдена")
-        if (isOther(from.category)) throw CategoryException("«${DefaultCategories.OTHER}» нельзя объединить с другой категорией")
+        if (isSystem(from.category)) throw CategoryException("«${from.category.name}» нельзя объединить с другой категорией")
+        if (isSystem(into.category)) throw CategoryException("В «${into.category.name}» нельзя объединять другие категории")
         val moved = db.expenses().countByCategory(fromId)
         var nextOrder = (into.subs.maxOfOrNull { it.sortOrder } ?: -1) + 1
         from.subs.forEach { sub ->
@@ -139,7 +152,7 @@ class CategoryRepository(private val db: AppDatabase) {
 
     // --- Вспомогательное ---
 
-    private fun isOther(c: Category) = c.name == DefaultCategories.OTHER
+    private fun isSystem(c: Category) = c.name == DefaultCategories.OTHER || sameName(c.name, DefaultCategories.UNACCOUNTED)
 
     private fun find(all: List<CategoryWithSubs>, id: Long): Category =
         all.firstOrNull { it.category.id == id }?.category ?: throw CategoryException("Категория не найдена")

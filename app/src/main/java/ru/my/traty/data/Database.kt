@@ -1,6 +1,7 @@
 package ru.my.traty.data
 
 import android.content.Context
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Delete
@@ -57,7 +58,24 @@ object ExpenseSource {
     const val TEXT = "text"
     const val MANUAL = "manual"
     const val IMPORT = "import"
+    const val RECONCILE = "reconcile"
 }
+
+/** Откуда пришло пополнение. */
+object IncomeOrigin {
+    const val MANUAL = "manual"
+    const val TEXT = "text"
+    const val VOICE = "voice"
+    const val RECONCILE = "reconcile"
+}
+
+/** Записи расхождения правятся и удаляются только через «Переделать». */
+val Expense.isUserEditable: Boolean get() = source != ExpenseSource.RECONCILE
+val Income.isUserEditable: Boolean get() = origin != IncomeOrigin.RECONCILE
+
+/** «Неучтённые» не выбираются ни пользователем, ни ИИ для обычных трат. */
+fun List<CategoryWithSubs>.selectable(): List<CategoryWithSubs> =
+    filterNot { sameName(it.category.name, DefaultCategories.UNACCOUNTED) }
 
 /** Одна трата. Суммы храним в копейках (Long), чтобы не было ошибок округления. */
 @Entity(
@@ -162,6 +180,15 @@ interface ExpenseDao {
 
     @Query("UPDATE expenses SET subcategoryId = :toId WHERE subcategoryId = :fromId")
     suspend fun reassignSubcategory(fromId: Long, toId: Long)
+
+    @Query("SELECT COALESCE(SUM(amountKopecks), 0) FROM expenses WHERE timestamp > :afterMillis")
+    suspend fun sumAfter(afterMillis: Long): Long
+
+    @Query("DELETE FROM expenses WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("SELECT MIN(timestamp) FROM expenses")
+    suspend fun getFirstTimestamp(): Long?
 }
 
 @Dao
@@ -213,7 +240,39 @@ data class Income(
     val source: String = "Прочее",
     val note: String? = null,
     val timestamp: Long,
+    @ColumnInfo(defaultValue = "'manual'") val origin: String = IncomeOrigin.MANUAL,
 )
+
+/** Сверка баланса с реальным остатком. */
+@Entity(tableName = "reconciliations", indices = [Index("timestamp")])
+data class Reconciliation(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val timestamp: Long,
+    val actualKopecks: Long,
+    val expectedKopecks: Long?,
+    val differenceKopecks: Long,
+    val expenseId: Long?,
+    val incomeId: Long?,
+    val isOpening: Boolean,
+)
+
+@Dao
+interface ReconciliationDao {
+    @Insert
+    suspend fun insert(item: Reconciliation): Long
+
+    @Delete
+    suspend fun delete(item: Reconciliation)
+
+    @Query("SELECT * FROM reconciliations ORDER BY timestamp DESC, id DESC LIMIT 1")
+    suspend fun getLast(): Reconciliation?
+
+    @Query("SELECT * FROM reconciliations ORDER BY timestamp ASC, id ASC")
+    suspend fun getAll(): List<Reconciliation>
+
+    @Query("SELECT * FROM reconciliations ORDER BY timestamp ASC, id ASC")
+    fun observeAll(): Flow<List<Reconciliation>>
+}
 
 @Dao
 interface IncomeDao {
@@ -240,17 +299,27 @@ interface IncomeDao {
 
     @Query("SELECT SUM(amountKopecks) FROM incomes WHERE timestamp >= :from AND timestamp < :to")
     fun observeTotal(from: Long, to: Long): Flow<Long?>
+
+    @Query("SELECT COALESCE(SUM(amountKopecks), 0) FROM incomes WHERE timestamp > :afterMillis")
+    suspend fun sumAfter(afterMillis: Long): Long
+
+    @Query("DELETE FROM incomes WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("SELECT MIN(timestamp) FROM incomes")
+    suspend fun getFirstTimestamp(): Long?
 }
 
 @Database(
-    entities = [Expense::class, Category::class, Subcategory::class, Income::class],
-    version = 3,
+    entities = [Expense::class, Category::class, Subcategory::class, Income::class, Reconciliation::class],
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun expenses(): ExpenseDao
     abstract fun categories(): CategoryDao
     abstract fun incomes(): IncomeDao
+    abstract fun reconciliations(): ReconciliationDao
 
     companion object {
         val MIGRATION_2_3 = object : Migration(2, 3) {
@@ -271,9 +340,27 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `incomes` ADD COLUMN `origin` TEXT NOT NULL DEFAULT 'manual'")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `reconciliations` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`timestamp` INTEGER NOT NULL, `actualKopecks` INTEGER NOT NULL, `expectedKopecks` INTEGER, " +
+                        "`differenceKopecks` INTEGER NOT NULL, `expenseId` INTEGER, `incomeId` INTEGER, `isOpening` INTEGER NOT NULL)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_reconciliations_timestamp` ON `reconciliations` (`timestamp`)")
+                db.execSQL(
+                    "INSERT INTO `categories` (`name`, `emoji`, `color`, `sortOrder`, `isArchived`) " +
+                        "SELECT '${DefaultCategories.UNACCOUNTED}', '${DefaultCategories.UNACCOUNTED_EMOJI}', NULL, " +
+                        "COALESCE((SELECT MAX(`sortOrder`) FROM `categories` WHERE `name` <> '${DefaultCategories.OTHER}'), -1) + 1, 0 " +
+                        "WHERE NOT EXISTS (SELECT 1 FROM `categories` WHERE `name` = '${DefaultCategories.UNACCOUNTED}')"
+                )
+            }
+        }
+
         fun build(context: Context, name: String = "traty.db"): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, name)
-                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                 // Решение владельца: в v1 реальных данных нет — базу v1 пересоздаём.
                 // Для версий 2+ — только Migration(n, n+1).
                 .fallbackToDestructiveMigrationFrom(true, 1)
@@ -284,6 +371,8 @@ abstract class AppDatabase : RoomDatabase() {
 /** Стартовый набор категорий — применяется только к пустой базе. Правятся в Настройки → Категории. */
 object DefaultCategories {
     const val OTHER = "Прочее"
+    const val UNACCOUNTED = "Неучтённые"
+    const val UNACCOUNTED_EMOJI = "🫥"
     const val NEW_EMOJI = "🏷️"
 
     private fun c(name: String, emoji: String, vararg subs: String) = Category(name = name, emoji = emoji) to subs.toList()
@@ -313,6 +402,7 @@ object DefaultCategories {
         c("Налоги и сборы", "🧾", "Налоги", "Госпошлины"),
         c("Комиссии банков", "🏦"),
         c("Благотворительность", "🤝"),
+        c(UNACCOUNTED, UNACCOUNTED_EMOJI),
         c(OTHER, "📦"),
     ).mapIndexed { i, (cat, subs) -> cat.copy(sortOrder = i) to subs }
 }

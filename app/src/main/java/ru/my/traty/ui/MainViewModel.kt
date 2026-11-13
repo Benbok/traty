@@ -34,6 +34,7 @@ import ru.my.traty.data.Expense
 import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.normalizeName
+import ru.my.traty.data.selectable
 import ru.my.traty.data.period.BillingPeriod
 import ru.my.traty.data.sameName
 import java.time.LocalDate
@@ -66,7 +67,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.settings.flow.stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
     /** Активные (не архивные) категории — для выбора и для промпта. */
     val categories: StateFlow<List<CategoryWithSubs>> =
-        c.db.categories().observeActiveWithSubs().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        c.db.categories().observeActiveWithSubs().map { it.selectable() }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** День начала расчётного периода из настроек (1 — календарный месяц). */
     private var startDay = 1
@@ -171,7 +172,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val source = if (inputFromVoice) ExpenseSource.VOICE else ExpenseSource.TEXT
         viewModelScope.launch {
             busy = true
-            val cats = c.db.categories().getActiveWithSubs()
+            val cats = c.db.categories().getActiveWithSubs().selectable()
             val client = clientFor(c.settings.current())
             val parsed: List<ParsedExpense> = if (client == null) {
                 OfflineParser.parse(text, cats)
@@ -249,7 +250,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.settings.save(s)
         val client = clientFor(s) ?: run { message = "Выбран режим без ИИ"; return@launch }
         message = try {
-            val r = ExpenseParsing.parse(client, "кофе двести пятьдесят и такси 400", c.db.categories().getActiveWithSubs())
+            val r = ExpenseParsing.parse(client, "кофе двести пятьдесят и такси 400", c.db.categories().getActiveWithSubs().selectable())
             "${client.name} работает: " + r.joinToString { "${it.category} ${it.amount.toInt()}" }
         } catch (e: Exception) {
             "${client.name}: ошибка — ${e.message}"

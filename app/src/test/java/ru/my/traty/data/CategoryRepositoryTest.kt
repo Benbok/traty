@@ -96,9 +96,9 @@ class CategoryRepositoryTest {
     }
 
     @Test
-    fun seedCreates25CategoriesWithOtherLast() = runTest {
+    fun seedCreates26CategoriesWithOtherLast() = runTest {
         val active = db.categories().getActiveWithSubs()
-        assertEquals(25, active.size)
+        assertEquals(26, active.size)
         assertEquals(DefaultCategories.OTHER, active.last().category.name)
     }
 
@@ -189,6 +189,37 @@ class CategoryRepositoryTest {
         val other = cat(DefaultCategories.OTHER).category.id
         assertCategoryError { repo.merge(a, a) }
         assertCategoryError { repo.merge(other, a) }
+    }
+
+    @Test
+    fun unaccountedCannotBeRenamedArchivedOrMerged() = runTest {
+        val un = cat(DefaultCategories.UNACCOUNTED).category
+        val hobby = cat("Хобби").category
+        assertEquals(DefaultCategories.UNACCOUNTED_EMOJI, un.emoji)
+        assertCategoryError { repo.updateCategory(un.id, "Разное", un.emoji, null) }
+        assertCategoryError { repo.setArchived(un.id, true) }
+        assertCategoryError { repo.merge(un.id, hobby.id) }
+        assertCategoryError { repo.merge(hobby.id, un.id) }
+        assertEquals(DefaultCategories.UNACCOUNTED, cat(DefaultCategories.UNACCOUNTED).category.name)
+        assertTrue(!cat(DefaultCategories.UNACCOUNTED).category.isArchived)
+
+        val before = db.categories().getActiveWithSubs().map { it.category.name }
+        repo.move(un.id, up = true)
+        repo.move(un.id, up = false)
+        assertEquals(before, db.categories().getActiveWithSubs().map { it.category.name })
+    }
+
+    @Test
+    fun ensureUnaccountedIsIdempotent() = runTest {
+        val id = cat(DefaultCategories.UNACCOUNTED).category.id
+        assertEquals(id, repo.ensureUnaccounted())
+        assertEquals(id, repo.ensureUnaccounted())
+        assertEquals(26, categoryCount())
+        db.categories().delete(cat(DefaultCategories.UNACCOUNTED).category)
+        val recreated = repo.ensureUnaccounted()
+        assertEquals(DefaultCategories.UNACCOUNTED, cat(DefaultCategories.UNACCOUNTED).category.name)
+        assertEquals(recreated, repo.ensureUnaccounted())
+        assertEquals(26, categoryCount())
     }
 
     @Test

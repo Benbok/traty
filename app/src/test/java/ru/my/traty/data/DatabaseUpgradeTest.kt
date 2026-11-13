@@ -66,6 +66,82 @@ class DatabaseUpgradeTest {
         }
     }
 
+    /** База в формате v3 — SQL взят дословно из app/schemas/.../3.json. */
+    private fun createV3Database() {
+        val file = context.getDatabasePath(dbName).apply { parentFile?.mkdirs(); delete() }
+        SQLiteDatabase.openOrCreateDatabase(file, null).use { v3 ->
+            v3.execSQL(
+                "CREATE TABLE IF NOT EXISTS `categories` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`name` TEXT NOT NULL, `emoji` TEXT NOT NULL, `color` INTEGER, `sortOrder` INTEGER NOT NULL, `isArchived` INTEGER NOT NULL)"
+            )
+            v3.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_categories_name` ON `categories` (`name`)")
+            v3.execSQL(
+                "CREATE TABLE IF NOT EXISTS `subcategories` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`categoryId` INTEGER NOT NULL, `name` TEXT NOT NULL, `sortOrder` INTEGER NOT NULL, " +
+                    "FOREIGN KEY(`categoryId`) REFERENCES `categories`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+            )
+            v3.execSQL("CREATE INDEX IF NOT EXISTS `index_subcategories_categoryId` ON `subcategories` (`categoryId`)")
+            v3.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS `index_subcategories_categoryId_name` ON `subcategories` (`categoryId`, `name`)"
+            )
+            v3.execSQL(
+                "CREATE TABLE IF NOT EXISTS `expenses` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`amountKopecks` INTEGER NOT NULL, `currency` TEXT NOT NULL, `categoryId` INTEGER NOT NULL, " +
+                    "`subcategoryId` INTEGER, `place` TEXT, `note` TEXT, `timestamp` INTEGER NOT NULL, `rawText` TEXT, `source` TEXT NOT NULL, " +
+                    "FOREIGN KEY(`categoryId`) REFERENCES `categories`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , " +
+                    "FOREIGN KEY(`subcategoryId`) REFERENCES `subcategories`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )"
+            )
+            v3.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_categoryId` ON `expenses` (`categoryId`)")
+            v3.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_subcategoryId` ON `expenses` (`subcategoryId`)")
+            v3.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_timestamp` ON `expenses` (`timestamp`)")
+            v3.execSQL(
+                "CREATE TABLE IF NOT EXISTS `incomes` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`amountKopecks` INTEGER NOT NULL, `currency` TEXT NOT NULL, `source` TEXT NOT NULL, `note` TEXT, `timestamp` INTEGER NOT NULL)"
+            )
+            v3.execSQL("CREATE INDEX IF NOT EXISTS `index_incomes_timestamp` ON `incomes` (`timestamp`)")
+            v3.execSQL("INSERT INTO categories (id, name, emoji, color, sortOrder, isArchived) VALUES (1, 'Продукты', '🛒', NULL, 0, 0)")
+            v3.execSQL(
+                "INSERT INTO expenses (id, amountKopecks, currency, categoryId, subcategoryId, place, note, timestamp, rawText, source) " +
+                    "VALUES (1, 35000, 'RUB', 1, NULL, 'Магнит', 'Молоко', 1000, NULL, 'manual')"
+            )
+            v3.execSQL(
+                "INSERT INTO incomes (id, amountKopecks, currency, source, note, timestamp) " +
+                    "VALUES (1, 5000000, 'RUB', 'Зарплата', NULL, 2000)"
+            )
+            v3.version = 3
+        }
+    }
+
+    @Test
+    fun v3DatabaseMigratesToV4WithoutDataLoss() = runTest {
+        createV3Database()
+        val db = AppDatabase.build(context, dbName)
+        try {
+            val expenses = db.expenses().getAllWithCategory()
+            assertEquals(1, expenses.size)
+            assertEquals(35000L, expenses[0].expense.amountKopecks)
+            val incomes = db.incomes().getAll()
+            assertEquals(1, incomes.size)
+            assertEquals(5000000L, incomes[0].amountKopecks)
+            assertEquals("manual", incomes[0].origin)
+
+            val unaccounted = db.categories().getAllWithSubs().single { it.category.name == DefaultCategories.UNACCOUNTED }
+            assertEquals(DefaultCategories.UNACCOUNTED_EMOJI, unaccounted.category.emoji)
+            assertTrue(!unaccounted.category.isArchived)
+
+            assertTrue(db.reconciliations().getAll().isEmpty())
+            val id = db.reconciliations().insert(
+                Reconciliation(
+                    timestamp = 3000, actualKopecks = 100, expectedKopecks = null,
+                    differenceKopecks = 100, expenseId = null, incomeId = null, isOpening = true,
+                )
+            )
+            assertEquals(listOf(id), db.reconciliations().getAll().map { it.id })
+        } finally {
+            db.close()
+        }
+    }
+
     @Test
     fun v1DatabaseIsRecreatedAndSeeded() = runTest {
         createV1Database()
@@ -73,7 +149,7 @@ class DatabaseUpgradeTest {
         try {
             CategoryRepository(db).seedIfEmpty()
             assertTrue(db.expenses().getAllWithCategory().isEmpty())
-            assertEquals(25, db.categories().getActiveWithSubs().size)
+            assertEquals(26, db.categories().getActiveWithSubs().size)
         } finally {
             db.close()
         }
