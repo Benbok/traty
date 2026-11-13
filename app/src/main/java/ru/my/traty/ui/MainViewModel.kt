@@ -20,6 +20,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.my.traty.TratyApp
 import ru.my.traty.ai.ExpenseParsing
+import ru.my.traty.ai.IncomeParsing
+import ru.my.traty.ai.OfflineIncomeParser
+import ru.my.traty.ai.ParsedIncome
 import ru.my.traty.ai.OfflineParser
 import ru.my.traty.ai.ParsedExpense
 import ru.my.traty.ai.clientFor
@@ -33,6 +36,11 @@ import ru.my.traty.data.DefaultCategories
 import ru.my.traty.data.Expense
 import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.ExpenseWithCategory
+import ru.my.traty.data.IncomeOrigin
+import ru.my.traty.data.IncomeSources
+import ru.my.traty.ui.home.IncomeDraft
+import ru.my.traty.ui.home.IncomeDraftItem
+import ru.my.traty.ui.home.toIncome
 import ru.my.traty.data.normalizeName
 import ru.my.traty.data.selectable
 import ru.my.traty.data.period.BillingPeriod
@@ -97,6 +105,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var busy by mutableStateOf(false)
         private set
     var draft by mutableStateOf<Draft?>(null)
+    /** Режим «+» в строке ввода: текст разбирается как пополнение. Сбрасывается после сохранения. */
+    var incomeMode by mutableStateOf(false)
+        private set
+    var incomeDraft by mutableStateOf<IncomeDraft?>(null)
     var message by mutableStateOf<String?>(null)
     var insight by mutableStateOf<String?>(null)
         private set
@@ -169,6 +181,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun parseInput() {
         val text = input.trim()
         if (text.isEmpty() || busy) return
+        if (incomeMode) { parseIncomeInput(text); return }
         val source = if (inputFromVoice) ExpenseSource.VOICE else ExpenseSource.TEXT
         viewModelScope.launch {
             busy = true
@@ -191,6 +204,45 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } else {
                 Draft(parsed.map { it.toDraft(cats) }, text, source)
             }
+        }
+    }
+
+    fun toggleIncomeMode() { incomeMode = !incomeMode }
+
+    private fun parseIncomeInput(text: String) {
+        val origin = if (inputFromVoice) IncomeOrigin.VOICE else IncomeOrigin.TEXT
+        viewModelScope.launch {
+            busy = true
+            val client = clientFor(c.settings.current())
+            val parsed: List<ParsedIncome> = if (client == null) {
+                OfflineIncomeParser.parse(text)
+            } else {
+                try {
+                    IncomeParsing.parse(client, text)
+                } catch (e: Exception) {
+                    message = "${client.name}: ${e.message ?: e.javaClass.simpleName}. Использован простой разбор."
+                    OfflineIncomeParser.parse(text)
+                }
+            }
+            busy = false
+            val items = parsed.map { it.toDraftItem() }.ifEmpty {
+                // Ничего не распознали — пустая форма для ручного заполнения
+                listOf(IncomeDraftItem("", IncomeSources.DEFAULT, "", LocalDate.now().toString()))
+            }
+            incomeDraft = IncomeDraft(items, text, origin)
+        }
+    }
+
+    fun saveIncomeDraft(d: IncomeDraft) {
+        val incomes = d.items.mapNotNull { it.toIncome(d.origin, zone) }
+        if (incomes.isEmpty()) { message = "Нет корректных сумм — нечего сохранять"; return }
+        viewModelScope.launch {
+            c.db.incomes().insertAll(incomes)
+            incomeDraft = null
+            input = ""
+            inputFromVoice = false
+            incomeMode = false
+            message = "Пополнение сохранено: ${incomes.size}"
         }
     }
 
@@ -317,6 +369,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- Преобразования ---
     private fun emptyItem() = DraftItem("", DefaultCategories.OTHER, "", "", "", LocalDate.now().toString())
+
+    private fun ParsedIncome.toDraftItem(): IncomeDraftItem {
+        val amountStr = if (amount % 1.0 == 0.0) amount.toLong().toString() else amount.toString()
+        val d = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()
+        return IncomeDraftItem(amountStr, IncomeSources.normalize(source), note.orEmpty(), d.toString())
+    }
 
     private fun ParsedExpense.toDraft(cats: List<CategoryWithSubs>): DraftItem {
         val name = normalizeName(category)

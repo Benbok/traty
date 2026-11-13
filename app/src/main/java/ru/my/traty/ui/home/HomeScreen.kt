@@ -192,6 +192,8 @@ fun HomeScreen(vm: MainViewModel) {
             },
             onSendClick = vm::parseInput,
             isBusy = vm.busy,
+            isIncomeMode = vm.incomeMode,
+            onToggleIncomeMode = vm::toggleIncomeMode,
         )
     }
 

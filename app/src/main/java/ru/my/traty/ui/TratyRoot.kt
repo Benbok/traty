@@ -28,6 +28,7 @@ import ru.my.traty.ui.charts.ChartsScreen
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.home.ConfirmDialog
 import ru.my.traty.ui.home.HomeScreen
+import ru.my.traty.ui.home.IncomeConfirmDialog
 import ru.my.traty.ui.navigation.TratyNavTab
 import ru.my.traty.ui.settings.SettingsScreen
 import ru.my.traty.ui.stats.StatsScreen
@@ -106,6 +107,14 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             categories = categories,
             onDismiss = { vm.draft = null },
             onSave = vm::saveDraft,
+        )
+    }
+
+    vm.incomeDraft?.let { d ->
+        IncomeConfirmDialog(
+            draft = d,
+            onDismiss = { vm.incomeDraft = null },
+            onSave = vm::saveIncomeDraft,
         )
     }
 }

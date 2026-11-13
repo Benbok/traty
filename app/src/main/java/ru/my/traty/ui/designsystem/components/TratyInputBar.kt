@@ -4,6 +4,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -43,7 +51,12 @@ fun TratyInputBar(
     modifier: Modifier = Modifier,
     placeholder: String = "кофе 250, такси 400…",
     isBusy: Boolean = false,
+    isIncomeMode: Boolean = false,
+    onToggleIncomeMode: (() -> Unit)? = null,
 ) {
+    val accent = if (isIncomeMode) TratyTheme.colors.income else TratyTheme.colors.primary
+    val fieldColor = if (isIncomeMode) TratyTheme.colors.incomeContainer else TratyTheme.colors.surfaceContainer
+    val hint = if (isIncomeMode) "зарплата 80000, аванс 30 тысяч…" else placeholder
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = TratyTheme.colors.surface,
@@ -70,18 +83,44 @@ fun TratyInputBar(
 
             Spacer(Modifier.width(TratyTheme.spacing.sm))
 
+            // Переключатель режима: «−» трата (по умолчанию), «+» пополнение
+            if (onToggleIncomeMode != null) {
+                val modeLabel = if (isIncomeMode) "Режим: пополнение" else "Режим: трата"
+                Box(
+                    modifier = Modifier
+                        .height(32.dp)
+                        .widthIn(min = 32.dp)
+                        .clip(TratyTheme.shapes.small)
+                        .background(if (isIncomeMode) TratyTheme.colors.income else TratyTheme.colors.expenseContainer)
+                        .clickable(onClick = onToggleIncomeMode)
+                        .semantics {
+                            contentDescription = modeLabel
+                            role = Role.Switch
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = if (isIncomeMode) "+" else "−",
+                        style = TratyTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isIncomeMode) TratyTheme.colors.onPrimary else TratyTheme.colors.expense,
+                    )
+                }
+                Spacer(Modifier.width(TratyTheme.spacing.sm))
+            }
+
             // Поле ввода с мягким фоном
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .clip(TratyTheme.shapes.medium)
-                    .background(TratyTheme.colors.surfaceContainer)
+                    .background(fieldColor)
                     .padding(horizontal = TratyTheme.spacing.md, vertical = 10.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 if (value.isEmpty()) {
                     Text(
-                        text = placeholder,
+                        text = hint,
                         style = TratyTheme.typography.bodyMedium,
                         color = TratyTheme.colors.onSurfaceVariant,
                     )
@@ -92,7 +131,7 @@ fun TratyInputBar(
                     textStyle = TratyTheme.typography.bodyMedium.copy(
                         color = TratyTheme.colors.onSurface,
                     ),
-                    cursorBrush = SolidColor(TratyTheme.colors.primary),
+                    cursorBrush = SolidColor(accent),
                     maxLines = 3,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = { if (value.isNotBlank()) onSendClick() }),
@@ -112,7 +151,7 @@ fun TratyInputBar(
                         CircularProgressIndicator(
                             modifier = Modifier.size(22.dp),
                             strokeWidth = 2.5.dp,
-                            color = TratyTheme.colors.primary,
+                            color = accent,
                         )
                     }
                 }
@@ -132,7 +171,7 @@ fun TratyInputBar(
                     IconButton(
                         onClick = onSendClick,
                         colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = TratyTheme.colors.primary,
+                            containerColor = accent,
                             contentColor = TratyTheme.colors.onPrimary,
                         ),
                         modifier = Modifier.size(42.dp),

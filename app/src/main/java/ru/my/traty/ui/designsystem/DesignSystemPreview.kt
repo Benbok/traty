@@ -125,6 +125,16 @@ fun TratyDesignSystemShowcase() {
             onManualClick = {},
             onVoiceClick = {},
             onSendClick = {},
+            onToggleIncomeMode = {},
+        )
+        TratyInputBar(
+            value = "зарплата 80000",
+            onValueChange = {},
+            onManualClick = {},
+            onVoiceClick = {},
+            onSendClick = {},
+            isIncomeMode = true,
+            onToggleIncomeMode = {},
         )
 
         // Empty State
