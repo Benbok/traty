@@ -583,6 +583,9 @@ private fun SettingsScreen(vm: MainViewModel, onOpenCategories: () -> Unit) {
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) vm.exportCsv(uri)
     }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.importCsv(uri)
+    }
 
     Column(
         Modifier
@@ -699,13 +702,23 @@ private fun SettingsScreen(vm: MainViewModel, onOpenCategories: () -> Unit) {
                 Text("Резервная копия", style = TratyTheme.typography.titleMedium)
                 Spacer(Modifier.height(TratyTheme.spacing.xs))
                 Text(
-                    "Все данные хранятся только на телефоне. Периодически выгружайте CSV (открывается в Excel).",
+                    "Все данные хранятся только на телефоне. Периодически выгружайте CSV (открывается в Excel). " +
+                        "Импорт добавляет траты из файла и пропускает те, что уже есть.",
                     style = TratyTheme.typography.bodySmall,
                     color = TratyTheme.colors.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(TratyTheme.spacing.md))
-                TratyOutlinedButton(onClick = { exportLauncher.launch("traty-${java.time.LocalDate.now()}.csv") }) {
-                    Text("Экспорт в CSV")
+                Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm)) {
+                    TratyOutlinedButton(onClick = { exportLauncher.launch("traty-${java.time.LocalDate.now()}.csv") }) {
+                        Text("Экспорт в CSV")
+                    }
+                    TratyOutlinedButton(onClick = {
+                        importLauncher.launch(
+                            arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel")
+                        )
+                    }) {
+                        Text("Импорт из CSV")
+                    }
                 }
             }
         }

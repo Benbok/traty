@@ -21,6 +21,8 @@ import ru.my.traty.ai.ExpenseParsing
 import ru.my.traty.ai.OfflineParser
 import ru.my.traty.ai.ParsedExpense
 import ru.my.traty.ai.clientFor
+import ru.my.traty.backup.CsvBackup
+import ru.my.traty.backup.CsvImporter
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.CategoryTotal
 import ru.my.traty.data.CategoryWithSubs
@@ -31,7 +33,6 @@ import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.normalizeName
 import ru.my.traty.data.sameName
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.ZoneId
@@ -217,20 +218,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val all = c.db.expenses().getAllWithCategory()
         withContext(Dispatchers.IO) {
             getApplication<Application>().contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { w ->
-                w.write("﻿") // BOM, чтобы Excel правильно открыл кириллицу
-                w.write("дата;сумма;валюта;категория;подкатегория;место;заметка;исходная фраза\n")
-                all.forEach { row ->
-                    val e = row.expense
-                    val date = LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(e.timestamp), zone)
-                    val cols = listOf(
-                        date.toString(), (e.amountKopecks / 100.0).toString().replace('.', ','), e.currency,
-                        row.categoryName, row.subcategoryName, e.place, e.note, e.rawText,
-                    ).map { v -> "\"" + (v ?: "").replace("\"", "\"\"") + "\"" }
-                    w.write(cols.joinToString(";") + "\n")
-                }
+                CsvBackup.write(all, zone, w)
             }
         }
         message = "Экспортировано записей: ${all.size}"
+    }
+
+    /** Восстановление из CSV (своего экспорта или пересохранённого в Excel). Уже существующие траты пропускаются. */
+    fun importCsv(uri: Uri) = viewModelScope.launch {
+        message = try {
+            val text = withContext(Dispatchers.IO) {
+                getApplication<Application>().contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+            } ?: throw IllegalStateException("не удалось открыть файл")
+            val r = CsvImporter(c.db, c.categories).import(CsvBackup.parse(text, zone))
+            buildString {
+                append("Импортировано: ${r.imported}, пропущено дублей: ${r.duplicates}")
+                if (r.badLines.isNotEmpty()) {
+                    append(", строки с ошибками: ")
+                    append(r.badLines.take(10).joinToString())
+                    if (r.badLines.size > 10) append("…")
+                }
+            }
+        } catch (e: Exception) {
+            "Импорт не удался: ${e.message ?: e.javaClass.simpleName}"
+        }
     }
 
     // --- Преобразования ---
