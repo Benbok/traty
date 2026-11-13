@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Soft ambient drop shadow beneath the coin -->
+    <path
+        android:pathData="M54,56.5m-25.5,0a25.5,25.5 0 1,1 51,0a25.5,25.5 0 1,1 -51,0"
+        android:fillColor="#35000000" />
+
+    <!-- Coin Outer Rim (Bevel) -->
+    <path android:pathData="M54,54m-25,0a25,25 0 1,1 50,0a25,25 0 1,1 -50,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="32"
+                android:startY="32"
+                android:endX="76"
+                android:endY="76"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#34D399" />
+                <item android:offset="0.45" android:color="#10B981" />
+                <item android:offset="1.0" android:color="#047857" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Coin Inner Face -->
+    <path android:pathData="M54,54m-22,0a22,22 0 1,1 44,0a22,22 0 1,1 -44,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="35"
+                android:startY="35"
+                android:endX="73"
+                android:endY="73"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#10B981" />
+                <item android:offset="0.7" android:color="#059669" />
+                <item android:offset="1.0" android:color="#047857" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Subtle inner specular sheen ring -->
+    <path
+        android:pathData="M54,54m-20.5,0a20.5,20.5 0 1,1 41,0a20.5,20.5 0 1,1 -41,0"
+        android:strokeWidth="0.9"
+        android:strokeColor="#30FFFFFF" />
+
+    <!-- Monogram "T" subtle shadow for embossed depth -->
+    <path
+        android:pathData="M 44.25,42.5 L 63.75,42.5 A 3.25,3.25 0 0,1 67,45.75 A 3.25,3.25 0 0,1 63.75,49 L 57.25,49 L 57.25,62.25 A 3.25,3.25 0 0,1 54,65.5 A 3.25,3.25 0 0,1 50.75,62.25 L 50.75,49 L 44.25,49 A 3.25,3.25 0 0,1 41,45.75 A 3.25,3.25 0 0,1 44.25,42.5 Z"
+        android:fillColor="#25044E3B" />
+
+    <!-- Monogram "T" core glyph (Pure Crisp White) -->
+    <path
+        android:pathData="M 44.25,41.5 L 63.75,41.5 A 3.25,3.25 0 0,1 67,44.75 A 3.25,3.25 0 0,1 63.75,48 L 57.25,48 L 57.25,61.25 A 3.25,3.25 0 0,1 54,64.5 A 3.25,3.25 0 0,1 50.75,61.25 L 50.75,48 L 44.25,48 A 3.25,3.25 0 0,1 41,44.75 A 3.25,3.25 0 0,1 44.25,41.5 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Vibrant Mint Accent Spark / Financial Pulse -->
+    <path
+        android:pathData="M66.5,37m-2.2,0a2.2,2.2 0 1,1 4.4,0a2.2,2.2 0 1,1 -4.4,0"
+        android:fillColor="#A7F3D0" />
+</vector>

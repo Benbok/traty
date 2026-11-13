@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import ru.my.traty.ui.designsystem.components.AmountSize
 import ru.my.traty.ui.designsystem.components.TratyAmountText
 import ru.my.traty.ui.designsystem.components.TratyButton

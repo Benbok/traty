@@ -8,6 +8,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
+enum class ThemeMode(val title: String) {
+    SYSTEM("Системная"),
+    LIGHT("Светлая"),
+    DARK("Тёмная"),
+}
+
 enum class LlmProvider(val title: String) {
     DEEPSEEK("DeepSeek"),
     YANDEX("YandexGPT"),
@@ -15,6 +21,7 @@ enum class LlmProvider(val title: String) {
 }
 
 data class AppSettings(
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val provider: LlmProvider = LlmProvider.DEEPSEEK,
     val deepseekKey: String = "",
     val deepseekModel: String = "deepseek-chat",
@@ -31,6 +38,7 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
  */
 class SettingsRepository(private val context: Context) {
     private object K {
+        val themeMode = stringPreferencesKey("theme_mode")
         val provider = stringPreferencesKey("provider")
         val dsKey = stringPreferencesKey("deepseek_key")
         val dsModel = stringPreferencesKey("deepseek_model")
@@ -42,6 +50,7 @@ class SettingsRepository(private val context: Context) {
     val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
         val d = AppSettings()
         AppSettings(
+            themeMode = p[K.themeMode]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: d.themeMode,
             provider = p[K.provider]?.let { runCatching { LlmProvider.valueOf(it) }.getOrNull() } ?: d.provider,
             deepseekKey = p[K.dsKey] ?: "",
             deepseekModel = p[K.dsModel] ?: d.deepseekModel,
@@ -55,12 +64,19 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun save(s: AppSettings) {
         context.dataStore.edit { p ->
+            p[K.themeMode] = s.themeMode.name
             p[K.provider] = s.provider.name
             p[K.dsKey] = s.deepseekKey.trim()
             p[K.dsModel] = s.deepseekModel.trim()
             p[K.yaKey] = s.yandexKey.trim()
             p[K.yaFolder] = s.yandexFolderId.trim()
             p[K.yaModel] = s.yandexModel.trim()
+        }
+    }
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        context.dataStore.edit { p ->
+            p[K.themeMode] = mode.name
         }
     }
 }

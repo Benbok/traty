@@ -1,0 +1,66 @@
+package ru.my.traty.ui.home
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import ru.my.traty.data.ExpenseWithCategory
+import ru.my.traty.ui.designsystem.components.AmountSize
+import ru.my.traty.ui.designsystem.components.TratyAmountText
+import ru.my.traty.ui.designsystem.components.TratyCategoryBadge
+import ru.my.traty.ui.designsystem.theme.TratyTheme
+import ru.my.traty.ui.formatTime
+
+/**
+ * Строка одной траты в списке с категорией, временем, местом, заметкой и суммой.
+ */
+@Composable
+fun ExpenseRow(
+    row: ExpenseWithCategory,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val e = row.expense
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TratyCategoryBadge(
+            emoji = row.categoryEmoji,
+            categoryName = row.categoryName,
+            size = 42.dp,
+        )
+        Spacer(Modifier.width(TratyTheme.spacing.md))
+        Column(Modifier.weight(1f)) {
+            val title = listOfNotNull(row.subcategoryName ?: row.categoryName, e.place).joinToString(" · ")
+            Text(
+                text = title,
+                style = TratyTheme.typography.titleSmall,
+                color = TratyTheme.colors.onSurface,
+            )
+            val sub = listOfNotNull(formatTime(e.timestamp), e.note).joinToString(" · ")
+            Text(
+                text = sub,
+                style = TratyTheme.typography.bodySmall,
+                color = TratyTheme.colors.onSurfaceVariant,
+            )
+        }
+        TratyAmountText(
+            amountKopecks = e.amountKopecks,
+            size = AmountSize.MEDIUM,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}

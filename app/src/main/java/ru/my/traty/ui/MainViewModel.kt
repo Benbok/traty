@@ -24,6 +24,7 @@ import ru.my.traty.ai.clientFor
 import ru.my.traty.backup.CsvBackup
 import ru.my.traty.backup.CsvImporter
 import ru.my.traty.data.AppSettings
+import ru.my.traty.data.ThemeMode
 import ru.my.traty.data.CategoryTotal
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.DefaultCategories
@@ -68,6 +69,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _month = MutableStateFlow(YearMonth.now())
     val month: StateFlow<YearMonth> = _month
 
+    private val _selectedDate = MutableStateFlow<LocalDate?>(null)
+    val selectedDate: StateFlow<LocalDate?> = _selectedDate
+
     val expenses: StateFlow<List<ExpenseWithCategory>> = _month.flatMapLatest { m ->
         c.db.expenses().observeRange(m.startMillis(), m.plusMonths(1).startMillis())
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -93,8 +97,50 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var insightBusy by mutableStateOf(false)
         private set
 
-    fun prevMonth() { _month.value = _month.value.minusMonths(1); insight = null }
-    fun nextMonth() { _month.value = _month.value.plusMonths(1); insight = null }
+    fun selectDate(date: LocalDate?) {
+        _selectedDate.value = date
+        if (date != null) {
+            val ym = YearMonth.from(date)
+            if (_month.value != ym) {
+                _month.value = ym
+                insight = null
+            }
+        }
+    }
+
+    fun clearSelectedDate() {
+        _selectedDate.value = null
+    }
+
+    fun prevPeriod() {
+        val cur = _selectedDate.value
+        if (cur != null) {
+            selectDate(cur.minusDays(1))
+        } else {
+            prevMonth()
+        }
+    }
+
+    fun nextPeriod() {
+        val cur = _selectedDate.value
+        if (cur != null) {
+            selectDate(cur.plusDays(1))
+        } else {
+            nextMonth()
+        }
+    }
+
+    fun prevMonth() {
+        _selectedDate.value = null
+        _month.value = _month.value.minusMonths(1)
+        insight = null
+    }
+
+    fun nextMonth() {
+        _selectedDate.value = null
+        _month.value = _month.value.plusMonths(1)
+        insight = null
+    }
 
     /** Результат распознавания речи: подставляем и сразу разбираем (подтверждение всё равно будет). */
     fun onVoiceResult(text: String) {
@@ -170,6 +216,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun delete(e: Expense) = viewModelScope.launch { c.db.expenses().delete(e) }
+
+    fun setThemeMode(mode: ThemeMode) = viewModelScope.launch {
+        c.settings.setThemeMode(mode)
+    }
 
     fun saveSettings(s: AppSettings) = viewModelScope.launch {
         c.settings.save(s)

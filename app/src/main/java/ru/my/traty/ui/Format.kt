@@ -1,6 +1,7 @@
 package ru.my.traty.ui
 
 import java.time.Instant
+import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -15,8 +16,19 @@ fun formatRub(kopecks: Long): String {
     else String.format(RU, "%,.2f ₽", rub)
 }
 
+fun formatRubSigned(kopecks: Long): String {
+    val prefix = if (kopecks > 0) "+" else ""
+    return prefix + formatRub(kopecks)
+}
+
 fun formatMonth(m: YearMonth): String =
     m.month.getDisplayName(TextStyle.FULL_STANDALONE, RU).replaceFirstChar { it.uppercase() } + " " + m.year
+
+fun formatDate(d: LocalDate): String =
+    "${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.FULL, RU)} ${d.year}"
+
+fun formatDateWithWeekday(d: LocalDate): String =
+    "${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.FULL, RU)}, ${d.dayOfWeek.getDisplayName(TextStyle.SHORT, RU)}"
 
 private val rowFmt = DateTimeFormatter.ofPattern("d MMM, HH:mm", RU)
 
