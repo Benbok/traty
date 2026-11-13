@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.my.traty.TratyApp
 import ru.my.traty.data.ReconcileException
+import ru.my.traty.data.Reconciliation
 import ru.my.traty.data.ReconcileOutcome
 import ru.my.traty.data.period.BillingPeriod
 import ru.my.traty.ui.formatPeriod
@@ -122,9 +123,9 @@ class ReconcileViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val now = System.currentTimeMillis()
                 val outcome = if (redo) {
-                    c.reconciliations.redoLast(actual, now, zone)
+                    c.reconciliations.redoLast(actual, now, zone, entryDateFor(c.reconciliations.previousOfLast()))
                 } else {
-                    c.reconciliations.reconcile(actual, now, entryDateNow(), zone)
+                    c.reconciliations.reconcile(actual, now, entryDateFor(c.reconciliations.last()), zone)
                 }
                 c.settings.setCalculatorLines(names)
                 redoing = false
@@ -138,9 +139,10 @@ class ReconcileViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private suspend fun entryDateNow(): LocalDate {
+    /** [reference] - сверка, от которой отсчитывается период (для «Переделать» - предыдущая, не заменяемая). */
+    private suspend fun entryDateFor(reference: Reconciliation?): LocalDate {
         val startDay = c.settings.current().periodStartDay
-        val last = c.reconciliations.last()?.let { dateOf(it.timestamp) }
+        val last = reference?.let { dateOf(it.timestamp) }
         val first = listOfNotNull(c.db.expenses().getFirstTimestamp(), c.db.incomes().getFirstTimestamp())
             .minOrNull()?.let(::dateOf)
         return ReconcilePolicy.entryDate(LocalDate.now(zone), startDay, last, first)

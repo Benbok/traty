@@ -60,6 +60,15 @@ class ReconcilePolicyTest {
     }
 
     @Test
+    fun redoEntryDateUsesReconciliationBeforeTheReplacedOne() {
+        // startDay=10: предыдущая сверка 20 ноя, сегодня 12 дек -> 9 дек (а не сегодня)
+        val today = LocalDate.of(2026, 12, 12)
+        assertEquals(LocalDate.of(2026, 12, 9), ReconcilePolicy.entryDate(today, 10, LocalDate.of(2026, 11, 20), null))
+        // если опираться на заменяемую сегодняшнюю сверку - получилось бы сегодня
+        assertEquals(today, ReconcilePolicy.entryDate(today, 10, today, null))
+    }
+
+    @Test
     fun entryDateIsTodayWithinSamePeriod() {
         val today = LocalDate.of(2026, 12, 12)
         assertEquals(today, ReconcilePolicy.entryDate(today, 10, LocalDate.of(2026, 12, 11), null))

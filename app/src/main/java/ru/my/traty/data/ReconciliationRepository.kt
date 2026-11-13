@@ -37,6 +37,9 @@ class ReconciliationRepository(
 
     fun observeAll(): Flow<List<Reconciliation>> = dao.observeAll()
 
+    /** Сверка перед последней (`null`, если последней нет или она единственная). */
+    suspend fun previousOfLast(): Reconciliation? = dao.getAll().let { if (it.size >= 2) it[it.size - 2] else null }
+
     /** `null`, если сверок ещё не было. Якорь - `timestamp` самой записи, не порядок вставки. */
     suspend fun expectation(): Expectation? = db.withTransaction { expectationAfter(dao.getLast()) }
 
@@ -61,7 +64,12 @@ class ReconciliationRepository(
      * Переделать последнюю сверку: удаляет её и записи расхождения, затем сверяет заново
      * относительно предыдущей, сохраняя дату записи расхождения.
      */
-    suspend fun redoLast(actualKopecks: Long, nowMillis: Long, zone: ZoneId): ReconcileOutcome =
+    suspend fun redoLast(
+        actualKopecks: Long,
+        nowMillis: Long,
+        zone: ZoneId,
+        fallbackEntryDate: LocalDate? = null,
+    ): ReconcileOutcome =
         db.withTransaction {
             val last = dao.getLast() ?: throw ReconcileException("Сверок ещё не было")
             val removedTimestamp = last.expenseId?.let { id ->
@@ -72,7 +80,9 @@ class ReconciliationRepository(
             last.expenseId?.let { db.expenses().deleteById(it) }
             last.incomeId?.let { db.incomes().deleteById(it) }
             dao.delete(last)
-            val date = Instant.ofEpochMilli(removedTimestamp ?: nowMillis).atZone(zone).toLocalDate()
+            val date = removedTimestamp?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
+                ?: fallbackEntryDate
+                ?: Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
             reconcileInTx(actualKopecks, nowMillis, date, zone)
         }
 

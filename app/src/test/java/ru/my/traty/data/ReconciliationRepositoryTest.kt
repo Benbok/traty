@@ -73,6 +73,47 @@ class ReconciliationRepositoryTest {
         }
     }
 
+    private suspend fun matchedAtT1() {
+        repo.reconcile(20_000_00, t0, LocalDate.of(2026, 9, 1), zone)
+        assertEquals(ReconcileOutcome.Matched, repo.reconcile(20_000_00, t1, LocalDate.of(2026, 10, 1), zone))
+    }
+
+    @Test
+    fun redoOfMatchedUsesFallbackEntryDate() = runTest {
+        matchedAtT1()
+
+        val outcome = repo.redoLast(18_000_00, t2, zone, fallbackEntryDate = LocalDate.of(2026, 10, 31))
+
+        assertEquals(ReconcileOutcome.Unaccounted(2_000_00), outcome)
+        val expenses = allExpenses()
+        assertEquals(1, expenses.size)
+        assertEquals(millis(2026, 10, 31, 12), expenses.single().expense.timestamp)
+        assertEquals(2, db.reconciliations().getAll().size)
+    }
+
+    @Test
+    fun redoOfMatchedToSurplusUsesFallbackEntryDate() = runTest {
+        matchedAtT1()
+
+        val outcome = repo.redoLast(22_000_00, t2, zone, fallbackEntryDate = LocalDate.of(2026, 10, 31))
+
+        assertEquals(ReconcileOutcome.Surplus(2_000_00), outcome)
+        val incomes = db.incomes().getAll()
+        assertEquals(1, incomes.size)
+        assertEquals(millis(2026, 10, 31, 12), incomes.single().timestamp)
+        assertEquals(DefaultCategories.OTHER, incomes.single().source)
+        assertEquals(2, db.reconciliations().getAll().size)
+    }
+
+    @Test
+    fun redoOfMatchedWithoutFallbackUsesToday() = runTest {
+        matchedAtT1()
+
+        repo.redoLast(18_000_00, t2, zone)
+
+        assertEquals(millis(2026, 11, 1, 10).coerceAtMost(millis(2026, 11, 1, 12)), allExpenses().single().expense.timestamp)
+    }
+
     @Test
     fun firstReconciliationOnlyStoresCapital() = runTest {
         addExpense(500_00, t0 - 10_000)
