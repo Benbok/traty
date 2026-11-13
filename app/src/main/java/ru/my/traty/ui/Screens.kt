@@ -46,6 +46,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -93,10 +94,6 @@ private enum class Tab(val title: String, val icon: ImageVector) {
 fun TratyRoot(vm: MainViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     var showCategories by rememberSaveable { mutableStateOf(false) }
-    if (showCategories) {
-        CategoriesScreen(onBack = { showCategories = false })
-        return
-    }
     val snackbar = remember { SnackbarHostState() }
     val categories by vm.categories.collectAsStateWithLifecycle()
 
@@ -104,6 +101,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
         vm.message?.let { snackbar.showSnackbar(it); vm.message = null }
     }
 
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         containerColor = TratyTheme.colors.background,
@@ -137,6 +135,15 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                 Tab.SETTINGS -> SettingsScreen(vm, onOpenCategories = { showCategories = true })
             }
         }
+    }
+
+    // Поверх вкладок, а не вместо них: вкладки остаются в композиции, несохранённые правки настроек не теряются.
+    // Surface перехватывает касания, чтобы они не доходили до экрана под ним.
+    if (showCategories) {
+        Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+            CategoriesScreen(onBack = { showCategories = false })
+        }
+    }
     }
 
     vm.draft?.let { d ->

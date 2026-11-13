@@ -11,7 +11,15 @@ data class ImportResult(val imported: Int, val duplicates: Int, val badLines: Li
 /** Записывает разобранный CSV в базу, создавая недостающие категории и пропуская уже существующие траты. */
 class CsvImporter(private val db: AppDatabase, private val categories: CategoryRepository) {
 
-    suspend fun import(parsed: CsvParseResult): ImportResult = db.withTransaction {
+    /** @throws CsvFormatException если в файле нет строки заголовка — тогда в базу ничего не пишется. */
+    suspend fun import(parsed: CsvParseResult): ImportResult {
+        if (!parsed.hasHeader) {
+            throw CsvFormatException("файл не похож на резервную копию «Трат» (нет строки «дата;сумма;…»)")
+        }
+        return insert(parsed)
+    }
+
+    private suspend fun insert(parsed: CsvParseResult): ImportResult = db.withTransaction {
         var duplicates = 0
         // Дубли ищем по состоянию базы до импорта: две одинаковые строки внутри одного файла — две траты
         val toInsert = parsed.rows.mapNotNull { r ->

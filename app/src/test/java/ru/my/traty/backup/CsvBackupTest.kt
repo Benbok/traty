@@ -90,6 +90,33 @@ class CsvBackupTest {
     }
 
     @Test
+    fun decodesCp1251WithoutBom() {
+        // Русский Excel «Сохранить как CSV» пишет windows-1251 без BOM
+        val bytes = (CsvBackup.HEADER + "\r\n13.11.2026 14:03;250;RUB;Продукты;Рынок;;морковь;\r\n")
+            .toByteArray(charset("windows-1251"))
+        val r = CsvBackup.parse(CsvBackup.decode(bytes), zone)
+        assertTrue(r.hasHeader)
+        assertTrue(r.badLines.isEmpty())
+        assertEquals("Продукты", r.rows.single().category)
+        assertEquals("морковь", r.rows.single().note)
+    }
+
+    @Test
+    fun decodesUtf8WithBom() {
+        val bytes = ("﻿" + CsvBackup.HEADER + "\n2026-11-13T10:00;250;RUB;Продукты;;;;\n").toByteArray(Charsets.UTF_8)
+        val text = CsvBackup.decode(bytes)
+        assertEquals("Продукты", CsvBackup.parse(text, zone).rows.single().category)
+    }
+
+    @Test
+    fun detectsMissingHeader() {
+        assertEquals(false, CsvBackup.parse("2026-11-13T10:00;250;RUB;Продукты;;;;\n", zone).hasHeader)
+        // Excel с запятой вместо «;» — заголовок не распознаётся
+        assertEquals(false, CsvBackup.parse(CsvBackup.HEADER.replace(';', ',') + "\n", zone).hasHeader)
+        assertEquals(true, CsvBackup.parse("\n" + CsvBackup.HEADER + "\n", zone).hasHeader)
+    }
+
+    @Test
     fun emptyCurrencyDefaultsToRub() {
         val r = CsvBackup.parse("2026-11-13T10:00;250;;Продукты;;;;\n", zone)
         assertEquals("RUB", r.rows.single().currency)

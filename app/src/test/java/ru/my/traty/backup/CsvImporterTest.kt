@@ -76,6 +76,16 @@ class CsvImporterTest {
     }
 
     @Test
+    fun refusesFileWithoutHeader() = runTest {
+        try {
+            importer.import(CsvParseResult(listOf(row(t0)), emptyList(), hasHeader = false))
+            org.junit.Assert.fail("Ожидалась CsvFormatException")
+        } catch (_: CsvFormatException) {
+        }
+        assertTrue(db.expenses().getAllWithCategory().isEmpty())
+    }
+
+    @Test
     fun badLinesArePassedThrough() = runTest {
         val r = importer.import(CsvParseResult(emptyList(), listOf(3, 4)))
         assertEquals(listOf(3, 4), r.badLines)
