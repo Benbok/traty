@@ -24,37 +24,29 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -76,7 +68,19 @@ import ru.my.traty.data.Category
 import ru.my.traty.data.Expense
 import ru.my.traty.data.LlmProvider
 import ru.my.traty.speech.SystemSpeech
-import java.time.YearMonth
+import ru.my.traty.ui.designsystem.components.AmountSize
+import ru.my.traty.ui.designsystem.components.TratyAmountText
+import ru.my.traty.ui.designsystem.components.TratyButton
+import ru.my.traty.ui.designsystem.components.TratyCard
+import ru.my.traty.ui.designsystem.components.TratyCategoryBadge
+import ru.my.traty.ui.designsystem.components.TratyDeltaBadge
+import ru.my.traty.ui.designsystem.components.TratyEmptyState
+import ru.my.traty.ui.designsystem.components.TratyInputBar
+import ru.my.traty.ui.designsystem.components.TratyMonthPicker
+import ru.my.traty.ui.designsystem.components.TratyOutlinedButton
+import ru.my.traty.ui.designsystem.components.TratyProgressBar
+import ru.my.traty.ui.designsystem.components.TratyTextButton
+import ru.my.traty.ui.designsystem.theme.TratyTheme
 import kotlin.math.roundToInt
 
 private enum class Tab(val title: String, val icon: ImageVector) {
@@ -97,14 +101,25 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
+        containerColor = TratyTheme.colors.background,
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = TratyTheme.colors.surface,
+                tonalElevation = 2.dp,
+            ) {
                 Tab.entries.forEach { t ->
                     NavigationBarItem(
                         selected = tab == t,
                         onClick = { tab = t },
                         icon = { Icon(t.icon, contentDescription = null) },
-                        label = { Text(t.title) },
+                        label = { Text(t.title, style = TratyTheme.typography.labelMedium) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = TratyTheme.colors.primary,
+                            selectedTextColor = TratyTheme.colors.primary,
+                            indicatorColor = TratyTheme.colors.primaryContainer,
+                            unselectedIconColor = TratyTheme.colors.onSurfaceVariant,
+                            unselectedTextColor = TratyTheme.colors.onSurfaceVariant,
+                        ),
                     )
                 }
             }
@@ -145,86 +160,111 @@ private fun HomeScreen(vm: MainViewModel) {
     }
 
     Column(Modifier.fillMaxSize().imePadding()) {
-        MonthHeader(month, expenses.sumOf { it.amountKopecks }, vm::prevMonth, vm::nextMonth)
-        HorizontalDivider()
+        TratyMonthPicker(
+            month = month,
+            totalKopecks = expenses.sumOf { it.amountKopecks },
+            onPrev = vm::prevMonth,
+            onNext = vm::nextMonth,
+        )
+
         LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
             if (expenses.isEmpty()) {
                 item {
-                    Text(
-                        "Трат пока нет.\nСкажите или напишите, например: «кофе 250 и такси 400».",
-                        Modifier.padding(24.dp),
-                        style = MaterialTheme.typography.bodyMedium,
+                    TratyEmptyState(
+                        icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                        title = "Трат пока нет",
+                        description = "Скажите или напишите, например: «кофе 250 и такси 400».",
                     )
                 }
             }
             items(expenses, key = { it.id }) { e ->
                 ExpenseRow(e, emojiOf[e.category] ?: "📦") { toDelete = e }
-                HorizontalDivider()
-            }
-        }
-        Surface(tonalElevation = 3.dp) {
-            Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = vm::manualDraft) { Icon(Icons.Filled.Add, "Вручную") }
-                OutlinedTextField(
-                    value = vm.input,
-                    onValueChange = { vm.input = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("кофе 250, такси 400…") },
-                    maxLines = 3,
+                HorizontalDivider(
+                    color = TratyTheme.colors.borderSubtle,
+                    modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg),
                 )
-                if (vm.busy) {
-                    CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp))
-                } else if (vm.input.isBlank()) {
-                    IconButton(onClick = {
-                        try { speech.launch(SystemSpeech.intent()) } catch (e: ActivityNotFoundException) {
-                            vm.message = "На телефоне нет сервиса распознавания речи"
-                        }
-                    }) { Icon(Icons.Filled.Mic, "Голос") }
-                } else {
-                    IconButton(onClick = vm::parseInput) { Icon(Icons.AutoMirrored.Filled.Send, "Разобрать") }
-                }
             }
         }
+
+        TratyInputBar(
+            value = vm.input,
+            onValueChange = { vm.input = it },
+            onManualClick = vm::manualDraft,
+            onVoiceClick = {
+                try {
+                    speech.launch(SystemSpeech.intent())
+                } catch (e: ActivityNotFoundException) {
+                    vm.message = "На телефоне нет сервиса распознавания речи"
+                }
+            },
+            onSendClick = vm::parseInput,
+            isBusy = vm.busy,
+        )
     }
 
     toDelete?.let { e ->
         AlertDialog(
             onDismissRequest = { toDelete = null },
-            title = { Text("Удалить трату?") },
-            text = { Text("${e.category}: ${formatRub(e.amountKopecks)}\n${e.note ?: e.rawText ?: ""}") },
-            confirmButton = { TextButton(onClick = { vm.delete(e); toDelete = null }) { Text("Удалить") } },
-            dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Отмена") } },
+            shape = TratyTheme.shapes.large,
+            containerColor = TratyTheme.colors.surface,
+            title = { Text("Удалить трату?", style = TratyTheme.typography.titleMedium) },
+            text = {
+                Text(
+                    "${e.category}: ${formatRub(e.amountKopecks)}\n${e.note ?: e.rawText ?: ""}",
+                    style = TratyTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TratyTextButton(
+                    onClick = { vm.delete(e); toDelete = null },
+                    contentColor = TratyTheme.colors.expense,
+                ) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TratyTextButton(onClick = { toDelete = null }) {
+                    Text("Отмена")
+                }
+            },
         )
-    }
-}
-
-@Composable
-private fun MonthHeader(month: YearMonth, totalKopecks: Long, onPrev: () -> Unit, onNext: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onPrev) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Назад") }
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(formatMonth(month), style = MaterialTheme.typography.titleMedium)
-            Text(formatRub(totalKopecks), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        }
-        IconButton(onClick = onNext) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Вперёд") }
     }
 }
 
 @Composable
 private fun ExpenseRow(e: Expense, emoji: String, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp),
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(emoji, style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.width(12.dp))
+        TratyCategoryBadge(
+            emoji = emoji,
+            categoryName = e.category,
+            size = 42.dp,
+        )
+        Spacer(Modifier.width(TratyTheme.spacing.md))
         Column(Modifier.weight(1f)) {
             val title = listOfNotNull(e.subcategory ?: e.category, e.place).joinToString(" · ")
-            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = title,
+                style = TratyTheme.typography.titleSmall,
+                color = TratyTheme.colors.onSurface,
+            )
             val sub = listOfNotNull(formatTime(e.timestamp), e.note).joinToString(" · ")
-            Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                text = sub,
+                style = TratyTheme.typography.bodySmall,
+                color = TratyTheme.colors.onSurfaceVariant,
+            )
         }
-        Text(formatRub(e.amountKopecks), style = MaterialTheme.typography.titleMedium)
+        TratyAmountText(
+            amountKopecks = e.amountKopecks,
+            size = AmountSize.MEDIUM,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
@@ -244,16 +284,33 @@ private fun ConfirmDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (items.size > 1) "Проверьте траты (${items.size})" else "Проверьте трату") },
+        shape = TratyTheme.shapes.large,
+        containerColor = TratyTheme.colors.surface,
+        title = {
+            Text(
+                if (items.size > 1) "Проверьте траты (${items.size})" else "Проверьте трату",
+                style = TratyTheme.typography.headlineMedium,
+            )
+        },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 if (draft.rawText.isNotBlank()) {
-                    Text("«${draft.rawText}»", style = MaterialTheme.typography.bodySmall)
-                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "«${draft.rawText}»",
+                        style = TratyTheme.typography.bodySmall,
+                        color = TratyTheme.colors.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(TratyTheme.spacing.sm))
                 }
                 items.forEachIndexed { i, item ->
-                    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                        Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TratyCard(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = TratyTheme.spacing.xs),
+                        backgroundColor = TratyTheme.colors.surfaceContainer,
+                    ) {
+                        Column(
+                            Modifier.padding(TratyTheme.spacing.md),
+                            verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
+                        ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 OutlinedTextField(
                                     value = item.amountText,
@@ -262,10 +319,11 @@ private fun ConfirmDialog(
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     singleLine = true,
                                     modifier = Modifier.weight(1f),
+                                    shape = TratyTheme.shapes.small,
                                 )
                                 if (items.size > 1) {
                                     IconButton(onClick = { items = items.filterIndexed { j, _ -> j != i } }) {
-                                        Icon(Icons.Filled.Close, "Убрать")
+                                        Icon(Icons.Filled.Close, "Убрать", tint = TratyTheme.colors.onSurfaceVariant)
                                     }
                                 }
                             }
@@ -273,28 +331,52 @@ private fun ConfirmDialog(
                                 update(i) { d -> d.copy(category = name) }
                             }
                             OutlinedTextField(
-                                item.subcategory, { v -> update(i) { d -> d.copy(subcategory = v) } },
-                                label = { Text("Подкатегория") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                                value = item.subcategory,
+                                onValueChange = { v -> update(i) { d -> d.copy(subcategory = v) } },
+                                label = { Text("Подкатегория") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = TratyTheme.shapes.small,
                             )
                             OutlinedTextField(
-                                item.place, { v -> update(i) { d -> d.copy(place = v) } },
-                                label = { Text("Место") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                                value = item.place,
+                                onValueChange = { v -> update(i) { d -> d.copy(place = v) } },
+                                label = { Text("Место") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = TratyTheme.shapes.small,
                             )
                             OutlinedTextField(
-                                item.note, { v -> update(i) { d -> d.copy(note = v) } },
-                                label = { Text("Заметка") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                                value = item.note,
+                                onValueChange = { v -> update(i) { d -> d.copy(note = v) } },
+                                label = { Text("Заметка") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = TratyTheme.shapes.small,
                             )
                             OutlinedTextField(
-                                item.dateText, { v -> update(i) { d -> d.copy(dateText = v) } },
-                                label = { Text("Дата (ГГГГ-ММ-ДД)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                                value = item.dateText,
+                                onValueChange = { v -> update(i) { d -> d.copy(dateText = v) } },
+                                label = { Text("Дата (ГГГГ-ММ-ДД)") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = TratyTheme.shapes.small,
                             )
                         }
                     }
                 }
             }
         },
-        confirmButton = { Button(onClick = { onSave(draft.copy(items = items)) }) { Text("Сохранить") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        confirmButton = {
+            TratyButton(onClick = { onSave(draft.copy(items = items)) }) {
+                Text("Сохранить")
+            }
+        },
+        dismissButton = {
+            TratyTextButton(onClick = onDismiss) {
+                Text("Отмена")
+            }
+        },
     )
 }
 
@@ -311,7 +393,11 @@ private fun CategoryPicker(
     val isNew = newOne != null && selected == newOne.name
     val emoji = categories.firstOrNull { it.name == selected }?.emoji ?: newOne?.takeIf { isNew }?.emoji ?: ""
     Box {
-        OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { open = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = TratyTheme.shapes.small,
+        ) {
             Text("$emoji $selected" + if (isNew) " (новая)" else "")
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -343,48 +429,139 @@ private fun StatsScreen(vm: MainViewModel) {
     val emojiOf = remember(categories) { categories.associate { it.name to it.emoji } }
     val prevMap = remember(prev) { prev.associate { it.category to it.total } }
     val sum = totals.sumOf { it.total }
+    val prevSum = prev.sumOf { it.total }
+
+    val deltaDescription = if (prevSum > 0) {
+        "Прошлый месяц: ${formatRub(prevSum)} (${deltaText(sum, prevSum)})"
+    } else null
 
     LazyColumn(Modifier.fillMaxSize()) {
-        item { MonthHeader(month, sum, vm::prevMonth, vm::nextMonth) }
         item {
-            val prevSum = prev.sumOf { it.total }
-            if (prevSum > 0) {
-                Text(
-                    "Прошлый месяц: ${formatRub(prevSum)} (${deltaText(sum, prevSum)})",
-                    Modifier.padding(horizontal = 16.dp),
-                    style = MaterialTheme.typography.bodyMedium,
+            TratyMonthPicker(
+                month = month,
+                totalKopecks = sum,
+                onPrev = vm::prevMonth,
+                onNext = vm::nextMonth,
+                deltaText = deltaDescription,
+            )
+        }
+
+        if (totals.isEmpty()) {
+            item {
+                TratyEmptyState(
+                    icon = Icons.Filled.PieChart,
+                    title = "Нет статистики",
+                    description = "В этом месяце пока нет зарегистрированных трат.",
                 )
             }
-            HorizontalDivider(Modifier.padding(top = 8.dp))
         }
+
         items(totals, key = { it.category }) { t ->
             val frac = if (sum > 0) t.total.toFloat() / sum else 0f
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            val p = prevMap[t.category]
+
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.sm),
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${emojiOf[t.category] ?: "📦"} ${t.category}", Modifier.weight(1f))
-                    Text(formatRub(t.total), fontWeight = FontWeight.Bold)
+                    TratyCategoryBadge(
+                        emoji = emojiOf[t.category] ?: "📦",
+                        categoryName = t.category,
+                        size = 36.dp,
+                    )
+                    Spacer(Modifier.width(TratyTheme.spacing.md))
+                    Text(
+                        text = t.category,
+                        style = TratyTheme.typography.titleSmall,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TratyAmountText(
+                        amountKopecks = t.total,
+                        size = AmountSize.MEDIUM,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
-                LinearProgressIndicator(progress = { frac }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
-                val p = prevMap[t.category]
-                Text(
-                    "${(frac * 100).roundToInt()}% от всех трат" + (p?.let { " · к прошлому месяцу ${deltaText(t.total, it)}" } ?: " · новая категория"),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+
+                Spacer(Modifier.height(TratyTheme.spacing.xs))
+
+                TratyProgressBar(
+                    progress = frac,
+                    modifier = Modifier.padding(vertical = TratyTheme.spacing.xxs),
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "${(frac * 100).roundToInt()}% от всех трат",
+                        style = TratyTheme.typography.bodySmall,
+                        color = TratyTheme.colors.onSurfaceVariant,
+                    )
+                    if (p != null) {
+                        TratyDeltaBadge(current = t.total, previous = p)
+                    } else {
+                        Text(
+                            text = "новая категория",
+                            style = TratyTheme.typography.labelSmall,
+                            color = TratyTheme.colors.info,
+                        )
+                    }
+                }
             }
         }
+
         item {
-            Card(Modifier.fillMaxWidth().padding(16.dp)) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Комментарий ИИ", style = MaterialTheme.typography.titleMedium)
+            TratyCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(TratyTheme.spacing.lg),
+                backgroundColor = TratyTheme.colors.surfaceContainer,
+            ) {
+                Column(Modifier.padding(TratyTheme.spacing.lg)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.AutoAwesome,
+                            contentDescription = null,
+                            tint = TratyTheme.colors.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(TratyTheme.spacing.sm))
+                        Text("Комментарий ИИ", style = TratyTheme.typography.titleMedium)
+                    }
+
+                    Spacer(Modifier.height(TratyTheme.spacing.xs))
+
                     Text(
-                        "Отправляются только суммы по категориям — без мест и заметок.",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = "Отправляются только суммы по категориям — без мест и заметок.",
+                        style = TratyTheme.typography.bodySmall,
+                        color = TratyTheme.colors.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(8.dp))
-                    vm.insight?.let { Text(it); Spacer(Modifier.height(8.dp)) }
-                    if (vm.insightBusy) CircularProgressIndicator()
-                    else Button(onClick = vm::requestInsight) { Text(if (vm.insight == null) "Получить" else "Обновить") }
+
+                    Spacer(Modifier.height(TratyTheme.spacing.md))
+
+                    vm.insight?.let {
+                        Text(
+                            text = it,
+                            style = TratyTheme.typography.bodyMedium,
+                            color = TratyTheme.colors.onSurface,
+                        )
+                        Spacer(Modifier.height(TratyTheme.spacing.md))
+                    }
+
+                    if (vm.insightBusy) {
+                        CircularProgressIndicator(
+                            color = TratyTheme.colors.primary,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    } else {
+                        TratyButton(onClick = vm::requestInsight) {
+                            Text(if (vm.insight == null) "Получить анализ" else "Обновить анализ")
+                        }
+                    }
                 }
             }
         }
@@ -408,53 +585,111 @@ private fun SettingsScreen(vm: MainViewModel) {
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(TratyTheme.spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md),
     ) {
-        Text("Разбор фраз", style = MaterialTheme.typography.titleMedium)
-        LlmProvider.entries.forEach { p ->
-            Row(
-                Modifier.fillMaxWidth().clickable { s = s.copy(provider = p) },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(selected = s.provider == p, onClick = { s = s.copy(provider = p) })
-                Text(p.title)
+        // Секция: Провайдер ИИ
+        TratyCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = TratyTheme.colors.surface,
+        ) {
+            Column(Modifier.padding(TratyTheme.spacing.lg)) {
+                Text("Разбор фраз", style = TratyTheme.typography.titleMedium)
+                Spacer(Modifier.height(TratyTheme.spacing.sm))
+                LlmProvider.entries.forEach { p ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { s = s.copy(provider = p) }
+                            .padding(vertical = TratyTheme.spacing.xs),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = s.provider == p, onClick = { s = s.copy(provider = p) })
+                        Spacer(Modifier.width(TratyTheme.spacing.sm))
+                        Text(p.title, style = TratyTheme.typography.bodyLarge)
+                    }
+                }
             }
         }
 
-        HorizontalDivider()
-        Text("DeepSeek", style = MaterialTheme.typography.titleMedium)
-        SecretField("API-ключ DeepSeek", s.deepseekKey) { s = s.copy(deepseekKey = it) }
-        OutlinedTextField(
-            s.deepseekModel, { s = s.copy(deepseekModel = it) },
-            label = { Text("Модель") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-        )
-
-        HorizontalDivider()
-        Text("YandexGPT", style = MaterialTheme.typography.titleMedium)
-        SecretField("API-ключ Yandex Cloud", s.yandexKey) { s = s.copy(yandexKey = it) }
-        OutlinedTextField(
-            s.yandexFolderId, { s = s.copy(yandexFolderId = it) },
-            label = { Text("ID каталога (folder id)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            s.yandexModel, { s = s.copy(yandexModel = it) },
-            label = { Text("Модель (напр. yandexgpt-lite/latest)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-        )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { vm.saveSettings(s) }) { Text("Сохранить") }
-            OutlinedButton(onClick = { vm.testConnection(s) }) { Text("Проверить") }
+        // Секция: DeepSeek
+        TratyCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = TratyTheme.colors.surface,
+        ) {
+            Column(
+                Modifier.padding(TratyTheme.spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
+            ) {
+                Text("DeepSeek", style = TratyTheme.typography.titleMedium)
+                SecretField("API-ключ DeepSeek", s.deepseekKey) { s = s.copy(deepseekKey = it) }
+                OutlinedTextField(
+                    value = s.deepseekModel,
+                    onValueChange = { s = s.copy(deepseekModel = it) },
+                    label = { Text("Модель") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = TratyTheme.shapes.small,
+                )
+            }
         }
 
-        HorizontalDivider()
-        Text("Резервная копия", style = MaterialTheme.typography.titleMedium)
-        Text(
-            "Все данные хранятся только на телефоне. Периодически выгружайте CSV (открывается в Excel).",
-            style = MaterialTheme.typography.bodySmall,
-        )
-        OutlinedButton(onClick = { exportLauncher.launch("traty-${java.time.LocalDate.now()}.csv") }) {
-            Text("Экспорт в CSV")
+        // Секция: YandexGPT
+        TratyCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = TratyTheme.colors.surface,
+        ) {
+            Column(
+                Modifier.padding(TratyTheme.spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
+            ) {
+                Text("YandexGPT", style = TratyTheme.typography.titleMedium)
+                SecretField("API-ключ Yandex Cloud", s.yandexKey) { s = s.copy(yandexKey = it) }
+                OutlinedTextField(
+                    value = s.yandexFolderId,
+                    onValueChange = { s = s.copy(yandexFolderId = it) },
+                    label = { Text("ID каталога (folder id)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = TratyTheme.shapes.small,
+                )
+                OutlinedTextField(
+                    value = s.yandexModel,
+                    onValueChange = { s = s.copy(yandexModel = it) },
+                    label = { Text("Модель (напр. yandexgpt-lite/latest)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = TratyTheme.shapes.small,
+                )
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md)) {
+            TratyButton(onClick = { vm.saveSettings(s) }) { Text("Сохранить") }
+            TratyOutlinedButton(onClick = { vm.testConnection(s) }) { Text("Проверить") }
+        }
+
+        // Секция: Резервная копия
+        TratyCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = TratyTheme.colors.surface,
+        ) {
+            Column(Modifier.padding(TratyTheme.spacing.lg)) {
+                Text("Резервная копия", style = TratyTheme.typography.titleMedium)
+                Spacer(Modifier.height(TratyTheme.spacing.xs))
+                Text(
+                    "Все данные хранятся только на телефоне. Периодически выгружайте CSV (открывается в Excel).",
+                    style = TratyTheme.typography.bodySmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(TratyTheme.spacing.md))
+                TratyOutlinedButton(onClick = { exportLauncher.launch("traty-${java.time.LocalDate.now()}.csv") }) {
+                    Text("Экспорт в CSV")
+                }
+            }
         }
     }
 }
@@ -468,5 +703,6 @@ private fun SecretField(label: String, value: String, onChange: (String) -> Unit
         singleLine = true,
         visualTransformation = PasswordVisualTransformation(),
         modifier = Modifier.fillMaxWidth(),
+        shape = TratyTheme.shapes.small,
     )
 }
