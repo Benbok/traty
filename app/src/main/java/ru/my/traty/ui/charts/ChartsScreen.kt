@@ -2,6 +2,7 @@ package ru.my.traty.ui.charts
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,10 +15,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material3.AlertDialog
@@ -40,6 +43,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.data.Income
 import ru.my.traty.data.isUserEditable
 import ru.my.traty.ui.charts.components.BalanceAreaChart
+import ru.my.traty.ui.charts.components.DateRangePickerModal
 import ru.my.traty.ui.charts.components.ChartKpiCard
 import ru.my.traty.ui.charts.components.DebitCreditBarChart
 import ru.my.traty.ui.charts.model.ChartPeriod
@@ -51,6 +55,7 @@ import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyProgressBar
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
+import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
 import ru.my.traty.ui.formatTime
@@ -60,6 +65,7 @@ import kotlin.math.roundToInt
 fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     var incomeToDelete by remember { mutableStateOf<Income?>(null) }
+    var showRangePicker by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier
@@ -78,10 +84,10 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
             )
         }
 
-        // Чипсы выбора периода
+        // Чипсы выбора периода (прокручиваются: «Даты» — выбор произвольного диапазона)
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
             ) {
                 ChartPeriod.entries.forEach { p ->
@@ -90,18 +96,16 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                         shape = TratyTheme.shapes.small,
                         color = if (isSelected) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
                         border = if (isSelected) BorderStroke(1.dp, TratyTheme.colors.primary) else null,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { vm.setPeriod(p) },
+                        modifier = Modifier.clickable {
+                            if (p == ChartPeriod.CUSTOM) showRangePicker = true else vm.setPeriod(p)
+                        },
                     ) {
                         Text(
                             text = p.title,
                             style = TratyTheme.typography.labelMedium,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                             color = if (isSelected) TratyTheme.colors.primary else TratyTheme.colors.onSurfaceVariant,
-                            modifier = Modifier
-                                .padding(vertical = 8.dp)
-                                .fillMaxWidth(),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         )
                     }
@@ -137,6 +141,37 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                         containerColor = TratyTheme.colors.surfaceContainer,
                         modifier = Modifier.size(36.dp),
                     )
+                }
+            }
+        }
+
+        // Если выбран произвольный период — показываем диапазон; нажатие открывает календарь
+        if (state.period == ChartPeriod.CUSTOM) {
+            item {
+                Surface(
+                    shape = TratyTheme.shapes.medium,
+                    color = TratyTheme.colors.surfaceContainer,
+                    modifier = Modifier.fillMaxWidth().clickable { showRangePicker = true },
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = TratyTheme.spacing.md, vertical = TratyTheme.spacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            Icons.Filled.DateRange,
+                            contentDescription = null,
+                            tint = TratyTheme.colors.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(TratyTheme.spacing.sm))
+                        Text(
+                            text = "${formatDate(state.rangeStart)} — ${formatDate(state.rangeEnd)}",
+                            style = TratyTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TratyTheme.colors.onSurface,
+                        )
+                    }
                 }
             }
         }
@@ -274,6 +309,15 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
         item {
             Spacer(Modifier.height(TratyTheme.spacing.lg))
         }
+    }
+
+    if (showRangePicker) {
+        DateRangePickerModal(
+            initialStart = state.rangeStart,
+            initialEnd = state.rangeEnd,
+            onRangeSelected = vm::setCustomRange,
+            onDismiss = { showRangePicker = false },
+        )
     }
 
     incomeToDelete?.let { inc ->

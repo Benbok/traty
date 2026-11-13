@@ -11,6 +11,7 @@ enum class ChartPeriod(val title: String) {
     HALF_YEAR("6 мес"),
     YEAR("Год"),
     ALL("Всё время"),
+    CUSTOM("Даты"),
 }
 
 /**

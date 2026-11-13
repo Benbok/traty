@@ -36,6 +36,9 @@ data class ChartsUiState(
     /** Расчётный период вкладки «Месяц» (остальные вкладки — календарные месяцы). */
     val billingPeriod: BillingPeriod = BillingPeriod.containing(LocalDate.now(), 1),
     val periodStartDay: Int = 1,
+    /** Границы текущего диапазона графиков (включительно). */
+    val rangeStart: LocalDate = LocalDate.now(),
+    val rangeEnd: LocalDate = LocalDate.now(),
     val summary: ChartSummary = ChartSummary(0, 0, 0, null, 0, 0, 0),
     val balancePoints: List<BalancePoint> = emptyList(),
     val debitCreditBars: List<DebitCreditBar> = emptyList(),
@@ -51,6 +54,8 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
     private val zone: ZoneId = ZoneId.systemDefault()
 
     val period = MutableStateFlow(ChartPeriod.MONTH)
+    /** Границы произвольного периода «Даты» (включительно); по умолчанию — последние 30 дней. */
+    private val customRange = MutableStateFlow(LocalDate.now().minusDays(29) to LocalDate.now())
     private val startDay = MutableStateFlow(1)
     val billingPeriod = MutableStateFlow(BillingPeriod.containing(LocalDate.now(), 1))
 
@@ -65,9 +70,10 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private val rangeFlow = combine(period, billingPeriod) { p, bp ->
+    private val rangeFlow = combine(period, billingPeriod, customRange) { p, bp, custom ->
         val now = LocalDate.now()
         when (p) {
+            ChartPeriod.CUSTOM -> customChartRange(custom.first, custom.second, zone)
             ChartPeriod.MONTH -> {
                 ChartRange(bp.startMillis(zone), bp.endMillisExclusive(zone), bp.startDate, bp.endDate)
             }
@@ -122,6 +128,12 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
         period.value = newPeriod
     }
 
+    /** Выбрать произвольный период «с даты по дату» и переключиться на него. */
+    fun setCustomRange(from: LocalDate, to: LocalDate) {
+        customRange.value = from to to
+        period.value = ChartPeriod.CUSTOM
+    }
+
     fun prevBillingPeriod() {
         billingPeriod.value = billingPeriod.value.previous(startDay.value)
     }
@@ -172,6 +184,8 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
             period = p,
             billingPeriod = bp,
             periodStartDay = startDay,
+            rangeStart = range.startDate,
+            rangeEnd = range.endDate,
             summary = summary,
             balancePoints = balancePoints,
             debitCreditBars = debitCreditBars,
@@ -187,7 +201,7 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
         incomes: List<Income>,
     ): List<BalancePoint> {
         val daysBetween = ChronoUnit.DAYS.between(range.startDate, range.endDate).toInt()
-        if (daysBetween <= 0) return emptyList()
+        if (daysBetween < 0) return emptyList()
 
         // Сгруппируем операции по дате (LocalDate)
         val debitByDate = incomes.groupBy {
@@ -201,8 +215,8 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
         val points = mutableListOf<BalancePoint>()
         var runningCumulative = 0L
 
-        if (period == ChartPeriod.MONTH) {
-            // Для месяца делаем точку на каждый день месяца
+        if (usesDailyPoints(period, range)) {
+            // Для месяца и коротких периодов делаем точку на каждый день
             var curDate = range.startDate
             while (!curDate.isAfter(range.endDate)) {
                 val debit = debitByDate[curDate] ?: 0L
@@ -271,7 +285,7 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
 
         val bars = mutableListOf<DebitCreditBar>()
 
-        if (period == ChartPeriod.MONTH) {
+        if (usesDailyPoints(period, range)) {
             var curDate = range.startDate
             while (!curDate.isAfter(range.endDate)) {
                 val debit = debitByDate[curDate] ?: 0L
