@@ -53,6 +53,8 @@ data class AppSettings(
     val dailyDigestEnabled: Boolean = true,
     /** Ключи скрытых карточек наблюдений на Главной. */
     val dismissedObservations: Set<String> = emptySet(),
+    /** Карточка «План трат» на Тратах: показаны ли категории. По умолчанию свёрнуто — только общий итог. */
+    val homePlanExpanded: Boolean = false,
 )
 
 internal fun encodeLines(lines: List<String>): String =
@@ -85,6 +87,7 @@ class SettingsRepository(private val context: Context) {
         val labelsEnabled = booleanPreferencesKey("labels_enabled")
         val dailyDigest = booleanPreferencesKey("daily_digest")
         val dismissedObservations = stringSetPreferencesKey("dismissed_observations")
+        val homePlanExpanded = booleanPreferencesKey("home_plan_expanded")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -105,6 +108,7 @@ class SettingsRepository(private val context: Context) {
             labelsEnabled = p[K.labelsEnabled] ?: d.labelsEnabled,
             dailyDigestEnabled = p[K.dailyDigest] ?: d.dailyDigestEnabled,
             dismissedObservations = p[K.dismissedObservations] ?: d.dismissedObservations,
+            homePlanExpanded = p[K.homePlanExpanded] ?: d.homePlanExpanded,
         )
     }
 
@@ -151,6 +155,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setDailyDigestEnabled(enabled: Boolean) {
         context.dataStore.edit { p -> p[K.dailyDigest] = enabled }
+    }
+
+    suspend fun setHomePlanExpanded(expanded: Boolean) {
+        context.dataStore.edit { p -> p[K.homePlanExpanded] = expanded }
     }
 
     suspend fun setLabelsEnabled(enabled: Boolean) {

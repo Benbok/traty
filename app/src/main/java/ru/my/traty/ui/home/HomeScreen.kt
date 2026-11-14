@@ -319,6 +319,8 @@ fun HomeScreen(
                         period = period,
                         onOpen = onOpenBudget,
                         compact = true,
+                        detailsExpanded = settings.homePlanExpanded,
+                        onToggleDetails = { vm.setHomePlanExpanded(!settings.homePlanExpanded) },
                         modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
                     )
                 }

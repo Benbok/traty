@@ -460,6 +460,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .onFailure { message = it.message ?: "Не удалось изменить категорию" }
     }
 
+    /** Свернуть или развернуть категории в карточке «План трат» на Тратах; выбор запоминается. */
+    fun setHomePlanExpanded(expanded: Boolean) = viewModelScope.launch {
+        c.settings.setHomePlanExpanded(expanded)
+    }
+
     fun setLabelsEnabled(enabled: Boolean) = viewModelScope.launch {
         c.settings.setLabelsEnabled(enabled)
     }
