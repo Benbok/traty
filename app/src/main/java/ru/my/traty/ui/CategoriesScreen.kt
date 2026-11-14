@@ -9,10 +9,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -100,6 +102,7 @@ fun CategoriesScreen(onBack: () -> Unit, vm: CategoriesViewModel = viewModel()) 
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TratyHeaderCard(
+                modifier = Modifier.statusBarsPadding(),
                 title = "Категории",
                 subtitle = "Управление категориями и подкатегориями",
                 onBack = onBack,
@@ -123,7 +126,12 @@ fun CategoriesScreen(onBack: () -> Unit, vm: CategoriesViewModel = viewModel()) 
             ) { Icon(Icons.Filled.Add, "Добавить категорию") }
         },
     ) { pad ->
-        LazyColumn(Modifier.padding(pad).fillMaxSize()) {
+        LazyColumn(
+            Modifier
+                .padding(pad)
+                .consumeWindowInsets(pad)
+                .fillMaxSize(),
+        ) {
             val movable = active.filterNot { isOther(it.category) }
             items(active, key = { it.category.id }) { c ->
                 val idx = movable.indexOf(c)

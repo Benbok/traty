@@ -3,15 +3,18 @@ package ru.my.traty.ui.settings
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,15 +31,21 @@ import ru.my.traty.ui.designsystem.theme.TratyTheme
 fun RulesScreen(vm: MainViewModel, onBack: () -> Unit) {
     val rules by vm.rules.collectAsStateWithLifecycle()
 
-    Column(Modifier.fillMaxSize()) {
-        TratyHeaderCard(
-            title = "Правила",
-            subtitle = "Автоматическая категоризация мест",
-            onBack = onBack,
-        )
-
+    Scaffold(
+        containerColor = TratyTheme.colors.background,
+        topBar = {
+            TratyHeaderCard(
+                modifier = Modifier.statusBarsPadding(),
+                title = "Правила",
+                subtitle = "Автоматическая категоризация мест",
+                onBack = onBack,
+            )
+        },
+    ) { pad ->
         Column(
             Modifier
+                .padding(pad)
+                .consumeWindowInsets(pad)
                 .fillMaxSize()
                 .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
         ) {
