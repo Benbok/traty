@@ -8,6 +8,7 @@ import ru.my.traty.data.DefaultCategories
 import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.IncomeOrigin
 import ru.my.traty.data.IncomeSources
+import ru.my.traty.data.Places
 import ru.my.traty.data.normalizeName
 import ru.my.traty.data.sameName
 import java.time.LocalDate
@@ -76,7 +77,7 @@ data class EntryRow(
             return EntryRow(
                 type = EntryType.EXPENSE, amountText = amountStr,
                 category = known ?: suggested?.name ?: DefaultCategories.OTHER,
-                subcategory = entry.subcategory.orEmpty(), place = entry.place.orEmpty(), note = entry.note.orEmpty(),
+                subcategory = entry.subcategory.orEmpty(), place = Places.normalize(entry.place).orEmpty(), note = entry.note.orEmpty(),
                 source = IncomeSources.DEFAULT, dateText = day.toString(), suggestedCategory = suggested,
             )
         }

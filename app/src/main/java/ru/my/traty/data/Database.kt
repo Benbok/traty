@@ -166,6 +166,17 @@ interface ExpenseDao {
     )
     fun observeTotals(from: Long, to: Long): Flow<List<CategoryTotal>>
 
+    /** Суммы по (категория, место) — для разбивки по магазинам. Написания одного магазина сводит [Places.group]. */
+    @Query(
+        "SELECT categoryId, place, SUM(amountKopecks) AS total, COUNT(*) AS count FROM expenses " +
+            "WHERE timestamp >= :from AND timestamp < :to GROUP BY categoryId, place"
+    )
+    fun observePlaceTotals(from: Long, to: Long): Flow<List<PlaceTotal>>
+
+    /** Все названия мест, что уже есть в базе: при сохранении новое написание приводится к уже известному. */
+    @Query("SELECT DISTINCT place FROM expenses WHERE place IS NOT NULL AND place <> ''")
+    suspend fun distinctPlaces(): List<String>
+
     @Query("$EXPENSE_JOIN ORDER BY e.timestamp")
     suspend fun getAllWithCategory(): List<ExpenseWithCategory>
 

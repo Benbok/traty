@@ -52,6 +52,26 @@ class EntryParsingTest {
     }
 
     @Test
+    fun severalShopsInOnePhraseGiveSeparateExpensesWithPlace() {
+        // Ответ модели на «магазин Пятёрочка 1200, строительный Стройландия 3500, Магнит 800»
+        val r = EntryParsing.decode(
+            """{"items":[""" +
+                """{"type":"expense","amount":1200,"category":"Продукты","place":"Пятёрочка"},""" +
+                """{"type":"expense","amount":3500,"category":"Жильё","subcategory":"Ремонт","place":"Стройландия"},""" +
+                """{"type":"expense","amount":800,"category":"Продукты","place":"магазин Магнит"}]}"""
+        )
+        assertEquals(listOf(1200.0, 3500.0, 800.0), r.map { it.amount })
+        assertEquals(listOf("Пятёрочка", "Стройландия", "магазин Магнит"), r.map { it.place })
+    }
+
+    @Test
+    fun promptAsksForOneItemPerShopAndCleanPlace() {
+        val p = EntryPrompt.system(emptyList(), LocalDate.of(2026, 11, 14), emptyList())
+        assertTrue("отдельный элемент на каждый магазин" in p)
+        assertTrue("«строительный Стройландия» → «Стройландия»" in p)
+    }
+
+    @Test
     fun promptMentionsTypesAndToday() {
         val p = EntryPrompt.system(emptyList(), LocalDate.of(2026, 11, 14), emptyList())
         assertTrue("\"type\"" in p && "income" in p && "2026-11-14" in p)

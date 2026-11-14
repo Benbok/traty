@@ -28,6 +28,13 @@ class RuleMatcherTest {
     }
 
     @Test
+    fun yoAndYeAreTheSameInRules() {
+        val r = RuleMatcher.apply(listOf(ParsedEntry(amount = 500.0, category = "Прочее", place = "Пятерочка")), rules, cats).single()
+        assertTrue(r.ruleMatched)
+        assertEquals("Продукты", r.entry.category)
+    }
+
+    @Test
     fun matchesNote() {
         val r = RuleMatcher.apply(listOf(ParsedEntry(amount = 300.0, category = "Прочее", note = "обед в кафе")), rules, cats).single()
         assertTrue(r.ruleMatched)
