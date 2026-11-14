@@ -16,11 +16,21 @@ import androidx.compose.ui.unit.dp
 import ru.my.traty.data.insights.Observation
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
+import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 /** Карточка наблюдения над лентой: что заметило приложение. Крестик скрывает её до конца периода. */
 @Composable
-fun ObservationCard(observation: Observation, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+fun ObservationCard(
+    observation: Observation,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** Пояснение ИИ, если уже получено. */
+    explanation: String? = null,
+    /** ИИ сейчас отвечает по этой карточке. */
+    explaining: Boolean = false,
+    onExplain: (() -> Unit)? = null,
+) {
     TratyCard(
         modifier = modifier
             .fillMaxWidth()
@@ -40,6 +50,18 @@ fun ObservationCard(observation: Observation, onDismiss: () -> Unit, modifier: M
                     style = TratyTheme.typography.bodySmall,
                     color = TratyTheme.colors.onSurfaceVariant,
                 )
+                if (explanation != null) {
+                    Text(
+                        explanation,
+                        style = TratyTheme.typography.bodySmall,
+                        color = TratyTheme.colors.onSurface,
+                        modifier = Modifier.padding(top = TratyTheme.spacing.sm),
+                    )
+                } else if (onExplain != null) {
+                    TratyTextButton(onClick = onExplain, enabled = !explaining) {
+                        Text(if (explaining) "Думаю…" else "✨ Подробнее", style = TratyTheme.typography.labelMedium)
+                    }
+                }
             }
             TratyIconButton(
                 Icons.Filled.Close,

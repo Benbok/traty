@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -51,6 +52,7 @@ import ru.my.traty.data.TemplateWithCategory
 import ru.my.traty.ui.home.EditFields
 import ru.my.traty.data.selectable
 import ru.my.traty.data.insights.Observation
+import ru.my.traty.data.insights.ObservationExplainer
 import ru.my.traty.data.insights.Observations
 import ru.my.traty.data.labels.ExpenseLabelHit
 import ru.my.traty.data.labels.ExpenseLabeler
@@ -107,6 +109,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Пояснения ИИ к карточкам наблюдений: ключ карточки → текст. Живут, пока открыто приложение. */
+    var observationExplanations by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+
+    /** Ключ карточки, по которой ИИ сейчас отвечает. */
+    var explainingObservation by mutableStateOf<String?>(null)
+        private set
+
+    fun explainObservation(o: Observation) {
+        if (explainingObservation != null) return
+        val client = clientFor(settings.value) ?: run { message = "Для пояснения нужен ИИ (Настройки)"; return }
+        viewModelScope.launch {
+            explainingObservation = o.key
+            try {
+                val answer = client.complete(
+                    system = ObservationExplainer.SYSTEM,
+                    user = ObservationExplainer.userPrompt(o),
+                    jsonMode = false,
+                )
+                observationExplanations = observationExplanations + (o.key to ObservationExplainer.clean(answer))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                message = "Не удалось получить пояснение: ${e.message}"
+            } finally {
+                explainingObservation = null
+            }
+        }
+    }
 
     fun dismissObservation(key: String) = viewModelScope.launch { c.settings.dismissObservation(key) }
 
