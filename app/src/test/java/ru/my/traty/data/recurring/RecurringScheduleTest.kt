@@ -77,21 +77,39 @@ class RecurringScheduleTest {
     }
 
     @Test
-    fun remindersFireInsideTheWindowOnlyOncePerChargeDate() {
-        val tomorrow = r(LocalDate.of(2026, 11, 15), remind = 1)
-        val inThreeDays = r(LocalDate.of(2026, 11, 17), remind = 1)
-        val inThreeWithWindow = r(LocalDate.of(2026, 11, 17), remind = 3)
-        val items = listOf(tomorrow, inThreeDays, inThreeWithWindow)
+    fun remindersGoEveryDayFromWindowStartThroughDueDate() {
+        val item = r(LocalDate.of(2026, 11, 17), remind = 3)
+        fun fires(day: Int) = RecurringSchedule.dueReminders(listOf(item), LocalDate.of(2026, 11, day), emptyMap()).isNotEmpty()
 
-        val due = RecurringSchedule.dueReminders(items, today, emptyMap())
-        assertEquals(listOf(tomorrow.id, inThreeWithWindow.id), due.map { it.id })
+        assertFalse(fires(13))
+        assertTrue(fires(14))
+        assertTrue(fires(15))
+        assertTrue(fires(16))
+        assertTrue(fires(17))
+        assertFalse(fires(18))
+    }
 
-        // по этой дате уже напоминали — второй раз нет, но после списания (новая дата) снова да
-        val notified = mapOf(tomorrow.id to tomorrow.nextEpochDay)
-        assertFalse(RecurringSchedule.dueReminders(items, today, notified).any { it.id == tomorrow.id })
-        val nextMonth = tomorrow.copy(nextEpochDay = LocalDate.of(2026, 12, 15).toEpochDay())
-        assertFalse(RecurringSchedule.dueReminders(listOf(nextMonth), today, notified).any())
-        assertTrue(RecurringSchedule.dueReminders(listOf(nextMonth), LocalDate.of(2026, 12, 14), notified).any())
+    @Test
+    fun oneReminderPerDay() {
+        val item = r(LocalDate.of(2026, 11, 17), remind = 3)
+        val sentToday = mapOf(item.id to today.toEpochDay())
+        assertTrue(RecurringSchedule.dueReminders(listOf(item), today, sentToday).isEmpty())
+        val sentYesterday = mapOf(item.id to today.minusDays(1).toEpochDay())
+        assertEquals(1, RecurringSchedule.dueReminders(listOf(item), today, sentYesterday).size)
+    }
+
+    @Test
+    fun smallerWindowStartsLater() {
+        val item = r(LocalDate.of(2026, 11, 17), remind = 1)
+        assertTrue(RecurringSchedule.dueReminders(listOf(item), LocalDate.of(2026, 11, 15), emptyMap()).isEmpty())
+        assertEquals(1, RecurringSchedule.dueReminders(listOf(item), LocalDate.of(2026, 11, 16), emptyMap()).size)
+    }
+
+    @Test
+    fun remindersStopAfterMarkingPaid() {
+        // «Списалось» перенесло дату на месяц вперёд — напоминаний нет до нового окна
+        val paid = r(LocalDate.of(2026, 12, 17), remind = 3)
+        assertTrue(RecurringSchedule.dueReminders(listOf(paid), today, emptyMap()).isEmpty())
     }
 
     @Test
@@ -105,9 +123,10 @@ class RecurringScheduleTest {
     }
 
     @Test
-    fun overduePaymentStillGetsOneReminder() {
+    fun overduePaymentIsNotRemindedAgain() {
+        // дата уже прошла — напоминания закончились, просрочка видна в «Ближайших списаниях»
         val overdue = r(LocalDate.of(2026, 11, 10))
-        assertEquals(1, RecurringSchedule.dueReminders(listOf(overdue), today, emptyMap()).size)
+        assertTrue(RecurringSchedule.dueReminders(listOf(overdue), today, emptyMap()).isEmpty())
     }
 
     @Test

@@ -493,8 +493,8 @@ data class Recurring(
     val periodUnit: String,
     val periodEvery: Int = 1,
     val nextEpochDay: Long,
-    /** За сколько дней напомнить о списании; 0 — не напоминать. */
-    val remindDaysBefore: Int = 1,
+    /** С какого дня до списания напоминать (каждый день до самого списания); 0 — не напоминать. */
+    val remindDaysBefore: Int = 3,
     val state: String = RecurringState.ACTIVE,
     val autoDetected: Boolean = false,
     /** Ключ автообнаружения ([ru.my.traty.data.recurring.RecurringDetector.keyOf]); у платежей, заведённых вручную, может быть пустым. */

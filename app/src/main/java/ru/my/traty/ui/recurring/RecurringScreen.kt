@@ -389,7 +389,7 @@ private fun RecurringEditDialog(
                     label = { Text("Сумма меняется (коммуналка)") },
                 )
                 DateField(dateText = dateText, onDateTextChange = { dateText = it })
-                Text("Напомнить", style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
+                Text("Напоминать каждый день до списания, начиная за:", style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
                 Row(
                     Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
