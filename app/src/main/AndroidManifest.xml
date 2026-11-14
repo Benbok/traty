@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Запись голоса: системное распознавание и встроенный GigaAM. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Напоминания о списаниях подписок (Android 13+: спрашивается при добавлении платежа). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <queries>
         <!-- SpeechRecognizer.isRecognitionAvailable видит сервис распознавания только с этим запросом (API 30+) -->
@@ -62,6 +64,10 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/traty_record_widget_info" />
         </receiver>
+
+        <receiver
+            android:name=".data.recurring.RecurringActionReceiver"
+            android:exported="false" />
 
         <service
             android:name=".tile.VoiceTileService"

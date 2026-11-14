@@ -117,6 +117,47 @@ class RecurringRepositoryTest {
     }
 
     @Test
+    fun markPaidCreatesExpenseAndMovesToNextPeriod() = runTest {
+        val id = repo.save(
+            Recurring(
+                title = "Яндекс Плюс", amountKopecks = 39_900, categoryId = categoryId, periodUnit = "month",
+                nextEpochDay = LocalDate.of(2026, 11, 14).toEpochDay(), place = "Яндекс Плюс",
+            )
+        )
+        assertTrue(repo.markPaid(id, today, zone))
+
+        val expense = db.expenses().getAllWithCategory().single().expense
+        assertEquals(39_900L, expense.amountKopecks)
+        assertEquals(ExpenseSource.RECURRING, expense.source)
+        assertEquals("Яндекс Плюс", expense.place)
+        assertEquals(categoryId, expense.categoryId)
+        assertEquals(LocalDate.of(2026, 12, 14).toEpochDay(), db.recurring().getById(id)!!.nextEpochDay)
+    }
+
+    @Test
+    fun markPaidIgnoresPausedAndMissingPayments() = runTest {
+        val id = repo.save(
+            Recurring(
+                title = "Кино", amountKopecks = 10_000, categoryId = categoryId, periodUnit = "month",
+                nextEpochDay = today.toEpochDay(), state = RecurringState.PAUSED,
+            )
+        )
+        assertEquals(false, repo.markPaid(id, today, zone))
+        assertEquals(false, repo.markPaid(9_999, today, zone))
+        assertTrue(db.expenses().getAllWithCategory().isEmpty())
+        assertEquals(today.toEpochDay(), db.recurring().getById(id)!!.nextEpochDay)
+    }
+
+    @Test
+    fun paidExpenseDoesNotBringTheSuggestionBack() = runTest {
+        addCharges(9..11)
+        repo.accept(suggestions().single(), today)
+        val id = db.recurring().getAll().single().id
+        repo.markPaid(id, today, zone)
+        assertTrue(suggestions().isEmpty())
+    }
+
+    @Test
     fun mergingCategoriesMovesPayments() = runTest {
         val categories = CategoryRepository(db)
         val other = db.categories().getAllWithSubs().first { it.category.name == "Развлечения" }.category.id

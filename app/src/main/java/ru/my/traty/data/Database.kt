@@ -59,6 +59,8 @@ object ExpenseSource {
     const val MANUAL = "manual"
     const val IMPORT = "import"
     const val RECONCILE = "reconcile"
+    /** Отмечено «списалось» у регулярного платежа. */
+    const val RECURRING = "recurring"
 }
 
 /** Откуда пришло пополнение. */
