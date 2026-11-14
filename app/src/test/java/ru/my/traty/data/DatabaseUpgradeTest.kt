@@ -146,6 +146,25 @@ class DatabaseUpgradeTest {
     }
 
     @Test
+    fun migrationChainReachesV7WithPendingPhrasesAndKeepsData() = runTest {
+        createV3Database()
+        val db = AppDatabase.build(context, dbName)
+        try {
+            assertEquals(1, db.expenses().getAllWithCategory().size)
+            assertEquals(1, db.incomes().getAll().size)
+            val id = db.pendingPhrases().insert(PendingPhrase(text = "кофе 250", createdAt = 5000))
+            val waiting = db.pendingPhrases().getByStatus(PendingStatus.WAITING)
+            assertEquals(listOf(id), waiting.map { it.id })
+            assertEquals(5000L, waiting.single().createdAt)
+            // sumRange: трата 350 ₽ в диапазоне [0, 2000), вне диапазона не учитывается
+            assertEquals(35000L, db.expenses().sumRange(0, 2000))
+            assertEquals(0L, db.expenses().sumRange(2000, 3000))
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun v3WithCaseVariantUnaccountedDoesNotGetDuplicate() = runTest {
         createV3Database(extraCategory = "неучтённые")
         val db = AppDatabase.build(context, dbName)

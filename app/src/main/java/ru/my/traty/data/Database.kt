@@ -184,6 +184,9 @@ interface ExpenseDao {
     @Query("UPDATE expenses SET subcategoryId = :toId WHERE subcategoryId = :fromId")
     suspend fun reassignSubcategory(fromId: Long, toId: Long)
 
+    @Query("SELECT COALESCE(SUM(amountKopecks), 0) FROM expenses WHERE timestamp >= :startMillis AND timestamp < :endMillisExclusive")
+    suspend fun sumRange(startMillis: Long, endMillisExclusive: Long): Long
+
     @Query("SELECT COALESCE(SUM(amountKopecks), 0) FROM expenses WHERE timestamp > :afterMillis")
     suspend fun sumAfter(afterMillis: Long): Long
 
@@ -317,9 +320,160 @@ interface IncomeDao {
     suspend fun getFirstTimestamp(): Long?
 }
 
+/** Шаблон быстрой траты — чипс над строкой ввода. */
+@Entity(
+    tableName = "templates",
+    foreignKeys = [
+        ForeignKey(entity = Category::class, parentColumns = ["id"], childColumns = ["categoryId"]),
+        ForeignKey(
+            entity = Subcategory::class,
+            parentColumns = ["id"],
+            childColumns = ["subcategoryId"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
+    ],
+    indices = [Index("categoryId"), Index("subcategoryId")],
+)
+data class Template(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val amountKopecks: Long,
+    val categoryId: Long,
+    val subcategoryId: Long? = null,
+    val place: String? = null,
+    val sortOrder: Int = 0,
+)
+
+/** Шаблон вместе с названиями категории и подкатегории — для отображения. */
+data class TemplateWithCategory(
+    @Embedded val template: Template,
+    val categoryName: String,
+    val categoryEmoji: String,
+    val subcategoryName: String?,
+)
+
+private const val TEMPLATE_JOIN =
+    "SELECT t.*, c.name AS categoryName, c.emoji AS categoryEmoji, s.name AS subcategoryName " +
+        "FROM templates t JOIN categories c ON c.id = t.categoryId " +
+        "LEFT JOIN subcategories s ON s.id = t.subcategoryId"
+
+@Dao
+interface TemplateDao {
+    @Insert
+    suspend fun insert(item: Template): Long
+
+    @Update
+    suspend fun update(item: Template)
+
+    @Delete
+    suspend fun delete(item: Template)
+
+    @Query("$TEMPLATE_JOIN ORDER BY t.sortOrder, t.title")
+    fun observeAll(): Flow<List<TemplateWithCategory>>
+
+    @Query("$TEMPLATE_JOIN ORDER BY t.sortOrder, t.title")
+    suspend fun getAll(): List<TemplateWithCategory>
+}
+
+/** Правило «шаблон/место → категория». Применяется до ИИ при разборе трат. */
+@Entity(
+    tableName = "rules",
+    foreignKeys = [
+        ForeignKey(entity = Category::class, parentColumns = ["id"], childColumns = ["categoryId"]),
+        ForeignKey(
+            entity = Subcategory::class,
+            parentColumns = ["id"],
+            childColumns = ["subcategoryId"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
+    ],
+    indices = [Index("categoryId"), Index("subcategoryId"), Index(value = ["pattern"], unique = true)],
+)
+data class Rule(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** Текст или место, к которому привязано правило (lowercase). */
+    val pattern: String,
+    val categoryId: Long,
+    val subcategoryId: Long? = null,
+    /** Сколько раз правило сработало — для статистики. */
+    val hits: Int = 0,
+)
+
+data class RuleWithNames(
+    @Embedded val rule: Rule,
+    val categoryName: String,
+    val categoryEmoji: String,
+    val subcategoryName: String?,
+)
+
+private const val RULE_JOIN =
+    "SELECT r.*, c.name AS categoryName, c.emoji AS categoryEmoji, s.name AS subcategoryName " +
+        "FROM rules r JOIN categories c ON c.id = r.categoryId " +
+        "LEFT JOIN subcategories s ON s.id = r.subcategoryId"
+
+@Dao
+interface RuleDao {
+    @Insert
+    suspend fun insert(item: Rule): Long
+
+    @Update
+    suspend fun update(item: Rule)
+
+    @Delete
+    suspend fun delete(item: Rule)
+
+    @Query("$RULE_JOIN ORDER BY r.hits DESC, r.pattern")
+    fun observeAll(): Flow<List<RuleWithNames>>
+
+    @Query("SELECT * FROM rules ORDER BY hits DESC")
+    suspend fun getAll(): List<Rule>
+
+    @Query("SELECT * FROM rules WHERE pattern = :pattern LIMIT 1")
+    suspend fun findByPattern(pattern: String): Rule?
+
+    @Query("UPDATE rules SET hits = hits + 1 WHERE id = :id")
+    suspend fun incrementHits(id: Long)
+}
+
+/** Статусы фраз в очереди без сети. */
+object PendingStatus {
+    const val WAITING = "waiting"
+    const val PARSED = "parsed"
+}
+
+/** Распознанная голосом фраза, которая ждёт разбора ИИ (нет сети). [createdAt] — когда фраза произнесена. */
+@Entity(tableName = "pending_phrases", indices = [Index("status")])
+data class PendingPhrase(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val text: String,
+    val createdAt: Long,
+    val status: String = PendingStatus.WAITING,
+    /** JSON черновика (EntryDraft) для статуса PARSED. */
+    val resultJson: String? = null,
+    val error: String? = null,
+)
+
+@Dao
+interface PendingPhraseDao {
+    @Insert
+    suspend fun insert(p: PendingPhrase): Long
+
+    @Update
+    suspend fun update(p: PendingPhrase)
+
+    @Query("DELETE FROM pending_phrases WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM pending_phrases WHERE status = :status ORDER BY createdAt")
+    suspend fun getByStatus(status: String): List<PendingPhrase>
+
+    @Query("SELECT * FROM pending_phrases ORDER BY createdAt")
+    fun observeAll(): Flow<List<PendingPhrase>>
+}
+
 @Database(
-    entities = [Expense::class, Category::class, Subcategory::class, Income::class, Reconciliation::class],
-    version = 4,
+    entities = [Expense::class, Category::class, Subcategory::class, Income::class, Reconciliation::class, Template::class, Rule::class, PendingPhrase::class],
+    version = 7,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -327,6 +481,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun categories(): CategoryDao
     abstract fun incomes(): IncomeDao
     abstract fun reconciliations(): ReconciliationDao
+    abstract fun templates(): TemplateDao
+    abstract fun rules(): RuleDao
+    abstract fun pendingPhrases(): PendingPhraseDao
 
     companion object {
         val MIGRATION_2_3 = object : Migration(2, 3) {
@@ -371,9 +528,62 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `templates` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `amountKopecks` INTEGER NOT NULL,
+                        `categoryId` INTEGER NOT NULL,
+                        `subcategoryId` INTEGER,
+                        `place` TEXT,
+                        `sortOrder` INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(`categoryId`) REFERENCES `categories`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION,
+                        FOREIGN KEY(`subcategoryId`) REFERENCES `subcategories`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_templates_categoryId` ON `templates` (`categoryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_templates_subcategoryId` ON `templates` (`subcategoryId`)")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `rules` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `pattern` TEXT NOT NULL,
+                        `categoryId` INTEGER NOT NULL,
+                        `subcategoryId` INTEGER,
+                        `hits` INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY(`categoryId`) REFERENCES `categories`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION,
+                        FOREIGN KEY(`subcategoryId`) REFERENCES `subcategories`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_rules_categoryId` ON `rules` (`categoryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_rules_subcategoryId` ON `rules` (`subcategoryId`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_rules_pattern` ON `rules` (`pattern`)")
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `pending_phrases` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`text` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `status` TEXT NOT NULL, `resultJson` TEXT, `error` TEXT)"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_pending_phrases_status` ON `pending_phrases` (`status`)")
+            }
+        }
+
         fun build(context: Context, name: String = "traty.db"): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, name)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 // Решение владельца: в v1 реальных данных нет — базу v1 пересоздаём.
                 // Для версий 2+ — только Migration(n, n+1).
                 .fallbackToDestructiveMigrationFrom(true, 1)
