@@ -47,8 +47,6 @@ import ru.my.traty.data.Income
 import ru.my.traty.data.isUserEditable
 import ru.my.traty.data.Rule
 import ru.my.traty.data.RuleWithNames
-import ru.my.traty.data.Template
-import ru.my.traty.data.TemplateWithCategory
 import ru.my.traty.ui.home.EditFields
 import ru.my.traty.data.selectable
 import ru.my.traty.data.insights.Observation
@@ -141,10 +139,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun dismissObservation(key: String) = viewModelScope.launch { c.settings.dismissObservation(key) }
-
-    /** Шаблоны быстрых трат — чипсы над строкой ввода. */
-    val templates: StateFlow<List<TemplateWithCategory>> =
-        c.db.templates().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Правила «место → категория». */
     val rules: StateFlow<List<RuleWithNames>> =
@@ -393,40 +387,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearDeletedForUndo() { deletedForUndo = null }
-
-    /** Мгновенное сохранение траты по шаблону — 1 нажатие. */
-    fun useTemplate(t: TemplateWithCategory) = viewModelScope.launch {
-        val e = Expense(
-            amountKopecks = t.template.amountKopecks,
-            categoryId = t.template.categoryId,
-            subcategoryId = t.template.subcategoryId,
-            place = t.template.place,
-            note = t.template.title,
-            timestamp = ru.my.traty.data.entryTimestamp(LocalDate.now(), zone),
-            source = ExpenseSource.MANUAL,
-        )
-        c.db.expenses().insert(e)
-        message = "${t.categoryEmoji} ${t.template.title}: ${t.template.amountKopecks / 100} ₽"
-    }
-
-    fun addTemplate(title: String, amountKopecks: Long, categoryId: Long, subcategoryId: Long?, place: String?) =
-        viewModelScope.launch {
-            c.db.templates().insert(
-                Template(
-                    title = title.trim(),
-                    amountKopecks = amountKopecks,
-                    categoryId = categoryId,
-                    subcategoryId = subcategoryId,
-                    place = ru.my.traty.data.Places.normalize(place),
-                )
-            )
-            message = "Шаблон добавлен"
-        }
-
-    fun deleteTemplate(t: Template) = viewModelScope.launch {
-        c.db.templates().delete(t)
-        message = "Шаблон удалён"
-    }
 
     /** Создать правило «место → категория». */
     fun addRule(pattern: String, categoryId: Long, subcategoryId: Long?) = viewModelScope.launch {
