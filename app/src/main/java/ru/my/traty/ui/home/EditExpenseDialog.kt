@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.ExpenseWithCategory
+import ru.my.traty.data.labels.ExpenseLabelHit
 import ru.my.traty.data.isUserEditable
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyTextButton
@@ -55,6 +56,7 @@ fun EditExpenseDialog(
     onDismiss: () -> Unit,
     onSave: (EditFields) -> Unit,
     onDelete: () -> Unit,
+    labels: List<ExpenseLabelHit> = emptyList(),
 ) {
     val e = item.expense
     val editable = e.isUserEditable
@@ -92,6 +94,10 @@ fun EditExpenseDialog(
         },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
+                if (labels.isNotEmpty()) {
+                    ExpenseLabelExplanations(labels)
+                    Spacer(Modifier.height(TratyTheme.spacing.sm))
+                }
                 if (!editable) {
                     Text(
                         "Записи сверки баланса нельзя редактировать. Используйте «Переделать последнюю сверку» в настройках.",
