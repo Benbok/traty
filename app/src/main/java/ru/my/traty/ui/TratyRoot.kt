@@ -33,7 +33,7 @@ import ru.my.traty.ui.charts.ChartsScreen
 import ru.my.traty.ui.designsystem.components.TratySnackbar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.capture.EntryConfirmSheet
-import ru.my.traty.ui.home.EditExpenseDialog
+import ru.my.traty.ui.home.EditExpenseScreen
 import ru.my.traty.ui.home.HomeScreen
 import ru.my.traty.ui.navigation.TratyNavTab
 import ru.my.traty.ui.reconcile.ReconcileMode
@@ -183,6 +183,24 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             }
         }
 
+        // Редактирование траты — отдельный экран поверх вкладок, как «Подписки»
+        vm.editing?.let { item ->
+            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                EditExpenseScreen(
+                    item = item,
+                    categories = categories,
+                    labels = labels[item.expense.id].orEmpty(),
+                    onDismiss = { vm.editing = null },
+                    onSave = { fields -> vm.updateExpense(item, fields) },
+                    onDelete = {
+                        vm.delete(item.expense)
+                        vm.editing = null
+                    },
+                    onSetCategoryImpulsive = vm::setCategoryImpulsive,
+                )
+            }
+        }
+
         reconcileMode?.let { mode ->
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
                 ReconcileScreen(mode = mode, onBack = { reconcileMode = null })
@@ -197,20 +215,6 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             notice = vm.confirmNotice,
             onDismiss = vm::dismissConfirm,
             onSave = { vm.saveEntry(it) },
-        )
-    }
-
-    vm.editing?.let { item ->
-        EditExpenseDialog(
-            item = item,
-            categories = categories,
-            labels = labels[item.expense.id].orEmpty(),
-            onDismiss = { vm.editing = null },
-            onSave = { fields -> vm.updateExpense(item, fields) },
-            onDelete = {
-                vm.delete(item.expense)
-                vm.editing = null
-            },
         )
     }
 
