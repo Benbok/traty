@@ -19,6 +19,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import ru.my.traty.ui.home.ExpenseRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -245,7 +254,8 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
             )
         }
 
-        if (sum > 0 && pace != null) {
+        // За один день «средняя в день» и «прогноз» равны итогу — карточка ничего не добавляет
+        if (sum > 0 && pace != null && spanOf(range) != StatsSpan.DAY) {
             item(key = "pace", contentType = "pace") { SpendingPaceCard(pace = pace, endDate = paceEnd, prevSum = prevSum, span = spanOf(range)) }
         }
 
@@ -253,25 +263,23 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
             item(key = "cumulative", contentType = "cumulative") { CumulativeCard(current = cumulative.first, previous = cumulative.second) }
         }
 
-        if (sum > 0 && heat != null) {
-            item {
-                val selected = heatSelected?.takeIf { it in heatStart..heatEnd }
-                val zone = ZoneId.systemDefault()
-                val dayExpenses = remember(expenses, selected) {
-                    if (selected == null) emptyList()
-                    else expenses.filter { Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate() == selected }
-                }
-                HeatCalendarCard(
-                    month = heat,
-                    selected = selected,
-                    dayExpenses = dayExpenses,
-                    onDay = { d -> heatSelected = if (heatSelected == d) null else d },
-                )
+        // Календарь из одной клетки в режиме «День» бесполезен
+        if (sum > 0 && heat != null && spanOf(range) != StatsSpan.DAY) {
+            item(key = "heat", contentType = "heat") {
+                HeatCalendarCard(month = heat, selected = heatSelected, onDay = { d -> heatSelected = d })
             }
         }
 
-        if (topChanges.isNotEmpty() && comparable.isNotEmpty()) {
-            item(key = "top-changes", contentType = "top-changes") { TopChangesCard(changes = topChanges, compareLabel = compareLabel) }
+        // «Что изменилось» есть во всех режимах; если сравнивать не с чем — карточка говорит об этом
+        if (totals.isNotEmpty()) {
+            item(key = "top-changes", contentType = "top-changes") {
+                TopChangesCard(
+                    changes = if (comparable.isEmpty()) emptyList() else topChanges,
+                    compareLabel = compareLabel,
+                    emptyText = if (comparable.isEmpty()) "Сравнивать пока не с чем: ${emptyCompareText(spanOf(range))} трат нет."
+                    else "По категориям всё так же, как раньше.",
+                )
+            }
         }
 
         if (totals.isNotEmpty()) {
@@ -460,6 +468,24 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
     }
 }
 
+    heatSelected?.let { day ->
+        val zone = ZoneId.systemDefault()
+        val dayExpenses = remember(expenses, day) {
+            expenses.filter { Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate() == day }
+                .sortedBy { it.expense.timestamp }
+        }
+        DayExpensesSheet(
+            day = day,
+            expenses = dayExpenses,
+            categoryColors = ringColorMap(remember(totals) { RingSlices.of(totals) }),
+            onOpenDay = {
+                heatSelected = null
+                rangeVm.setRange(day, day)
+            },
+            onDismiss = { heatSelected = null },
+        )
+    }
+
     if (showRangePicker) {
         StatsRangeDialog(
             range = range,
@@ -639,17 +665,35 @@ private fun LegendDot(color: Color) {
     Canvas(Modifier.padding(end = 4.dp).size(8.dp)) { drawCircle(color) }
 }
 
-/** Цвета долей кольца: насыщенные, различимые в светлой и тёмной теме; «Остальное» — серое. */
-private val RING_COLORS = listOf(
-    Color(0xFF4F7CF7), Color(0xFFF59E0B), Color(0xFF10B981), Color(0xFFEC4899), Color(0xFF8B5CF6), Color(0xFF06B6D4),
+/**
+ * Категориальная палитра долей (фиксированный порядок, свои ступени для тёмной темы), проверена
+ * валидатором палитр: различимость при дальтонизме ΔE ≥ 8. Часть цветов бледнее 3:1 к фону,
+ * поэтому у каждой доли всегда подпись с названием и %. «Остальное» — серое.
+ */
+private val RING_COLORS_LIGHT = listOf(
+    Color(0xFF2A78D6), Color(0xFFEB6834), Color(0xFF1BAF7A), Color(0xFFEDA100), Color(0xFFE87BA4), Color(0xFF6250D6),
+)
+private val RING_COLORS_DARK = listOf(
+    Color(0xFF3987E5), Color(0xFFD95926), Color(0xFF199E70), Color(0xFFC98500), Color(0xFFD55181), Color(0xFF9085E9),
 )
 private val RING_REST = Color(0xFF94A3B8)
+
+@Composable
+private fun ringPalette(): List<Color> = if (TratyTheme.colors.isDark) RING_COLORS_DARK else RING_COLORS_LIGHT
+
+/** Цвет категории = цвет её доли в кольце периода, чтобы одна категория везде была одного цвета. */
+@Composable
+private fun ringColorMap(slices: List<RingSlice>): Map<Long, Color> {
+    val pal = ringPalette()
+    return slices.mapIndexedNotNull { i, sl -> sl.categoryId?.let { it to pal[i % pal.size] } }.toMap()
+}
 
 /** Кольцевая диаграмма по категориям: крупные категории своими долями, мелкие — «Остальное». */
 @Composable
 private fun CategoryRingCard(slices: List<RingSlice>, sum: Long) {
     if (slices.isEmpty()) return
-    val colors = slices.mapIndexed { i, sl -> if (sl.categoryId == null) RING_REST else RING_COLORS[i % RING_COLORS.size] }
+    val pal = ringPalette()
+    val colors = slices.mapIndexed { i, sl -> if (sl.categoryId == null) RING_REST else pal[i % pal.size] }
     TratyCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -706,20 +750,19 @@ private fun CategoryRingCard(slices: List<RingSlice>, sum: Long) {
 
 private val WEEKDAYS = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 
+/** Цвет клетки календаря: один синий оттенок, бледнее — меньше, насыщеннее — больше (последовательная шкала). */
+@Composable
+private fun heatColor(level: Int): Color =
+    if (level == 0) TratyTheme.colors.surfaceContainerHigh
+    else ringPalette()[0].copy(alpha = 0.22f + 0.78f * level / HeatCalendar.LEVELS)
+
 /**
  * Тепловой календарь: чем больше потрачено за день, тем насыщеннее клетка (4 уровня от самого дорогого дня).
- * Нажатие на день показывает его траты под календарём, повторное — скрывает.
+ * Нажатие на день открывает его траты в нижней шторке.
  */
 @Composable
-private fun HeatCalendarCard(
-    month: HeatMonth,
-    selected: LocalDate?,
-    dayExpenses: List<ExpenseWithCategory>,
-    onDay: (LocalDate) -> Unit,
-) {
+private fun HeatCalendarCard(month: HeatMonth, selected: LocalDate?, onDay: (LocalDate) -> Unit) {
     val today = LocalDate.now()
-    val base = TratyTheme.colors.expense
-    val empty = TratyTheme.colors.surfaceContainerHigh
     TratyCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -728,7 +771,12 @@ private fun HeatCalendarCard(
     ) {
         Column(Modifier.padding(TratyTheme.spacing.md)) {
             Text("Календарь трат", style = TratyTheme.typography.titleSmall)
-            Spacer(Modifier.height(TratyTheme.spacing.xs))
+            Text(
+                text = "Нажмите на день, чтобы увидеть траты",
+                style = TratyTheme.typography.bodySmall,
+                color = TratyTheme.colors.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(TratyTheme.spacing.sm))
             Row(Modifier.fillMaxWidth()) {
                 WEEKDAYS.forEach {
                     Text(
@@ -747,13 +795,13 @@ private fun HeatCalendarCard(
                         val day = week.getOrNull(col)
                         Box(Modifier.weight(1f).padding(2.dp).aspectRatio(1f)) {
                             if (day != null) {
-                                val color = if (day.level == 0) empty else base.copy(alpha = 0.18f + 0.82f * day.level / HeatCalendar.LEVELS)
                                 val isSel = day.date == selected
+                                val isFuture = day.date.isAfter(today)
                                 Box(
                                     Modifier
                                         .fillMaxSize()
                                         .clip(TratyTheme.shapes.extraSmall)
-                                        .background(color)
+                                        .background(heatColor(day.level))
                                         .then(
                                             if (isSel || day.date == today) {
                                                 Modifier.border(
@@ -762,13 +810,17 @@ private fun HeatCalendarCard(
                                                 )
                                             } else Modifier
                                         )
-                                        .clickable { onDay(day.date) },
+                                        .then(if (isFuture) Modifier else Modifier.clickable { onDay(day.date) }),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Text(
                                         text = day.date.dayOfMonth.toString(),
                                         style = TratyTheme.typography.labelSmall,
-                                        color = if (day.level >= 3) Color.White else TratyTheme.colors.onSurface,
+                                        color = when {
+                                            day.level >= 3 -> Color.White
+                                            isFuture -> TratyTheme.colors.onSurfaceVariant.copy(alpha = 0.5f)
+                                            else -> TratyTheme.colors.onSurface
+                                        },
                                     )
                                 }
                             }
@@ -776,32 +828,138 @@ private fun HeatCalendarCard(
                     }
                 }
             }
-            if (selected != null) {
-                Spacer(Modifier.height(TratyTheme.spacing.sm))
-                val total = dayExpenses.sumOf { it.expense.amountKopecks }
+            // Легенда шкалы: «меньше ▢▢▢▢▢ больше» и самый дорогой день
+            Spacer(Modifier.height(TratyTheme.spacing.xs))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("меньше", style = TratyTheme.typography.labelSmall, color = TratyTheme.colors.onSurfaceVariant)
+                (0..HeatCalendar.LEVELS).forEach { lvl ->
+                    Box(
+                        Modifier
+                            .padding(horizontal = 2.dp)
+                            .size(12.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(heatColor(lvl)),
+                    )
+                }
                 Text(
-                    text = "${formatDateWithWeekday(selected)} · ${formatRub(total)}",
-                    style = TratyTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    "больше",
+                    style = TratyTheme.typography.labelSmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
                 )
-                if (dayExpenses.isEmpty()) {
-                    Text("В этот день трат нет", style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
-                } else {
-                    dayExpenses.sortedByDescending { it.expense.amountKopecks }.forEach { e ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(e.categoryEmoji, modifier = Modifier.padding(end = TratyTheme.spacing.xs))
-                            BreakdownExpenseRow(e, showPlace = true, modifier = Modifier.weight(1f))
-                        }
-                    }
+                if (month.maxTotal > 0) {
+                    Text(
+                        "макс. ${formatRub(month.maxTotal)}",
+                        style = TratyTheme.typography.labelSmall,
+                        color = TratyTheme.colors.onSurfaceVariant,
+                    )
                 }
             }
         }
     }
 }
 
-/** «Что изменилось»: три категории с самой большой разницей в рублях, рост — красным, падение — зелёным. */
+/**
+ * Траты одного дня в нижней шторке: дата, итог и число покупок, полоса долей по категориям,
+ * затем сами траты в том же виде, что на главной. Кнопка открывает статистику этого дня.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TopChangesCard(changes: List<CategoryChange>, compareLabel: String) {
+private fun DayExpensesSheet(
+    day: LocalDate,
+    expenses: List<ExpenseWithCategory>,
+    categoryColors: Map<Long, Color>,
+    onOpenDay: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
+        containerColor = TratyTheme.colors.surface,
+    ) {
+        val total = expenses.sumOf { it.expense.amountKopecks }
+        Column(Modifier.fillMaxWidth().padding(horizontal = TratyTheme.spacing.lg)) {
+            Text(
+                text = formatDateWithWeekday(day).replaceFirstChar { it.uppercase() },
+                style = TratyTheme.typography.titleMedium,
+            )
+            Row(verticalAlignment = Alignment.Bottom) {
+                TratyAmountText(amountKopecks = total, size = AmountSize.LARGE, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(TratyTheme.spacing.sm))
+                Text(
+                    text = if (expenses.isEmpty()) "трат нет" else purchases(expenses.size),
+                    style = TratyTheme.typography.bodySmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
+            if (expenses.isNotEmpty()) {
+                // Доли категорий дня одной тонкой полосой (сегменты через 2dp зазор), подписи — ниже
+                val byCat = expenses.groupBy { it.expense.categoryId }
+                    .map { (id, v) -> Triple(id, "${v.first().categoryEmoji} ${v.first().categoryName}", v.sumOf { it.expense.amountKopecks }) }
+                    .sortedByDescending { it.third }
+                Spacer(Modifier.height(TratyTheme.spacing.sm))
+                Row(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))) {
+                    byCat.forEachIndexed { i, (id, _, v) ->
+                        Box(
+                            Modifier
+                                .weight(v.toFloat().coerceAtLeast(1f))
+                                .fillMaxHeight()
+                                .padding(end = if (i < byCat.lastIndex) 2.dp else 0.dp)
+                                .background(categoryColors[id] ?: RING_REST),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(TratyTheme.spacing.xs))
+                byCat.forEach { (id, name, v) ->
+                    Row(Modifier.padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
+                        LegendDot(categoryColors[id] ?: RING_REST)
+                        Text(
+                            name,
+                            style = TratyTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(formatRub(v), style = TratyTheme.typography.labelMedium, color = TratyTheme.colors.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(TratyTheme.spacing.sm))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 420.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            expenses.forEach { ExpenseRow(row = it, onClick = {}) }
+        }
+        TratyButton(
+            onClick = onOpenDay,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.md),
+        ) { Text("Статистика за этот день") }
+        Spacer(Modifier.height(TratyTheme.spacing.lg))
+    }
+}
+
+/** Где не было трат, когда сравнивать не с чем. */
+private fun emptyCompareText(span: StatsSpan) = when (span) {
+    StatsSpan.PERIOD -> "в эти же дни прошлого периода"
+    StatsSpan.DAY -> "в предыдущий день"
+    StatsSpan.WEEK -> "на прошлой неделе"
+    StatsSpan.DATES -> "в предыдущие такие же даты"
+}
+
+/**
+ * «Что изменилось»: три категории с самой большой разницей в рублях.
+ * Каждая строка — «было → стало» двумя тонкими полосами одного оттенка (раньше — бледная, сейчас — насыщенная)
+ * на общей шкале, справа — разница в ₽ и %. Цвет текста — обычный, направление несёт значок со знаком.
+ */
+@Composable
+private fun TopChangesCard(changes: List<CategoryChange>, compareLabel: String, emptyText: String) {
+    val nowColor = TratyTheme.colors.primary
+    val wasColor = TratyTheme.colors.primary.copy(alpha = 0.3f)
     TratyCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -815,29 +973,83 @@ private fun TopChangesCard(changes: List<CategoryChange>, compareLabel: String) 
                 style = TratyTheme.typography.bodySmall,
                 color = TratyTheme.colors.onSurfaceVariant,
             )
+            if (changes.isEmpty()) {
+                Spacer(Modifier.height(TratyTheme.spacing.xs))
+                Text(emptyText, style = TratyTheme.typography.bodyMedium, color = TratyTheme.colors.onSurfaceVariant)
+                return@Column
+            }
             Spacer(Modifier.height(TratyTheme.spacing.xs))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LegendDot(nowColor)
+                Text("сейчас", style = TratyTheme.typography.labelSmall, color = TratyTheme.colors.onSurfaceVariant)
+                Spacer(Modifier.width(TratyTheme.spacing.md))
+                LegendDot(wasColor)
+                Text("раньше", style = TratyTheme.typography.labelSmall, color = TratyTheme.colors.onSurfaceVariant)
+            }
+            val scale = changes.maxOf { maxOf(it.current, it.previous) }.coerceAtLeast(1)
             changes.forEach { ch ->
-                val up = ch.diff > 0
-                Row(
-                    Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                Spacer(Modifier.height(TratyTheme.spacing.sm))
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "${ch.emoji} ${ch.name}",
                         style = TratyTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
                         maxLines = 1,
                         modifier = Modifier.weight(1f),
                     )
-                    val pct = ch.percent?.let { if (it > 0) " (+$it%)" else " ($it%)" } ?: " (новая)"
-                    Text(
-                        text = formatRubSigned(ch.diff) + pct,
-                        style = TratyTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (up) TratyTheme.colors.expense else TratyTheme.colors.income,
-                    )
+                    ChangeChip(ch)
                 }
+                Spacer(Modifier.height(4.dp))
+                ComparisonBar(ch.current, scale, nowColor)
+                Spacer(Modifier.height(2.dp))
+                ComparisonBar(ch.previous, scale, wasColor)
+                Text(
+                    text = if (ch.previous == 0L) "раньше не было · сейчас ${formatRub(ch.current)}"
+                    else if (ch.current == 0L) "было ${formatRub(ch.previous)} · сейчас не было"
+                    else "было ${formatRub(ch.previous)} → сейчас ${formatRub(ch.current)}",
+                    style = TratyTheme.typography.labelSmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
             }
         }
+    }
+}
+
+/** Тонкая полоса «было / стало» на общей шкале [scale]; ноль — пустая дорожка. */
+@Composable
+private fun ComparisonBar(value: Long, scale: Long, color: Color) {
+    val frac = (value.toFloat() / scale).coerceIn(0f, 1f)
+    Box(Modifier.fillMaxWidth().height(6.dp)) {
+        if (frac > 0f) {
+            Box(
+                Modifier
+                    .fillMaxWidth(frac)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(color),
+            )
+        }
+    }
+}
+
+/** Разница в ₽ и % на подложке: рост трат — красноватая, снижение — зеленоватая. */
+@Composable
+private fun ChangeChip(ch: CategoryChange) {
+    val up = ch.diff > 0
+    val pct = ch.percent?.let { if (it > 0) "+$it%" else "$it%" }
+    Box(
+        Modifier
+            .clip(TratyTheme.shapes.extraSmall)
+            .background(if (up) TratyTheme.colors.expenseContainer else TratyTheme.colors.incomeContainer)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    ) {
+        Text(
+            text = formatRubSigned(ch.diff) + (pct?.let { " · $it" } ?: ""),
+            style = TratyTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = if (up) TratyTheme.colors.expense else TratyTheme.colors.income,
+        )
     }
 }
 
