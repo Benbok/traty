@@ -50,11 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,11 +58,14 @@ import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.labels.ExpenseLabelHit
 import ru.my.traty.data.isUserEditable
+import ru.my.traty.ui.AmountInput
+import ru.my.traty.ui.designsystem.components.AmountVisualTransformation
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyCategoryBadge
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
+import ru.my.traty.ui.designsystem.components.rememberAmountFieldValue
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatDateNumeric
 import ru.my.traty.ui.formatDateWithWeekday
@@ -113,10 +112,7 @@ fun EditExpenseScreen(
     val date = remember(e.timestamp) {
         Instant.ofEpochMilli(e.timestamp).atZone(zone).toLocalDate()
     }
-    val initialAmount = remember(e.amountKopecks) {
-        if (e.amountKopecks % 100 == 0L) (e.amountKopecks / 100).toString()
-        else (e.amountKopecks / 100.0).toString()
-    }
+    val initialAmount = remember(e.amountKopecks) { AmountInput.fromKopecks(e.amountKopecks) }
 
     var fields by remember(item) {
         mutableStateOf(
@@ -360,12 +356,14 @@ fun EditExpenseScreen(
 
 private enum class Picker { CATEGORY, SUBCATEGORY, DATE }
 
-/** Крупная сумма по центру карточки: правится прямо здесь, цифровая клавиатура, «₽» дописывается при показе. */
+/** Крупная сумма по центру карточки: правится прямо здесь, показывается как «20 000,5 руб». */
 @Composable
 private fun AmountField(value: String, onValueChange: (String) -> Unit, enabled: Boolean) {
+    val (fieldValue, onFieldChange) = rememberAmountFieldValue(value, onValueChange)
+    val suffixColor = TratyTheme.colors.onSurfaceVariant
     BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
+        value = fieldValue,
+        onValueChange = onFieldChange,
         enabled = enabled,
         singleLine = true,
         textStyle = TratyTheme.typography.heroAmount.copy(
@@ -376,20 +374,8 @@ private fun AmountField(value: String, onValueChange: (String) -> Unit, enabled:
         ),
         cursorBrush = SolidColor(TratyTheme.colors.primary),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        visualTransformation = RubSuffix,
+        visualTransformation = remember(suffixColor) { AmountVisualTransformation(suffixColor) },
         modifier = Modifier.fillMaxWidth(),
-    )
-}
-
-/** Показывает «1240 ₽», не трогая сам текст поля: курсор за «₽» не уходит. */
-private val RubSuffix = VisualTransformation { text ->
-    val len = text.length
-    TransformedText(
-        AnnotatedString(text.text + " ₽"),
-        object : OffsetMapping {
-            override fun originalToTransformed(offset: Int) = offset
-            override fun transformedToOriginal(offset: Int) = offset.coerceAtMost(len)
-        },
     )
 }
 

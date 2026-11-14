@@ -16,8 +16,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import ru.my.traty.ui.designsystem.components.TratyAmountTextField
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyTextButton
@@ -72,20 +72,16 @@ fun BalanceCalculator(
                     modifier = Modifier.weight(1f),
                     shape = TratyTheme.shapes.small,
                 )
-                OutlinedTextField(
+                TratyAmountTextField(
                     value = line.amountText,
                     onValueChange = { onAmount(line.id, it) },
-                    label = { Text("Сумма, ₽") },
                     isError = ReconcilePolicy.isInvalidAmount(line.amountText),
                     supportingText = if (ReconcilePolicy.isInvalidAmount(line.amountText)) {
                         { Text("Не число") }
                     } else {
                         null
                     },
-                    singleLine = true,
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),
-                    shape = TratyTheme.shapes.small,
                 )
                 if (lines.size > 1) {
                     TratyIconButton(Icons.Filled.Close, "Убрать строку", onClick = { onRemove(line.id) })

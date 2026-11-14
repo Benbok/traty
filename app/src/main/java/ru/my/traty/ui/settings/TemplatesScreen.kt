@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -32,13 +31,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.Template
 import ru.my.traty.data.TemplateWithCategory
+import ru.my.traty.ui.AmountInput
 import ru.my.traty.ui.MainViewModel
+import ru.my.traty.ui.designsystem.components.TratyAmountTextField
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
@@ -167,14 +167,10 @@ private fun AddTemplateDialog(
                     modifier = Modifier.fillMaxWidth(),
                     shape = TratyTheme.shapes.small,
                 )
-                OutlinedTextField(
+                TratyAmountTextField(
                     value = amount,
                     onValueChange = { amount = it },
-                    label = { Text("Сумма, ₽") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = TratyTheme.shapes.small,
                 )
                 CategoryPicker(selectedCat, categories, null) { selectedCat = it }
                 OutlinedTextField(
@@ -190,11 +186,11 @@ private fun AddTemplateDialog(
         confirmButton = {
             TratyButton(
                 onClick = {
-                    val kopecks = amount.replace(",", ".").replace(" ", "").toDoubleOrNull()
-                    if (title.isNotBlank() && kopecks != null && kopecks > 0) {
+                    val kopecks = AmountInput.parsePositiveKopecks(amount)
+                    if (title.isNotBlank() && kopecks != null) {
                         val cat = categories.firstOrNull { it.category.name == selectedCat }
                         if (cat != null) {
-                            onSave(title, (kopecks * 100).toLong(), cat.category.id, null, place.ifBlank { null })
+                            onSave(title, kopecks, cat.category.id, null, place.ifBlank { null })
                         }
                     }
                 },

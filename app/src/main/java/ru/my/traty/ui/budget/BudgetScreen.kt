@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Flag
@@ -22,7 +21,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,13 +28,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.budget.PlanKey
 import ru.my.traty.data.budget.PlanMonth
+import ru.my.traty.ui.AmountInput
+import ru.my.traty.ui.designsystem.components.TratyAmountTextField
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyEmptyState
@@ -50,7 +49,6 @@ import ru.my.traty.ui.formatMonth
 import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
 import ru.my.traty.ui.home.CategoryPicker
-import kotlin.math.roundToLong
 
 /** Что открыто в диалоге плана: новый план или правка существующего. */
 private data class PlanEdit(val key: PlanKey?, val amountKopecks: Long, val repeats: Boolean)
@@ -199,7 +197,7 @@ private fun PlanEditDialog(
     }
     val category = categories.firstOrNull { it.category.name == categoryName }
     var subId by remember { mutableStateOf(edit.key?.subcategoryId) }
-    var amount by remember { mutableStateOf(if (edit.amountKopecks > 0) (edit.amountKopecks / 100).toString() else "") }
+    var amount by remember { mutableStateOf(if (edit.amountKopecks > 0) AmountInput.fromKopecks(edit.amountKopecks) else "") }
     var repeats by remember { mutableStateOf(edit.repeats) }
     val key = category?.let { PlanKey(it.category.id, subId?.takeIf { id -> it.subs.any { s -> s.id == id } }) }
     val suggestion = remember(key) { key?.let(hint) }
@@ -227,14 +225,11 @@ private fun PlanEditDialog(
                         style = TratyTheme.typography.titleSmall,
                     )
                 }
-                OutlinedTextField(
+                TratyAmountTextField(
                     value = amount,
-                    onValueChange = { v -> amount = v.filter { it.isDigit() || it == ',' || it == '.' }.take(10) },
-                    label = { Text("Сумма на месяц, ₽") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
+                    onValueChange = { amount = it },
+                    label = "Сумма на месяц",
                     modifier = Modifier.fillMaxWidth(),
-                    shape = TratyTheme.shapes.small,
                 )
                 if (suggestion != null) {
                     TratyTextButton(onClick = { amount = (suggestion / 100).toString() }) {
@@ -261,11 +256,11 @@ private fun PlanEditDialog(
             }
         },
         confirmButton = {
-            val rub = amount.replace(',', '.').toDoubleOrNull()
+            val kopecks = AmountInput.parsePositiveKopecks(amount)
             TratyButton(
-                enabled = key != null && rub != null && rub > 0,
+                enabled = key != null && kopecks != null,
                 onClick = {
-                    if (key != null && rub != null && rub > 0) onSave(key, (rub * 100).roundToLong(), repeats)
+                    if (key != null && kopecks != null) onSave(key, kopecks, repeats)
                 },
             ) { Text("Сохранить") }
         },
