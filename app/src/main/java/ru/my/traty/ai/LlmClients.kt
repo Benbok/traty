@@ -18,7 +18,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.LlmProvider
-import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /** Общий интерфейс для любой языковой модели. */
@@ -42,7 +41,7 @@ private fun postJson(url: String, body: JsonObject, headers: Map<String, String>
     }.post(body.toString().toRequestBody(JSON_MEDIA)).build()
     http.newCall(req).execute().use { r ->
         val text = r.body?.string().orEmpty()
-        if (!r.isSuccessful) throw IOException("HTTP ${r.code}: ${text.take(300)}")
+        if (!r.isSuccessful) throw LlmHttpException(r.code, "HTTP ${r.code}: ${text.take(300)}")
         return lenientJson.parseToJsonElement(text).jsonObject
     }
 }
