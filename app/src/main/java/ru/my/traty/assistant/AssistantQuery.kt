@@ -57,4 +57,32 @@ object AssistantQueries {
     }
 
     fun encode(q: AssistantQuery): String = json.encodeToString(AssistantQuery.serializer(), q)
+
+    private val setPlanRe = Regex("""(постав|установ|задай|задать|сделай|измени|поменяй|обнови)\S*\s+(мне\s+)?(лимит|план|бюджет)""")
+    private val suggestPlanRe = Regex("""(предлож|состав|подбер|рассчита|посчита|прикин)\S*.*(план|лимит|бюджет)|^\s*(план|бюджет)\s+(трат|расходов)?\s*(на\s+(месяц|период))?\s*[.!?]*\s*$|какие\s+лимиты""")
+    private val amountRe = Regex("""(\d[\d\s\u00A0]*(?:[.,]\d+)?)\s*(тыс\S*|т\.?|к)?(?![\p{L}\d])""")
+
+    /**
+     * Команды про план модель иногда принимает за вопрос («поставь лимит на кафе 2500» → afford/plan).
+     * Явные формулировки распознаём сами: так кнопка «Добавить в план» появляется всегда.
+     */
+    fun correct(question: String, q: AssistantQuery): AssistantQuery {
+        val text = question.lowercase().replace('ё', 'е')
+        return when {
+            setPlanRe.containsMatchIn(text) -> {
+                val amount = q.amount?.takeIf { it > 0 } ?: amountIn(text)
+                if (amount == null) q else q.copy(intent = Intents.SET_PLAN, amount = amount)
+            }
+            q.intent != Intents.SET_PLAN && suggestPlanRe.containsMatchIn(text) -> q.copy(intent = Intents.SUGGEST_PLAN)
+            else -> q
+        }
+    }
+
+    /** Последнее число в тексте, в рублях: «3 000» → 3000, «3 тысячи» / «3к» → 3000. */
+    internal fun amountIn(text: String): Double? {
+        val m = amountRe.findAll(text).lastOrNull() ?: return null
+        val n = m.groupValues[1].filter { !it.isWhitespace() }.replace(',', '.').trimEnd('.').toDoubleOrNull() ?: return null
+        val v = if (m.groupValues[2].isNotEmpty()) n * 1000 else n
+        return v.takeIf { it > 0 }
+    }
 }
