@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -57,7 +56,6 @@ import ru.my.traty.ui.designsystem.components.TratyAmountText
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyCategoryBadge
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
-import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyProgressBar
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
@@ -80,16 +78,6 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
             title = "Графики",
             subtitle = "Финансовая аналитика и динамика",
             icon = Icons.Filled.ShowChart,
-            actions = {
-                TratyIconButton(
-                    icon = Icons.Filled.DateRange,
-                    contentDescription = "Выбрать диапазон дат",
-                    onClick = { showRangePicker = true },
-                    containerColor = if (state.period == ChartPeriod.CUSTOM) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
-                    tint = if (state.period == ChartPeriod.CUSTOM) TratyTheme.colors.primary else TratyTheme.colors.onSurfaceVariant,
-                    modifier = Modifier.size(40.dp),
-                )
-            },
         )
 
         LazyColumn(
@@ -98,21 +86,19 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                 .padding(horizontal = TratyTheme.spacing.lg),
             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md),
         ) {
-            // Чипсы выбора периода (прокручиваются: «Даты» — выбор произвольного диапазона)
+            // Чипсы выбора периода (Месяц, 3 мес, 6 мес, Год, Всё время)
         item(key = "period-chips", contentType = "period-chips") {
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
             ) {
-                ChartPeriod.entries.forEach { p ->
+                ChartPeriod.entries.filter { it != ChartPeriod.CUSTOM }.forEach { p ->
                     val isSelected = state.period == p
                     Surface(
                         shape = TratyTheme.shapes.small,
                         color = if (isSelected) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
                         border = if (isSelected) BorderStroke(1.dp, TratyTheme.colors.primary) else null,
-                        modifier = Modifier.clickable {
-                            if (p == ChartPeriod.CUSTOM) showRangePicker = true else vm.setPeriod(p)
-                        },
+                        modifier = Modifier.clickable { vm.setPeriod(p) },
                     ) {
                         Text(
                             text = p.title,
