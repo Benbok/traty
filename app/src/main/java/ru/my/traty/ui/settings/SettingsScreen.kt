@@ -59,6 +59,8 @@ fun SettingsScreen(
     onOpenCategories: () -> Unit,
     onOpenReconcile: () -> Unit,
     onRedoReconcile: () -> Unit,
+    onOpenTemplates: () -> Unit = {},
+    onOpenRules: () -> Unit = {},
 ) {
     val saved by vm.settings.collectAsStateWithLifecycle()
     var s by remember(saved) { mutableStateOf<AppSettings>(saved) }
@@ -279,6 +281,42 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(TratyTheme.spacing.md))
                 TratyOutlinedButton(onClick = onOpenCategories) { Text("Категории и подкатегории") }
+            }
+        }
+
+        // Секция: Шаблоны
+        TratyCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = TratyTheme.colors.surface,
+        ) {
+            Column(Modifier.padding(TratyTheme.spacing.lg)) {
+                Text("Шаблоны быстрых трат", style = TratyTheme.typography.titleMedium)
+                Spacer(Modifier.height(TratyTheme.spacing.xs))
+                Text(
+                    "Чипсы над строкой ввода: одно нажатие — трата сохранена.",
+                    style = TratyTheme.typography.bodySmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(TratyTheme.spacing.md))
+                TratyOutlinedButton(onClick = onOpenTemplates) { Text("Управление шаблонами") }
+            }
+        }
+
+        // Секция: Правила
+        TratyCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = TratyTheme.colors.surface,
+        ) {
+            Column(Modifier.padding(TratyTheme.spacing.lg)) {
+                Text("Правила категоризации", style = TratyTheme.typography.titleMedium)
+                Spacer(Modifier.height(TratyTheme.spacing.xs))
+                Text(
+                    "Автоматическая подстановка категории по месту или слову.",
+                    style = TratyTheme.typography.bodySmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(TratyTheme.spacing.md))
+                TratyOutlinedButton(onClick = onOpenRules) { Text("Управление правилами") }
             }
         }
 

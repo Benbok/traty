@@ -120,4 +120,22 @@ class ChartsViewModelTest {
         assertEquals(0L, afterDelete.summary.totalDebitKopecks)
         assertEquals(-20_000_00L, afterDelete.summary.netBalanceKopecks)
     }
+
+    @Test
+    fun testSetCustomRange() = runTest(timeout = 10.seconds) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.uiState.collect {}
+        }
+
+        val start = LocalDate.of(2026, 3, 10)
+        val end = LocalDate.of(2026, 3, 25)
+
+        vm.setCustomRange(start, end)
+        advanceUntilIdle()
+
+        val state = vm.uiState.filter { it.period == ChartPeriod.CUSTOM }.first()
+        assertEquals(ChartPeriod.CUSTOM, state.period)
+        assertEquals(start, state.rangeStart)
+        assertEquals(end, state.rangeEnd)
+    }
 }

@@ -41,6 +41,11 @@ fun formatPeriod(p: BillingPeriod, startDay: Int): String {
 fun formatDate(d: LocalDate): String =
     "${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.FULL, RU)} ${d.year}"
 
+private val numericDateFmt = DateTimeFormatter.ofPattern("dd.MM.yyyy", RU)
+
+/** Дата в формате «дд.мм.гггг», например «13.11.2026». */
+fun formatDateNumeric(d: LocalDate): String = d.format(numericDateFmt)
+
 fun formatDateWithWeekday(d: LocalDate): String =
     "${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.FULL, RU)}, ${d.dayOfWeek.getDisplayName(TextStyle.SHORT, RU)}"
 

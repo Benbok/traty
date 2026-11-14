@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -43,8 +42,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.data.Income
 import ru.my.traty.data.isUserEditable
 import ru.my.traty.ui.charts.components.BalanceAreaChart
-import ru.my.traty.ui.charts.components.DateRangePickerModal
+import ru.my.traty.ui.charts.components.ChartDateCard
 import ru.my.traty.ui.charts.components.ChartKpiCard
+import ru.my.traty.ui.charts.components.DateRangePickerModal
 import ru.my.traty.ui.charts.components.DebitCreditBarChart
 import ru.my.traty.ui.charts.model.ChartPeriod
 import ru.my.traty.ui.designsystem.components.AmountSize
@@ -113,67 +113,19 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
             }
         }
 
-        // Если выбран "Месяц", показываем переключатель месяцев
-        if (state.period == ChartPeriod.MONTH) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    TratyIconButton(
-                        icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                        contentDescription = "Предыдущий период",
-                        onClick = vm::prevBillingPeriod,
-                        containerColor = TratyTheme.colors.surfaceContainer,
-                        modifier = Modifier.size(36.dp),
-                    )
-                    Text(
-                        text = formatPeriod(state.billingPeriod, state.periodStartDay),
-                        style = TratyTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TratyTheme.colors.onSurface,
-                    )
-                    TratyIconButton(
-                        icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = "Следующий период",
-                        onClick = vm::nextBillingPeriod,
-                        containerColor = TratyTheme.colors.surfaceContainer,
-                        modifier = Modifier.size(36.dp),
-                    )
-                }
-            }
-        }
-
-        // Если выбран произвольный период — показываем диапазон; нажатие открывает календарь
-        if (state.period == ChartPeriod.CUSTOM) {
-            item {
-                Surface(
-                    shape = TratyTheme.shapes.medium,
-                    color = TratyTheme.colors.surfaceContainer,
-                    modifier = Modifier.fillMaxWidth().clickable { showRangePicker = true },
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = TratyTheme.spacing.md, vertical = TratyTheme.spacing.sm),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(
-                            Icons.Filled.DateRange,
-                            contentDescription = null,
-                            tint = TratyTheme.colors.primary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(TratyTheme.spacing.sm))
-                        Text(
-                            text = "${formatDate(state.rangeStart)} — ${formatDate(state.rangeEnd)}",
-                            style = TratyTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TratyTheme.colors.onSurface,
-                        )
-                    }
-                }
-            }
+        // Карточка календаря и периода анализа (начальная и конечная даты, переключение, вызов календаря)
+        item {
+            ChartDateCard(
+                period = state.period,
+                rangeStart = state.rangeStart,
+                rangeEnd = state.rangeEnd,
+                billingPeriod = state.billingPeriod,
+                periodStartDay = state.periodStartDay,
+                onPrevBillingPeriod = vm::prevBillingPeriod,
+                onNextBillingPeriod = vm::nextBillingPeriod,
+                onOpenCalendar = { showRangePicker = true },
+                onResetToMonth = { vm.setPeriod(ChartPeriod.MONTH) },
+            )
         }
 
         // Сводные метрики (Сальдо, Дебет, Кредит, Сбережения)

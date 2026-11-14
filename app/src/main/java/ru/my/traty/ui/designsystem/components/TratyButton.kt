@@ -27,6 +27,8 @@ fun TratyButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    containerColor: Color = TratyTheme.colors.primary,
+    contentColor: Color = TratyTheme.colors.onPrimary,
     contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
     content: @Composable RowScope.() -> Unit,
 ) {
@@ -36,8 +38,8 @@ fun TratyButton(
         enabled = enabled,
         shape = TratyTheme.shapes.medium,
         colors = ButtonDefaults.buttonColors(
-            containerColor = TratyTheme.colors.primary,
-            contentColor = TratyTheme.colors.onPrimary,
+            containerColor = containerColor,
+            contentColor = contentColor,
             disabledContainerColor = TratyTheme.colors.surfaceContainerHigh,
             disabledContentColor = TratyTheme.colors.onSurfaceVariant,
         ),

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +41,7 @@ fun TratyMonthPicker(
     selectedDate: LocalDate? = null,
     onDateClick: (() -> Unit)? = null,
     onClearDate: (() -> Unit)? = null,
+    onSearchClick: (() -> Unit)? = null,
 ) {
     TratyCard(
         modifier = modifier
@@ -128,6 +130,16 @@ fun TratyMonthPicker(
                 containerColor = TratyTheme.colors.surfaceContainer,
                 modifier = Modifier.size(40.dp),
             )
+
+            if (onSearchClick != null) {
+                TratyIconButton(
+                    icon = Icons.Filled.Search,
+                    contentDescription = "Поиск",
+                    onClick = onSearchClick,
+                    containerColor = TratyTheme.colors.surfaceContainer,
+                    modifier = Modifier.size(40.dp),
+                )
+            }
         }
     }
 }
