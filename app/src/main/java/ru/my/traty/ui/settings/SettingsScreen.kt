@@ -185,6 +185,9 @@ fun SettingsScreen(
             }
         }
 
+        // Секция: Голос (модель GigaAM)
+        VoiceSettingsCard(vm)
+
         // Секция: Провайдер ИИ
         TratyCard(
             modifier = Modifier.fillMaxWidth(),

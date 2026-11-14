@@ -1,7 +1,9 @@
 package ru.my.traty.speech
 
 import android.content.Context
+import ru.my.traty.TratyApp
 import ru.my.traty.data.AppSettings
+import ru.my.traty.data.VoiceEngine
 
 /** События распознавания; могут приходить с любого потока. */
 interface SpeechListener {
@@ -31,7 +33,13 @@ interface SpeechEngine {
 }
 
 object SpeechEngines {
-    /** Системное распознавание; встроенный GigaAM подключается на этапе «GigaAM» плана. */
-    fun create(context: Context, @Suppress("UNUSED_PARAMETER") settings: AppSettings): SpeechEngine =
-        SystemSpeechEngine(context.applicationContext)
+    /** GigaAM — если выбран в настройках и модель скачана; иначе системное распознавание. */
+    fun create(context: Context, settings: AppSettings): SpeechEngine {
+        val container = (context.applicationContext as TratyApp).container
+        return if (settings.voiceEngine == VoiceEngine.GIGAAM && container.gigaAm.isReady()) {
+            GigaAmEngine(container.gigaAm)
+        } else {
+            SystemSpeechEngine(context.applicationContext)
+        }
+    }
 }

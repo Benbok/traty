@@ -19,6 +19,9 @@ import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.ReconciliationRepository
 import ru.my.traty.data.SettingsRepository
+import ru.my.traty.speech.GigaAmRuntime
+import ru.my.traty.speech.ModelManager
+import java.io.File
 import ru.my.traty.widget.TratyWidget
 
 open class TratyApp : Application() {
@@ -73,7 +76,21 @@ class AppContainer(
     val categories = CategoryRepository(db)
     val reconciliations = ReconciliationRepository(db, categories)
     val quickEntry = QuickEntry(db, categories, settings, clientProvider = clientProvider)
+
+    /** Модель GigaAM: качается в filesDir; можно положить вручную в Android/data/<пакет>/files/models/gigaam. */
+    val models = ModelManager(
+        listOfNotNull(
+            File(context.filesDir, "models/gigaam"),
+            context.getExternalFilesDir(null)?.let { File(it, "models/gigaam") },
+        )
+    )
+    val gigaAm = GigaAmRuntime(context, models)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Скачивание модели речи в процессном скоупе: переживает закрытие экрана настроек. */
+    fun downloadModel() {
+        scope.launch { models.download() }
+    }
 
     fun seedIfEmpty() {
         scope.launch { categories.seedIfEmpty() }

@@ -29,6 +29,8 @@ import ru.my.traty.capture.EntryOutcome
 import ru.my.traty.capture.RuleOffer
 import ru.my.traty.capture.SavedEntries
 import ru.my.traty.data.PendingPhrase
+import ru.my.traty.data.VoiceEngine
+import ru.my.traty.speech.ModelState
 import ru.my.traty.backup.CsvBackup
 import ru.my.traty.backup.CsvImporter
 import ru.my.traty.data.AppSettings
@@ -359,6 +361,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setThemeMode(mode: ThemeMode) = viewModelScope.launch {
         c.settings.setThemeMode(mode)
+    }
+
+    /** Состояние модели распознавания речи GigaAM. */
+    val modelState: StateFlow<ModelState> = c.models.state
+
+    fun refreshModel() = c.models.refresh()
+
+    /** Качается в процессном скоупе, а не в viewModelScope: уход с экрана настроек не прерывает скачивание. */
+    fun downloadModel() = c.downloadModel()
+
+    fun deleteModel() = c.models.delete()
+
+    fun setVoiceEngine(engine: VoiceEngine) = viewModelScope.launch {
+        c.settings.setVoiceEngine(engine)
     }
 
     fun setPeriodStartDay(day: Int) = viewModelScope.launch {
