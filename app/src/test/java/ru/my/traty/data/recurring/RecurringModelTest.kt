@@ -13,9 +13,10 @@ class RecurringModelTest {
         unit: PeriodUnit = PeriodUnit.MONTH,
         every: Int = 1,
         state: String = RecurringState.ACTIVE,
+        varies: Boolean = false,
     ) = Recurring(
         title = "x", amountKopecks = kopecks, categoryId = 1, periodUnit = unit.key, periodEvery = every,
-        nextEpochDay = LocalDate.of(2026, 12, 5).toEpochDay(), state = state,
+        nextEpochDay = LocalDate.of(2026, 12, 5).toEpochDay(), state = state, amountVaries = varies,
     )
 
     @Test
@@ -31,6 +32,17 @@ class RecurringModelTest {
         assertEquals(2, t.count)
         assertEquals(59_900L, t.monthlyKopecks)
         assertEquals(478_800L + 240_000L, t.yearlyKopecks)
+    }
+
+    @Test
+    fun totalsAreApproximateOnlyWhenAnActivePaymentVaries() {
+        assertEquals(false, RecurringSummary.totals(listOf(r(10_000))).approximate)
+        assertEquals(true, RecurringSummary.totals(listOf(r(10_000), r(300_000, varies = true))).approximate)
+        // платёж с меняющейся суммой на паузе в итог не входит и приблизительность не добавляет
+        assertEquals(
+            false,
+            RecurringSummary.totals(listOf(r(10_000), r(300_000, varies = true, state = RecurringState.PAUSED))).approximate,
+        )
     }
 
     @Test

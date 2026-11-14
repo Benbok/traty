@@ -21,6 +21,7 @@ import ru.my.traty.data.PendingPhrase
 import ru.my.traty.data.Places
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.SettingsRepository
+import ru.my.traty.data.recurring.RecurringRepository
 import ru.my.traty.data.entryTimestamp
 import ru.my.traty.data.normalizeName
 import ru.my.traty.data.sameName
@@ -35,7 +36,13 @@ import java.time.ZoneId
 /** Предложение создать правило «место → категория» после сохранения траты. */
 data class RuleOffer(val place: String, val categoryId: Long, val subcategoryId: Long?, val categoryName: String)
 
-data class SaveResult(val saved: SavedEntries, val ruleOffer: RuleOffer?, val newCategories: List<String>)
+/** [recurringAdded] — названия платежей, которые сами добавились в «Подписки». */
+data class SaveResult(
+    val saved: SavedEntries,
+    val ruleOffer: RuleOffer?,
+    val newCategories: List<String>,
+    val recurringAdded: List<String> = emptyList(),
+)
 
 sealed interface EntryOutcome {
     /** Всё уверенно — сохранено без подтверждения. [draft] нужен для «Изменить». */
@@ -59,6 +66,7 @@ class QuickEntry(
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val clientProvider: (AppSettings) -> LlmClient? = ::clientFor,
 ) {
+    private val recurring = RecurringRepository(db)
     private val _changes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     /** Эмитит после каждого сохранения — виджет обновляет суммы. */
@@ -152,6 +160,7 @@ class QuickEntry(
         val known = db.categories().getAllWithSubs().map { it.category.name }
         val expenseIds = mutableListOf<Long>()
         val incomeIds = mutableListOf<Long>()
+        val recurringAdded = mutableListOf<String>()
         var ruleOffer: RuleOffer? = null
         db.withTransaction {
             val knownPlaces = db.expenses().distinctPlaces().toMutableList()
@@ -185,7 +194,9 @@ class QuickEntry(
                         timestamp = timestamp, rawText = draft.rawText.ifBlank { null },
                         source = draft.origin.toExpenseSource(),
                     )
-                    expenseIds += db.expenses().insert(expense)
+                    val expenseId = db.expenses().insert(expense)
+                    expenseIds += expenseId
+                    recurring.onExpenseSaved(expense.copy(id = expenseId), row.category, zone)?.let { recurringAdded += it }
                     if (ruleOffer == null && place != null) {
                         if (db.rules().findByPattern(place.lowercase()) == null) {
                             ruleOffer = RuleOffer(place, ids.categoryId, ids.subcategoryId, row.category)
@@ -200,7 +211,7 @@ class QuickEntry(
             .map { normalizeName(it) }
             .distinct()
         _changes.tryEmit(Unit)
-        return SaveResult(SavedEntries(expenseIds, incomeIds), ruleOffer, created)
+        return SaveResult(SavedEntries(expenseIds, incomeIds), ruleOffer, created, recurringAdded)
     }
 
     /** Черновик из уже сохранённых записей — для «Изменить» после автосохранения. */

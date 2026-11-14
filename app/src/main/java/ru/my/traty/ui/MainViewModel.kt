@@ -283,7 +283,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 dismissConfirm()
                 ruleOffer = result.ruleOffer
                 message = "Сохранено: ${result.saved.count}" +
-                    if (result.newCategories.isNotEmpty()) ". Новые категории: ${result.newCategories.joinToString()}" else ""
+                    (if (result.newCategories.isNotEmpty()) ". Новые категории: ${result.newCategories.joinToString()}" else "") +
+                    (if (result.recurringAdded.isNotEmpty()) ". В подписки добавлено: ${result.recurringAdded.joinToString()}" else "")
             } finally {
                 savingEntry = false
             }
