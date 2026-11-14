@@ -535,7 +535,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun importCsv(uri: Uri) = viewModelScope.launch {
         message = try {
             val text = withContext(Dispatchers.IO) {
-                getApplication<Application>().contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                getApplication<Application>().contentResolver.openInputStream(uri)?.use(CsvBackup::readLimited)
                     ?.let(CsvBackup::decode)
             } ?: throw IllegalStateException("не удалось открыть файл")
             val r = CsvImporter(c.db, c.categories).import(CsvBackup.parse(text, zone))

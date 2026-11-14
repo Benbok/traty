@@ -34,7 +34,10 @@ open class TratyApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = createContainer()
-        if (seedOnStart) container.seedIfEmpty()
+        if (seedOnStart) {
+            container.seedIfEmpty()
+            container.protectSecrets()
+        }
         if (updateWidgetOnChanges) {
             appScope.launch {
                 container.quickEntry.changes.collect {
@@ -102,5 +105,10 @@ class AppContainer(
 
     fun seedIfEmpty() {
         scope.launch { categories.seedIfEmpty() }
+    }
+
+    /** Ключи ИИ из старых версий (открытым текстом) шифруются при первом запуске. */
+    fun protectSecrets() {
+        scope.launch { runCatching { settings.upgradeStoredSecrets() } }
     }
 }

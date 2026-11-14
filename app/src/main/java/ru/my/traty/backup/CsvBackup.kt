@@ -58,8 +58,39 @@ object CsvBackup {
         val all = rows.map { it.expense.timestamp to expenseColumns(it, zone) } +
             incomes.map { it.timestamp to incomeColumns(it, zone) }
         all.sortedBy { it.first }.forEach { (_, cols) ->
-            out.write(cols.joinToString(";") { v -> "\"" + (v ?: "").replace("\"", "\"\"") + "\"" } + "\n")
+            val safe = cols.mapIndexed { i, v -> if (i in TEXT_COLUMNS) guardFormula(v) else v }
+            out.write(safe.joinToString(";") { v -> "\"" + (v ?: "").replace("\"", "\"\"") + "\"" } + "\n")
         }
+    }
+
+    /** Категория, подкатегория, место, заметка, исходная фраза — то, что пишет пользователь или ИИ. */
+    private val TEXT_COLUMNS = 3..7
+    private val FORMULA_START = charArrayOf('=', '+', '-', '@', '\t', '\r')
+
+    /**
+     * Excel и Google Таблицы выполняют ячейку, начинающуюся с `=`, `+`, `-`, `@`, как формулу.
+     * Такой текст пишем с апострофом впереди (стандартная защита от CSV-инъекции); при импорте апостроф снимается.
+     */
+    internal fun guardFormula(v: String?): String? =
+        if (v != null && v.isNotEmpty() && v[0] in FORMULA_START) "'$v" else v
+
+    internal fun unguardFormula(v: String?): String? =
+        if (v != null && v.length > 1 && v[0] == '\'' && v[1] in FORMULA_START) v.substring(1) else v
+
+    /** Больше резервная копия не бывает (десятки тысяч записей — единицы мегабайт); защищает от нехватки памяти. */
+    const val MAX_IMPORT_BYTES = 20 * 1024 * 1024
+
+    /** Читает файл импорта целиком, но не больше [MAX_IMPORT_BYTES]. */
+    fun readLimited(input: java.io.InputStream): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        val buf = ByteArray(64 * 1024)
+        while (true) {
+            val n = input.read(buf)
+            if (n < 0) break
+            out.write(buf, 0, n)
+            if (out.size() > MAX_IMPORT_BYTES) throw CsvFormatException("файл больше 20 МБ — это не резервная копия «Трат»")
+        }
+        return out.toByteArray()
     }
 
     private fun dateText(ts: Long, zone: ZoneId) = LocalDateTime.ofInstant(Instant.ofEpochMilli(ts), zone).toString()
@@ -115,7 +146,7 @@ object CsvBackup {
     }
 
     private fun toRow(f: List<String>, zone: ZoneId): CsvRow? {
-        fun at(i: Int) = f.getOrNull(i)?.trim()?.ifEmpty { null }
+        fun at(i: Int) = f.getOrNull(i)?.trim()?.ifEmpty { null }?.let { if (i in TEXT_COLUMNS) unguardFormula(it) else it }
         val ts = at(0)?.let { parseTimestamp(it, zone) } ?: return null
         val amount = at(1)?.let(::parseKopecks) ?: return null
         val currency = at(2) ?: "RUB"
