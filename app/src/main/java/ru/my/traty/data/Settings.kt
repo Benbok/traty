@@ -48,6 +48,8 @@ data class AppSettings(
     val voiceEngine: VoiceEngine = VoiceEngine.GIGAAM,
     /** Показывать метки 🔺 🔁 🆕 ⚡ 📅 на тратах. */
     val labelsEnabled: Boolean = true,
+    /** Вечернее уведомление «Итог дня» (около 20:00). */
+    val dailyDigestEnabled: Boolean = true,
 )
 
 internal fun encodeLines(lines: List<String>): String =
@@ -76,6 +78,7 @@ class SettingsRepository(private val context: Context) {
         val calculatorLines = stringPreferencesKey("calculator_lines")
         val voiceEngine = stringPreferencesKey("voice_engine")
         val labelsEnabled = booleanPreferencesKey("labels_enabled")
+        val dailyDigest = booleanPreferencesKey("daily_digest")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -94,6 +97,7 @@ class SettingsRepository(private val context: Context) {
             calculatorLines = decodeLines(p[K.calculatorLines]),
             voiceEngine = p[K.voiceEngine]?.let { runCatching { VoiceEngine.valueOf(it) }.getOrNull() } ?: d.voiceEngine,
             labelsEnabled = p[K.labelsEnabled] ?: d.labelsEnabled,
+            dailyDigestEnabled = p[K.dailyDigest] ?: d.dailyDigestEnabled,
         )
     }
 
@@ -128,6 +132,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setVoiceEngine(engine: VoiceEngine) {
         context.dataStore.edit { p -> p[K.voiceEngine] = engine.name }
+    }
+
+    suspend fun setDailyDigestEnabled(enabled: Boolean) {
+        context.dataStore.edit { p -> p[K.dailyDigest] = enabled }
     }
 
     suspend fun setLabelsEnabled(enabled: Boolean) {

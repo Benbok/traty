@@ -442,6 +442,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteModel() = c.models.delete()
 
+    fun setDailyDigestEnabled(enabled: Boolean) = viewModelScope.launch {
+        c.settings.setDailyDigestEnabled(enabled)
+    }
+
     /** Флажок «импульсивная» у категории из экрана траты: меняет метку ⚡ у всех трат категории. */
     fun setCategoryImpulsive(categoryId: Long, impulsive: Boolean) = viewModelScope.launch {
         val cat = c.db.categories().getAllWithSubs().firstOrNull { it.category.id == categoryId }?.category ?: return@launch

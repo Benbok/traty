@@ -18,6 +18,7 @@ import ru.my.traty.data.AppSettings
 import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.ReconciliationRepository
+import ru.my.traty.data.digest.DailyDigestWork
 import ru.my.traty.data.recurring.RecurringReminderWork
 import ru.my.traty.data.SettingsRepository
 import ru.my.traty.speech.GigaAmRuntime
@@ -47,6 +48,7 @@ open class TratyApp : Application() {
         }
         if (parsePendingOnStart) {
             runCatching { RecurringReminderWork.schedule(this) }
+            runCatching { DailyDigestWork.schedule(this) }
             // Есть фразы без разбора (в т. ч. оставшиеся с прошлого запуска) — поставить фоновый разбор
             appScope.launch {
                 container.db.pendingPhrases().observeAll()
