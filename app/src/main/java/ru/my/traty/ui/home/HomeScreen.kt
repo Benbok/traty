@@ -284,7 +284,13 @@ fun HomeScreen(
             // Наблюдения показываем только в текущем периоде и на всём периоде, не на выбранном дне
             if (selectedDate == null && LocalDate.now() in period) {
                 items(observations, key = { "observation-${it.key}" }, contentType = { "observation" }) { o ->
-                    ObservationCard(o, onDismiss = { vm.dismissObservation(o.key) })
+                    ObservationCard(
+                        o,
+                        onDismiss = { vm.dismissObservation(o.key) },
+                        explanation = vm.observationExplanations[o.key],
+                        explaining = vm.explainingObservation == o.key,
+                        onExplain = { vm.explainObservation(o) },
+                    )
                 }
             }
             // Шапка «потрачено / пополнено / баланс»
