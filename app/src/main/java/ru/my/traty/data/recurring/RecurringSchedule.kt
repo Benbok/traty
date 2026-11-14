@@ -48,15 +48,15 @@ object RecurringSchedule {
     }
 
     /**
-     * Платежи, о которых пора напомнить: до списания осталось не больше [Recurring.remindDaysBefore] дней
-     * (или оно уже просрочено), а по этой дате уведомления ещё не было. [notified]: id платежа → дата списания,
-     * по которой напомнили.
+     * Платежи, о которых пора напомнить сегодня: напоминания идут каждый день, начиная за
+     * [Recurring.remindDaysBefore] дней до списания и до самого дня списания включительно.
+     * [notified]: id платежа → последний день, когда о нём напомнили (в одни сутки не больше одного уведомления).
      */
     fun dueReminders(items: List<Recurring>, today: LocalDate, notified: Map<Long, Long>): List<Recurring> =
         items
             .filter { it.state == RecurringState.ACTIVE && it.remindDaysBefore > 0 }
-            .filter { !today.isBefore(it.nextDate().minusDays(it.remindDaysBefore.toLong())) }
-            .filter { notified[it.id] != it.nextEpochDay }
+            .filter { !today.isBefore(it.nextDate().minusDays(it.remindDaysBefore.toLong())) && !today.isAfter(it.nextDate()) }
+            .filter { notified[it.id] != today.toEpochDay() }
             .sortedBy { it.nextEpochDay }
 
     /** Заголовок уведомления по числу дней до списания. */

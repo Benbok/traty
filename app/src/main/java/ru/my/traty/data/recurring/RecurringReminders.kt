@@ -38,7 +38,7 @@ fun Context.canNotify(): Boolean =
     Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
         ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-/** Раз в сутки (около 9 утра) напоминает о предстоящих списаниях. По каждой дате списания — одно уведомление. */
+/** Раз в сутки (около 9 утра) напоминает о предстоящих списаниях: каждый день с момента «за N дней» до дня списания. */
 class RecurringReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         if (!applicationContext.canNotify()) return Result.success()
@@ -83,7 +83,7 @@ class RecurringReminderWorker(context: Context, params: WorkerParameters) : Coro
                 .build()
             try {
                 manager.notify(item.id.toInt(), notification)
-                log.edit().putLong("n_${item.id}", item.nextEpochDay).apply()
+                log.edit().putLong("n_${item.id}", today.toEpochDay()).apply()
             } catch (_: SecurityException) {
                 // Право отозвали между проверкой и показом — в следующий раз
             }
