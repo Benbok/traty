@@ -72,6 +72,14 @@ class EntryParsingTest {
     }
 
     @Test
+    fun promptExplainsSpokenAmountsWithoutThousand() {
+        val p = EntryPrompt.system(emptyList(), LocalDate.of(2026, 11, 14), emptyList())
+        assertTrue("«две сто» → 2100" in p)
+        assertTrue("«две пятьсот» → 2500" in p)
+        assertTrue("«сто пятьдесят» — это 150" in p)
+    }
+
+    @Test
     fun promptMentionsTypesAndToday() {
         val p = EntryPrompt.system(emptyList(), LocalDate.of(2026, 11, 14), emptyList())
         assertTrue("\"type\"" in p && "income" in p && "2026-11-14" in p)
