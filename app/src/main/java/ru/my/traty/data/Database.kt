@@ -169,6 +169,9 @@ interface ExpenseDao {
     @Query("$EXPENSE_JOIN ORDER BY e.timestamp")
     suspend fun getAllWithCategory(): List<ExpenseWithCategory>
 
+    @Query("$EXPENSE_JOIN WHERE e.id IN (:ids) ORDER BY e.id")
+    suspend fun getByIds(ids: List<Long>): List<ExpenseWithCategory>
+
     @Query("SELECT COUNT(*) FROM expenses WHERE categoryId = :categoryId")
     suspend fun countByCategory(categoryId: Long): Int
 
@@ -311,6 +314,9 @@ interface IncomeDao {
 
     @Query("DELETE FROM incomes WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("SELECT * FROM incomes WHERE id IN (:ids) ORDER BY id")
+    suspend fun getByIds(ids: List<Long>): List<Income>
 
     /** Для поиска дублей при импорте CSV: пополнения на ту же сумму в окне по времени. */
     @Query("SELECT COUNT(*) FROM incomes WHERE amountKopecks = :amountKopecks AND timestamp >= :fromTs AND timestamp <= :toTs")
