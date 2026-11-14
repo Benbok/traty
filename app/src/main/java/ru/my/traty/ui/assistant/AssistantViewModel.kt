@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.my.traty.TratyApp
-import ru.my.traty.ai.clientFor
 import ru.my.traty.assistant.AssistantContext
 import ru.my.traty.assistant.Balance
 import ru.my.traty.assistant.AssistantEngine
@@ -92,7 +91,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         val question = raw.trim()
         if (question.isEmpty() || busy) return
         messages += ChatMessage(nextId++, fromUser = true, text = question)
-        val client = clientFor(settings.value)
+        val client = c.llm(settings.value)
         if (client == null) {
             messages += ChatMessage(nextId++, false, "Чтобы отвечать на вопросы, подключите ИИ в Настройках → «Разбор фраз и ИИ».", error = true)
             return

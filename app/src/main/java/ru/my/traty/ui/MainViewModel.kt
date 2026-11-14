@@ -25,7 +25,6 @@ import kotlinx.coroutines.withContext
 import ru.my.traty.TratyApp
 import kotlinx.serialization.json.Json
 import ru.my.traty.ai.EntryParsing
-import ru.my.traty.ai.clientFor
 import ru.my.traty.capture.EntryDraft
 import ru.my.traty.capture.EntryOrigin
 import ru.my.traty.capture.EntryOutcome
@@ -118,7 +117,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun explainObservation(o: Observation) {
         if (explainingObservation != null) return
-        val client = clientFor(settings.value) ?: run { message = "Для пояснения нужен ИИ (Настройки)"; return }
+        val client = c.llm(settings.value) ?: run { message = "Для пояснения нужен ИИ (Настройки)"; return }
         viewModelScope.launch {
             explainingObservation = o.key
             try {
@@ -479,13 +478,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun testConnection(s: AppSettings) = viewModelScope.launch {
         c.settings.save(s)
-        val client = clientFor(s) ?: run { message = "Выбран режим без ИИ"; return@launch }
+        val client = c.llm(s) ?: run { message = "Выбран режим без ИИ"; return@launch }
         message = try {
             val r = EntryParsing.parse(
                 client, "кофе двести пятьдесят и такси 400",
                 c.db.categories().getActiveWithSubs().selectable(), emptyList(), LocalDate.now(),
             )
             "${client.name} работает: " + r.joinToString { "${it.category} ${it.amount.toInt()}" }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             "${client.name}: ошибка — ${e.message}"
         }
@@ -493,7 +494,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** ИИ получает только агрегированные суммы по категориям, без мест и заметок. */
     fun requestInsight() {
-        val client = clientFor(settings.value) ?: run { message = "Для комментария нужен ИИ (Настройки)"; return }
+        val client = c.llm(settings.value) ?: run { message = "Для комментария нужен ИИ (Настройки)"; return }
         val cur = totals.value
         if (cur.isEmpty()) { message = "За этот период трат нет"; return }
         val prev = prevTotals.value.associate { it.categoryId to it.total }
@@ -513,22 +514,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     user = summary,
                     jsonMode = false,
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 "Ошибка: ${e.message}"
+            } finally {
+                insightBusy = false
             }
-            insightBusy = false
         }
     }
 
+    /** Ошибка записи (нет места, файл удалён, облачная папка недоступна) показывается сообщением, а не роняет приложение. */
     fun exportCsv(uri: Uri) = viewModelScope.launch {
-        val all = c.db.expenses().getAllWithCategory()
-        val incomes = c.db.incomes().getAll()
-        withContext(Dispatchers.IO) {
-            getApplication<Application>().contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { w ->
-                CsvBackup.write(all, incomes, zone, w)
+        message = try {
+            val all = c.db.expenses().getAllWithCategory()
+            val incomes = c.db.incomes().getAll()
+            withContext(Dispatchers.IO) {
+                val out = getApplication<Application>().contentResolver.openOutputStream(uri)
+                    ?: throw IllegalStateException("не удалось открыть файл")
+                out.bufferedWriter(Charsets.UTF_8).use { w -> CsvBackup.write(all, incomes, zone, w) }
             }
+            "Экспортировано записей: ${all.size + incomes.size}"
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            "Экспорт не удался: ${e.message ?: e.javaClass.simpleName}"
         }
-        message = "Экспортировано записей: ${all.size + incomes.size}"
     }
 
     /** Восстановление из CSV (своего экспорта или пересохранённого в Excel). Уже существующие траты пропускаются. */
@@ -547,6 +558,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     if (r.badLines.size > 10) append("…")
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             "Импорт не удался: ${e.message ?: e.javaClass.simpleName}"
         }

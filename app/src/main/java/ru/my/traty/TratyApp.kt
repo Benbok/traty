@@ -83,10 +83,12 @@ class AppContainer(
     val db: AppDatabase = AppDatabase.build(context),
     clientProvider: (AppSettings) -> LlmClient? = ::clientFor,
 ) {
+    /** Единая точка выбора языковой модели: экраны берут клиента здесь, тесты подменяют. */
+    val llm: (AppSettings) -> LlmClient? = clientProvider
     val settings = SettingsRepository(context)
     val categories = CategoryRepository(db)
     val reconciliations = ReconciliationRepository(db, categories)
-    val quickEntry = QuickEntry(db, categories, settings, clientProvider = clientProvider)
+    val quickEntry = QuickEntry(db, categories, settings, clientProvider = llm)
 
     /** Модель GigaAM: качается в filesDir; можно положить вручную в Android/data/<пакет>/files/models/gigaam. */
     val models = ModelManager(
