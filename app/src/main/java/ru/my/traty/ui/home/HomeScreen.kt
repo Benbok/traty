@@ -45,7 +45,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.ui.reconcile.ReconcileCard
 import ru.my.traty.ui.reconcile.ReconcilePromptViewModel
 import ru.my.traty.data.ExpenseWithCategory
-import ru.my.traty.data.TemplateWithCategory
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.speech.SpeechEngines
 import ru.my.traty.ui.MainViewModel
@@ -162,20 +161,34 @@ fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: Reconcile
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Поиск по тратам…") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                placeholder = {
+                    Text(
+                        text = "Поиск по тратам…",
+                        style = TratyTheme.typography.bodyMedium,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         androidx.compose.material3.IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Очистить", modifier = Modifier.size(20.dp))
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = "Очистить",
+                                modifier = Modifier.size(20.dp),
+                            )
                         }
                     }
                 },
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xxs)
-                    .height(48.dp),
+                    .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
                 shape = TratyTheme.shapes.small,
                 textStyle = TratyTheme.typography.bodyMedium,
             )

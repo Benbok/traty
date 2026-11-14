@@ -36,6 +36,8 @@ object SpeechEngines {
     /** GigaAM — если выбран в настройках и модель скачана; иначе системное распознавание. */
     fun create(context: Context, settings: AppSettings): SpeechEngine {
         val container = (context.applicationContext as TratyApp).container
+        // Файл модели могли положить, пока приложение уже было запущено: проверяем заново (это дешёво)
+        container.models.refresh()
         return if (settings.voiceEngine == VoiceEngine.GIGAAM && container.gigaAm.isReady()) {
             GigaAmEngine(container.gigaAm)
         } else {

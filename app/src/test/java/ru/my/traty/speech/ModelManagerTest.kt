@@ -48,6 +48,16 @@ class ModelManagerTest {
     }
 
     @Test
+    fun refreshPicksUpFileAppearingAfterConstruction() {
+        val a = tmp.newFolder("a")
+        val m = manager(a)
+        assertEquals(ModelState.Missing, m.state.value)
+        File(a, "model.onnx").writeBytes(body)
+        m.refresh()
+        assertEquals(ModelState.Ready(a), m.state.value)
+    }
+
+    @Test
     fun wrongSizeCountsAsMissing() {
         val a = tmp.newFolder("a")
         File(a, "model.onnx").writeBytes(body.copyOf(3))
