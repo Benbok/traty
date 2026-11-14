@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.isUserEditable
+import ru.my.traty.data.labels.ExpenseLabelHit
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 /**
@@ -40,6 +41,7 @@ fun SwipeableExpenseRow(
     onClick: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    labels: List<ExpenseLabelHit> = emptyList(),
 ) {
     val canDelete = item.expense.isUserEditable
     val density = LocalDensity.current
@@ -84,6 +86,7 @@ fun SwipeableExpenseRow(
             ExpenseRow(
                 row = item,
                 onClick = onClick,
+                labels = labels,
             )
         }
     }
