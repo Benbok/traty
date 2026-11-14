@@ -3,6 +3,7 @@ package ru.my.traty.data
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -159,6 +160,39 @@ class DatabaseUpgradeTest {
             // sumRange: трата 350 ₽ в диапазоне [0, 2000), вне диапазона не учитывается
             assertEquals(35000L, db.expenses().sumRange(0, 2000))
             assertEquals(0L, db.expenses().sumRange(2000, 3000))
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun migrationChainReachesV8WithRecurringTable() = runTest {
+        createV3Database()
+        val db = AppDatabase.build(context, dbName)
+        try {
+            val categoryId = db.categories().getAllWithSubs().first().category.id
+            assertTrue(db.recurring().getAll().isEmpty())
+            val id = db.recurring().insert(
+                Recurring(
+                    title = "Яндекс Плюс", amountKopecks = 39_900, categoryId = categoryId,
+                    periodUnit = "month", nextEpochDay = 20_000, detectKey = "$categoryId|яндекс плюс",
+                )
+            )
+            val saved = db.recurring().getById(id)!!
+            assertEquals(RecurringState.ACTIVE, saved.state)
+            assertEquals(1, saved.periodEvery)
+            assertEquals(39_900L, saved.amountKopecks)
+            // Отклонённое предложение хранится, но в списке не показывается.
+            db.recurring().insert(
+                Recurring(
+                    title = "Кофе", amountKopecks = 25_000, categoryId = categoryId, periodUnit = "week",
+                    nextEpochDay = 20_007, state = RecurringState.DISMISSED, autoDetected = true,
+                )
+            )
+            assertEquals(2, db.recurring().getAll().size)
+            assertEquals(listOf("Яндекс Плюс"), db.recurring().observeVisible().first().map { it.recurring.title })
+            // Данные прежних версий на месте.
+            assertEquals(1, db.expenses().getAllWithCategory().size)
         } finally {
             db.close()
         }

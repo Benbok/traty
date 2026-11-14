@@ -455,6 +455,92 @@ interface RuleDao {
     suspend fun incrementHits(id: Long)
 }
 
+/** Состояния регулярного платежа. DISMISSED — «это не подписка»: хранится, чтобы не предлагать снова. */
+object RecurringState {
+    const val ACTIVE = "active"
+    const val PAUSED = "paused"
+    const val DISMISSED = "dismissed"
+}
+
+/**
+ * Регулярный платёж (подписка, аренда, кредит). Период — «раз в [periodEvery] [periodUnit]»,
+ * [nextEpochDay] — дата следующего списания (LocalDate.toEpochDay, без часового пояса).
+ */
+@Entity(
+    tableName = "recurring",
+    foreignKeys = [
+        ForeignKey(entity = Category::class, parentColumns = ["id"], childColumns = ["categoryId"]),
+        ForeignKey(
+            entity = Subcategory::class,
+            parentColumns = ["id"],
+            childColumns = ["subcategoryId"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
+    ],
+    indices = [Index("categoryId"), Index("subcategoryId"), Index("detectKey")],
+)
+data class Recurring(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val amountKopecks: Long,
+    val currency: String = "RUB",
+    val categoryId: Long,
+    val subcategoryId: Long? = null,
+    val place: String? = null,
+    /** [ru.my.traty.data.recurring.PeriodUnit.key]. */
+    val periodUnit: String,
+    val periodEvery: Int = 1,
+    val nextEpochDay: Long,
+    /** За сколько дней напомнить о списании; 0 — не напоминать. */
+    val remindDaysBefore: Int = 1,
+    val state: String = RecurringState.ACTIVE,
+    val autoDetected: Boolean = false,
+    /** Ключ автообнаружения ([ru.my.traty.data.recurring.RecurringDetector.keyOf]); у платежей, заведённых вручную, может быть пустым. */
+    val detectKey: String? = null,
+)
+
+data class RecurringWithNames(
+    @Embedded val recurring: Recurring,
+    val categoryName: String,
+    val categoryEmoji: String,
+    val subcategoryName: String?,
+)
+
+private const val RECURRING_JOIN =
+    "SELECT r.*, c.name AS categoryName, c.emoji AS categoryEmoji, s.name AS subcategoryName " +
+        "FROM recurring r JOIN categories c ON c.id = r.categoryId " +
+        "LEFT JOIN subcategories s ON s.id = r.subcategoryId"
+
+@Dao
+interface RecurringDao {
+    @Insert
+    suspend fun insert(item: Recurring): Long
+
+    @Update
+    suspend fun update(item: Recurring)
+
+    @Delete
+    suspend fun delete(item: Recurring)
+
+    /** Заведённые платежи (активные и на паузе), ближайшее списание — первым. Отклонённые предложения не показываем. */
+    @Query("$RECURRING_JOIN WHERE r.state <> '${RecurringState.DISMISSED}' ORDER BY r.nextEpochDay, r.title")
+    fun observeVisible(): Flow<List<RecurringWithNames>>
+
+    /** Все строки, включая отклонённые предложения: по ним автообнаружение не предлагает то же самое снова. */
+    @Query("SELECT * FROM recurring")
+    suspend fun getAll(): List<Recurring>
+
+    @Query("SELECT * FROM recurring WHERE id = :id")
+    suspend fun getById(id: Long): Recurring?
+
+    /** При объединении категорий платежи переезжают вместе с тратами. */
+    @Query("UPDATE recurring SET categoryId = :toId WHERE categoryId = :fromId")
+    suspend fun reassignCategory(fromId: Long, toId: Long)
+
+    @Query("UPDATE recurring SET subcategoryId = :toId WHERE subcategoryId = :fromId")
+    suspend fun reassignSubcategory(fromId: Long, toId: Long)
+}
+
 /** Статусы фраз в очереди без сети. */
 object PendingStatus {
     const val WAITING = "waiting"
@@ -492,8 +578,8 @@ interface PendingPhraseDao {
 }
 
 @Database(
-    entities = [Expense::class, Category::class, Subcategory::class, Income::class, Reconciliation::class, Template::class, Rule::class, PendingPhrase::class],
-    version = 7,
+    entities = [Expense::class, Category::class, Subcategory::class, Income::class, Reconciliation::class, Template::class, Rule::class, PendingPhrase::class, Recurring::class],
+    version = 8,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -504,6 +590,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun templates(): TemplateDao
     abstract fun rules(): RuleDao
     abstract fun pendingPhrases(): PendingPhraseDao
+    abstract fun recurring(): RecurringDao
 
     companion object {
         val MIGRATION_2_3 = object : Migration(2, 3) {
@@ -601,9 +688,39 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `recurring` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `amountKopecks` INTEGER NOT NULL,
+                        `currency` TEXT NOT NULL,
+                        `categoryId` INTEGER NOT NULL,
+                        `subcategoryId` INTEGER,
+                        `place` TEXT,
+                        `periodUnit` TEXT NOT NULL,
+                        `periodEvery` INTEGER NOT NULL,
+                        `nextEpochDay` INTEGER NOT NULL,
+                        `remindDaysBefore` INTEGER NOT NULL,
+                        `state` TEXT NOT NULL,
+                        `autoDetected` INTEGER NOT NULL,
+                        `detectKey` TEXT,
+                        FOREIGN KEY(`categoryId`) REFERENCES `categories`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION,
+                        FOREIGN KEY(`subcategoryId`) REFERENCES `subcategories`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_recurring_categoryId` ON `recurring` (`categoryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_recurring_subcategoryId` ON `recurring` (`subcategoryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_recurring_detectKey` ON `recurring` (`detectKey`)")
+            }
+        }
+
         fun build(context: Context, name: String = "traty.db"): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, name)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 // Решение владельца: в v1 реальных данных нет — базу v1 пересоздаём.
                 // Для версий 2+ — только Migration(n, n+1).
                 .fallbackToDestructiveMigrationFrom(true, 1)
