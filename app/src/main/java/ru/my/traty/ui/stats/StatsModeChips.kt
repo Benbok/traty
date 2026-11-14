@@ -53,7 +53,7 @@ fun StatsViewChips(
 }
 
 @Composable
-private fun ModeChip(title: String, selected: Boolean, onClick: () -> Unit) {
+internal fun ModeChip(title: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         shape = TratyTheme.shapes.small,
         color = if (selected) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
