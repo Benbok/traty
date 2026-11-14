@@ -30,6 +30,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import ru.my.traty.ui.budget.BudgetScreen
+import ru.my.traty.ui.assistant.AssistantScreen
 import ru.my.traty.ui.charts.ChartsScreen
 import ru.my.traty.ui.designsystem.components.TratySnackbar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
@@ -46,8 +47,7 @@ import ru.my.traty.ui.settings.SettingsScreen
 import ru.my.traty.ui.stats.StatsScreen
 
 /**
- * Корневой контейнер приложения Traty с нижней навигацией по 4 вкладкам:
- * Траты (Home), Графики (Charts), Статистика (Stats), Настройки (Settings).
+ * Корневой контейнер приложения Traty с нижней навигацией: Траты, Графики, Статистика, ИИ, Настройки.
  */
 @Composable
 fun TratyRoot(vm: MainViewModel = viewModel()) {
@@ -142,6 +142,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                     )
                     TratyNavTab.CHARTS -> ChartsScreen()
                     TratyNavTab.STATS -> StatsScreen(vm, onOpenBudget = { showBudget = true })
+                    TratyNavTab.ASSISTANT -> AssistantScreen()
                     TratyNavTab.SETTINGS -> SettingsScreen(
                         vm,
                         onOpenCategories = { showCategories = true },
