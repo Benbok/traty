@@ -50,6 +50,8 @@ import ru.my.traty.data.Template
 import ru.my.traty.data.TemplateWithCategory
 import ru.my.traty.ui.home.EditFields
 import ru.my.traty.data.selectable
+import ru.my.traty.data.insights.Observation
+import ru.my.traty.data.insights.Observations
 import ru.my.traty.data.labels.ExpenseLabelHit
 import ru.my.traty.data.labels.ExpenseLabeler
 import ru.my.traty.data.period.BillingPeriod
@@ -94,6 +96,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** Карточки наблюдений на Главной (для текущего расчётного периода), без скрытых пользователем. */
+    val observations: StateFlow<List<Observation>> =
+        combine(
+            c.db.expenses().observeAllWithCategory(),
+            c.settings.flow.map { it.periodStartDay to it.dismissedObservations }.distinctUntilChanged(),
+        ) { rows, (startDay, dismissed) ->
+            Observations.visible(Observations.build(rows, LocalDate.now(), startDay, zone), dismissed)
+        }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun dismissObservation(key: String) = viewModelScope.launch { c.settings.dismissObservation(key) }
 
     /** Шаблоны быстрых трат — чипсы над строкой ввода. */
     val templates: StateFlow<List<TemplateWithCategory>> =

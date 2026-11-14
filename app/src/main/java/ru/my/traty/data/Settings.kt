@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -50,6 +51,8 @@ data class AppSettings(
     val labelsEnabled: Boolean = true,
     /** Вечернее уведомление «Итог дня» (около 20:00). */
     val dailyDigestEnabled: Boolean = true,
+    /** Ключи скрытых карточек наблюдений на Главной. */
+    val dismissedObservations: Set<String> = emptySet(),
 )
 
 internal fun encodeLines(lines: List<String>): String =
@@ -64,6 +67,8 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
  * Ключи хранятся в приватном хранилище приложения (другим приложениям недоступно,
  * allowBackup=false). Для личного APK этого достаточно.
  */
+private const val MAX_DISMISSED = 60
+
 class SettingsRepository(private val context: Context) {
     private object K {
         val themeMode = stringPreferencesKey("theme_mode")
@@ -79,6 +84,7 @@ class SettingsRepository(private val context: Context) {
         val voiceEngine = stringPreferencesKey("voice_engine")
         val labelsEnabled = booleanPreferencesKey("labels_enabled")
         val dailyDigest = booleanPreferencesKey("daily_digest")
+        val dismissedObservations = stringSetPreferencesKey("dismissed_observations")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -98,6 +104,7 @@ class SettingsRepository(private val context: Context) {
             voiceEngine = p[K.voiceEngine]?.let { runCatching { VoiceEngine.valueOf(it) }.getOrNull() } ?: d.voiceEngine,
             labelsEnabled = p[K.labelsEnabled] ?: d.labelsEnabled,
             dailyDigestEnabled = p[K.dailyDigest] ?: d.dailyDigestEnabled,
+            dismissedObservations = p[K.dismissedObservations] ?: d.dismissedObservations,
         )
     }
 
@@ -132,6 +139,14 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setVoiceEngine(engine: VoiceEngine) {
         context.dataStore.edit { p -> p[K.voiceEngine] = engine.name }
+    }
+
+    /** Скрывает карточку наблюдения. Помним последние [MAX_DISMISSED] ключей: старые периоды уже не вернутся. */
+    suspend fun dismissObservation(key: String) {
+        context.dataStore.edit { p ->
+            val kept = (p[K.dismissedObservations].orEmpty() - key).toList().takeLast(MAX_DISMISSED - 1)
+            p[K.dismissedObservations] = (kept + key).toSet()
+        }
     }
 
     suspend fun setDailyDigestEnabled(enabled: Boolean) {
