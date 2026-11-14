@@ -1,0 +1,202 @@
+package ru.my.traty.assistant
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import ru.my.traty.data.Expense
+import ru.my.traty.data.ExpenseSource
+import ru.my.traty.data.ExpenseWithCategory
+import ru.my.traty.data.Income
+import ru.my.traty.data.IncomeOrigin
+import ru.my.traty.data.Recurring
+import java.time.LocalDate
+import java.time.ZoneOffset
+
+class AssistantEngineTest {
+    private val zone = ZoneOffset.UTC
+    private val today = LocalDate.of(2026, 11, 14)
+    private var nextId = 1L
+
+    private fun exp(
+        date: LocalDate,
+        rub: Long,
+        cat: Long = 1,
+        name: String = "Продукты",
+        sub: String? = null,
+        place: String? = null,
+        source: String = ExpenseSource.VOICE,
+    ) = ExpenseWithCategory(
+        Expense(
+            id = nextId++, amountKopecks = rub * 100, categoryId = cat, place = place, source = source,
+            timestamp = date.atTime(12, 0).toInstant(ZoneOffset.UTC).toEpochMilli(),
+        ),
+        categoryName = name, categoryEmoji = "🛒", subcategoryName = sub,
+    )
+
+    private fun nov(d: Int) = LocalDate.of(2026, 11, d)
+    private fun oct(d: Int) = LocalDate.of(2026, 10, d)
+
+    private val rows = listOf(
+        exp(nov(2), 1000, place = "Пятёрочка"),
+        exp(nov(5), 2500, place = "Магнит"),
+        exp(nov(9), 600, place = "пятёрочка"),
+        exp(nov(10), 450, cat = 2, name = "Кафе и рестораны", sub = "Кофе"),
+        exp(nov(12), 1200, cat = 3, name = "Транспорт", sub = "Такси", place = "Яндекс Такси"),
+        exp(oct(3), 3000),
+        exp(oct(8), 900, cat = 2, name = "Кафе и рестораны", sub = "Обед"),
+        exp(nov(13), 99_999, source = ExpenseSource.RECONCILE),
+    )
+
+    private fun ctx(
+        expenses: List<ExpenseWithCategory> = rows,
+        incomes: List<Income> = emptyList(),
+        recurring: List<Recurring> = emptyList(),
+    ) = AssistantContext(expenses, incomes, recurring, today, 1, zone)
+
+    private fun run(q: AssistantQuery, c: AssistantContext = ctx()) = AssistantEngine.run(q, c)
+
+    @Test
+    fun totalDefaultsToCurrentPeriodAndSkipsReconcile() {
+        val d = run(AssistantQuery(intent = Intents.TOTAL))
+        assertTrue(d.facts, "покупок: 5" in d.facts)
+        assertEquals(5, d.expenseIds.size)
+        assertFalse(d.facts.contains("99"))
+    }
+
+    @Test
+    fun categoryAndSubcategoryNamesFilter() {
+        val cafe = run(AssistantQuery(intent = Intents.TOTAL, categories = listOf("кафе и рестораны")))
+        assertEquals(1, cafe.expenseIds.size)
+        val taxi = run(AssistantQuery(intent = Intents.TOTAL, categories = listOf("Такси")))
+        assertEquals(1, taxi.expenseIds.size)
+        assertTrue("Такси" in taxi.caption!!)
+    }
+
+    @Test
+    fun unknownCategoryIsReportedNotInvented() {
+        val d = run(AssistantQuery(intent = Intents.TOTAL, categories = listOf("Яхты")))
+        assertTrue("Яхты" in d.facts && "нет" in d.facts)
+        assertNull(d.headline)
+        assertTrue(d.expenseIds.isEmpty())
+    }
+
+    @Test
+    fun placeMatchesIgnoringCase() {
+        val d = run(AssistantQuery(intent = Intents.TOTAL, place = "Пятёрочка"))
+        assertEquals(2, d.expenseIds.size)
+    }
+
+    @Test
+    fun explicitDatesAreUsedAndFutureIsClipped() {
+        val (from, to) = AssistantEngine.range("2026-10-01", "2026-12-31", nov(1), today)
+        assertEquals(oct(1), from)
+        assertEquals(today, to)
+        val d = run(AssistantQuery(intent = Intents.TOTAL, from = "2026-10-01", to = "2026-10-31"))
+        assertEquals(2, d.expenseIds.size)
+    }
+
+    @Test
+    fun swappedDatesAreFixed() {
+        val (from, to) = AssistantEngine.range("2026-11-10", "2026-11-01", nov(1), today)
+        assertEquals(nov(1), from)
+        assertEquals(nov(10), to)
+    }
+
+    @Test
+    fun topIsSortedAndLimited() {
+        val d = run(AssistantQuery(intent = Intents.TOP, limit = 2))
+        assertEquals(2, d.expenseIds.size)
+        assertTrue(d.headline!!.startsWith("2"))
+    }
+
+    @Test
+    fun placesGroupsSpellings() {
+        val d = run(AssistantQuery(intent = Intents.PLACES, categories = listOf("Продукты")))
+        // «Магнит» 2500 больше, чем «Пятёрочка» 1600 (в двух написаниях)
+        assertTrue(d.caption!!.startsWith("Магнит"))
+        assertTrue("покупок: 2" in d.facts)
+    }
+
+    @Test
+    fun compareCurrentPeriodUsesSameDaysOfPrevious() {
+        val d = run(AssistantQuery(intent = Intents.COMPARE))
+        // 1–14 ноября: 5750 ₽, 1–14 октября: 3900 ₽
+        assertTrue(d.facts, "1–14 октября" in d.facts)
+        assertTrue(d.headline!!.startsWith("+"))
+    }
+
+    @Test
+    fun averagePerDay() {
+        val d = run(AssistantQuery(intent = Intents.AVERAGE, from = "2026-11-01", to = "2026-11-10"))
+        // 1000 + 2500 + 600 + 450 = 4550 за 10 дней
+        assertTrue(d.facts, "10 дней" in d.facts)
+        assertTrue(d.headline!!.startsWith("455"))
+    }
+
+    @Test
+    fun subscriptionsListedWithTotals() {
+        val r = Recurring(title = "Яндекс Плюс", amountKopecks = 39_900, categoryId = 4, periodUnit = "month", nextEpochDay = nov(20).toEpochDay())
+        val d = run(AssistantQuery(intent = Intents.SUBSCRIPTIONS), ctx(recurring = listOf(r)))
+        assertTrue("Яндекс Плюс" in d.facts)
+        assertTrue("20 ноября" in d.facts)
+        assertNotNull(d.headline)
+    }
+
+    @Test
+    fun incomeShowsBalance() {
+        val inc = Income(amountKopecks = 5_000_000, source = "Зарплата", timestamp = nov(5).atTime(10, 0).toInstant(ZoneOffset.UTC).toEpochMilli())
+        val rec = inc.copy(amountKopecks = 1_000, origin = IncomeOrigin.RECONCILE)
+        val d = run(AssistantQuery(intent = Intents.INCOME), ctx(incomes = listOf(inc, rec)))
+        assertTrue("Зарплата" in d.facts)
+        assertTrue(d.headline!!.startsWith("50"))
+    }
+
+    @Test
+    fun affordWithoutIncomeSaysBalanceIsUnknown() {
+        val d = run(AssistantQuery(intent = Intents.AFFORD, amount = 15000.0))
+        assertTrue("не записаны" in d.facts)
+        assertNull(d.headline)
+    }
+
+    @Test
+    fun affordCountsUpcomingPaymentsAndIncome() {
+        val inc = Income(amountKopecks = 10_000_000, timestamp = nov(1).atTime(10, 0).toInstant(ZoneOffset.UTC).toEpochMilli())
+        val rent = Recurring(title = "Аренда", amountKopecks = 3_000_000, categoryId = 5, periodUnit = "month", nextEpochDay = nov(25).toEpochDay())
+        val d = run(AssistantQuery(intent = Intents.AFFORD, amount = 15000.0), ctx(incomes = listOf(inc), recurring = listOf(rent)))
+        assertTrue("Аренда" in d.facts)
+        assertNotNull(d.headline)
+    }
+
+    @Test
+    fun unknownIntentAnswersDirectly() {
+        val d = run(AssistantQuery(intent = Intents.UNKNOWN))
+        assertNotNull(d.direct)
+    }
+
+    @Test
+    fun decodeHandlesFencesAndUnknownIntent() {
+        val q = AssistantQueries.decode("```json\n{\"intent\":\"total\",\"categories\":[\"Кафе\"],\"extra\":1}\n```")!!
+        assertEquals(Intents.TOTAL, q.intent)
+        assertEquals(listOf("Кафе"), q.categories)
+        assertEquals(Intents.UNKNOWN, AssistantQueries.decode("{\"intent\":\"dance\"}")!!.intent)
+        assertNull(AssistantQueries.decode("не знаю"))
+    }
+
+    @Test
+    fun spanFormatting() {
+        assertEquals("1–14 ноября", AssistantEngine.span(nov(1), nov(14)))
+        assertEquals("14 ноября", AssistantEngine.span(nov(14), nov(14)))
+        assertEquals("28 октября — 3 ноября", AssistantEngine.span(oct(28), nov(3)))
+    }
+
+    @Test
+    fun queryUserKeepsOnlyRecentHistory() {
+        val h = (1..4).map { AssistantTurn("q$it", "{}") }
+        val text = AssistantPrompts.queryUser("а в сентябре?", h)
+        assertFalse("q1" in text)
+        assertTrue("q3" in text && "q4" in text && "а в сентябре?" in text)
+    }
+}

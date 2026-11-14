@@ -1,6 +1,7 @@
 package ru.my.traty.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Settings
@@ -14,5 +15,6 @@ enum class TratyNavTab(val title: String, val icon: ImageVector) {
     HOME("Траты", Icons.Filled.Home),
     CHARTS("Графики", Icons.Filled.ShowChart),
     STATS("Статистика", Icons.Filled.PieChart),
+    ASSISTANT("ИИ", Icons.Filled.AutoAwesome),
     SETTINGS("Настройки", Icons.Filled.Settings),
 }
