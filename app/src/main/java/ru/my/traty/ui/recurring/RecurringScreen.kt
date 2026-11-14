@@ -52,6 +52,8 @@ import ru.my.traty.data.recurring.canNotify
 import ru.my.traty.data.recurring.nextDate
 import ru.my.traty.data.recurring.period
 import ru.my.traty.data.recurring.yearlyKopecks
+import ru.my.traty.ui.AmountInput
+import ru.my.traty.ui.designsystem.components.TratyAmountTextField
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
@@ -340,7 +342,7 @@ private fun RecurringEditDialog(
 ) {
     val isNew = initial.id == 0L
     var title by remember { mutableStateOf(initial.title) }
-    var amount by remember { mutableStateOf(if (initial.amountKopecks > 0) (initial.amountKopecks / 100.0).toString().removeSuffix(".0") else "") }
+    var amount by remember { mutableStateOf(if (initial.amountKopecks > 0) AmountInput.fromKopecks(initial.amountKopecks) else "") }
     var categoryName by remember {
         mutableStateOf(categories.firstOrNull { it.category.id == initial.categoryId }?.category?.name ?: categories.firstOrNull()?.category?.name.orEmpty())
     }
@@ -365,14 +367,10 @@ private fun RecurringEditDialog(
                     modifier = Modifier.fillMaxWidth(),
                     shape = TratyTheme.shapes.small,
                 )
-                OutlinedTextField(
+                TratyAmountTextField(
                     value = amount,
                     onValueChange = { amount = it },
-                    label = { Text("Сумма, ₽") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = TratyTheme.shapes.small,
                 )
                 CategoryPicker(categoryName, categories, null) { categoryName = it }
                 Row(
@@ -412,15 +410,15 @@ private fun RecurringEditDialog(
         confirmButton = {
             TratyButton(
                 onClick = {
-                    val rub = amount.replace(",", ".").replace(" ", "").toDoubleOrNull()
+                    val kopecks = AmountInput.parsePositiveKopecks(amount)
                     val cat = categories.firstOrNull { it.category.name == categoryName }
                     val date = runCatching { LocalDate.parse(dateText.trim()) }.getOrNull()
                     val n = every.toIntOrNull()?.takeIf { it >= 1 }
-                    if (title.isNotBlank() && rub != null && rub > 0 && cat != null && date != null && n != null) {
+                    if (title.isNotBlank() && kopecks != null && cat != null && date != null && n != null) {
                         onSave(
                             initial.copy(
                                 title = title,
-                                amountKopecks = Math.round(rub * 100),
+                                amountKopecks = kopecks,
                                 categoryId = cat.category.id,
                                 subcategoryId = if (cat.category.id == initial.categoryId) initial.subcategoryId else null,
                                 periodUnit = unit.key,
@@ -440,28 +438,24 @@ private fun RecurringEditDialog(
 
 @Composable
 private fun PaidAmountDialog(item: Recurring, onDismiss: () -> Unit, onConfirm: (Long) -> Unit) {
-    var amount by remember { mutableStateOf((item.amountKopecks / 100.0).toString().removeSuffix(".0")) }
+    var amount by remember { mutableStateOf(AmountInput.fromKopecks(item.amountKopecks)) }
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = TratyTheme.shapes.large,
         containerColor = TratyTheme.colors.surface,
         title = { Text("Сколько списалось?", style = TratyTheme.typography.titleMedium) },
         text = {
-            OutlinedTextField(
+            TratyAmountTextField(
                 value = amount,
                 onValueChange = { amount = it },
-                label = { Text("${item.title}, ₽") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
+                label = item.title,
                 modifier = Modifier.fillMaxWidth(),
-                shape = TratyTheme.shapes.small,
             )
         },
         confirmButton = {
             TratyButton(
                 onClick = {
-                    val rub = amount.replace(",", ".").replace(" ", "").toDoubleOrNull()
-                    if (rub != null && rub > 0) onConfirm(Math.round(rub * 100))
+                    AmountInput.parsePositiveKopecks(amount)?.let(onConfirm)
                 },
             ) { Text("Списалось") }
         },
