@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -44,13 +45,13 @@ fun ExpenseRow(
         )
         Spacer(Modifier.width(TratyTheme.spacing.md))
         Column(Modifier.weight(1f)) {
-            val title = listOfNotNull(row.subcategoryName ?: row.categoryName, e.place).joinToString(" · ")
+            val title = remember(row) { listOfNotNull(row.subcategoryName ?: row.categoryName, e.place).joinToString(" · ") }
             Text(
                 text = title,
                 style = TratyTheme.typography.titleSmall,
                 color = TratyTheme.colors.onSurface,
             )
-            val sub = listOfNotNull(formatTime(e.timestamp), e.note).joinToString(" · ")
+            val sub = remember(row) { listOfNotNull(formatTime(e.timestamp), e.note).joinToString(" · ") }
             Text(
                 text = sub,
                 style = TratyTheme.typography.bodySmall,

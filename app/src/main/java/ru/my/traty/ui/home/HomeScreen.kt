@@ -256,16 +256,16 @@ fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: Reconcile
 
         LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
             if (showReconcileCard) {
-                item(key = "reconcile-card") {
+                item(key = "reconcile-card", contentType = "reconcile-card") {
                     ReconcileCard(onReconcile = onOpenReconcile, onSnooze = prompt::snooze)
                 }
             }
             if (waitingCount > 0) {
-                item(key = "pending-waiting") {
+                item(key = "pending-waiting", contentType = "pending") {
                     PendingCard(title = pendingWaitingText(waitingCount), subtitle = "Разоберу, когда появится интернет")
                 }
             }
-            items(parsedPending, key = { "pending-${it.id}" }) { p ->
+            items(parsedPending, key = { "pending-${it.id}" }, contentType = { "pending" }) { p ->
                 PendingCard(
                     title = "Разобрано, проверьте",
                     subtitle = "«${p.text}»",
@@ -274,7 +274,7 @@ fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: Reconcile
             }
             // Шапка «потрачено / пополнено / баланс»
             if (totalIncome > 0 || totalExpense > 0) {
-                item(key = "balance-header") {
+                item(key = "balance-header", contentType = "balance-header") {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -305,7 +305,7 @@ fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: Reconcile
                 }
             }
             if (feed.isEmpty()) {
-                item {
+                item(key = "empty", contentType = "empty") {
                     if (selectedDate != null) {
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(top = TratyTheme.spacing.xl),
@@ -330,7 +330,9 @@ fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: Reconcile
                     }
                 }
             }
-            items(feed, key = { it.id }) { item ->
+            // contentType: при прокрутке LazyColumn переиспользует уже собранные строки того же типа
+            // (трата ↔ трата), а не строит каждую с нуля — это и убирает рывки на длинном списке.
+            items(feed, key = { it.id }, contentType = { it.contentType }) { item ->
                 when (item) {
                     is FeedItem.ExpenseItem -> {
                         SwipeableExpenseRow(

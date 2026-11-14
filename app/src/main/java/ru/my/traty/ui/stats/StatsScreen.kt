@@ -173,8 +173,10 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
             },
         )
 
+        val ringSlices = remember(totals) { RingSlices.of(totals) }
+
         LazyColumn(Modifier.fillMaxSize()) {
-            item {
+            item(key = "mode-chips", contentType = "mode-chips") {
                 StatsModeChips(
                 customSelected = custom,
                 onPeriod = rangeVm::clear,
@@ -182,7 +184,7 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
             )
         }
 
-        item {
+        item(key = "month-picker", contentType = "month-picker") {
             TratyMonthPicker(
                 periodLabel = range?.let { "${formatDate(it.first)} — ${formatDate(it.second)}" }
                     ?: formatPeriod(period, settings.periodStartDay),
@@ -196,23 +198,23 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
         }
 
         if (sum > 0 && pace != null) {
-            item { SpendingPaceCard(pace = pace, endDate = paceEnd, prevSum = prevSum, custom = custom) }
+            item(key = "pace", contentType = "pace") { SpendingPaceCard(pace = pace, endDate = paceEnd, prevSum = prevSum, custom = custom) }
         }
 
         if (!custom && cumulative.first.points.isNotEmpty() && cumulative.second.last > 0) {
-            item { CumulativeCard(current = cumulative.first, previous = cumulative.second) }
+            item(key = "cumulative", contentType = "cumulative") { CumulativeCard(current = cumulative.first, previous = cumulative.second) }
         }
 
         if (topChanges.isNotEmpty() && comparable.isNotEmpty()) {
-            item { TopChangesCard(changes = topChanges, compareLabel = compareLabel) }
+            item(key = "top-changes", contentType = "top-changes") { TopChangesCard(changes = topChanges, compareLabel = compareLabel) }
         }
 
         if (totals.isNotEmpty()) {
-            item { CategoryRingCard(slices = RingSlices.of(totals), sum = sum) }
+            item(key = "ring", contentType = "ring") { CategoryRingCard(slices = ringSlices, sum = sum) }
         }
 
         if (totals.isNotEmpty()) {
-            item {
+            item(key = "view-chips", contentType = "view-chips") {
                 StatsViewChips(
                     storesSelected = byStores,
                     onCategories = { byStores = false },
@@ -222,7 +224,7 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
         }
 
         if (totals.isEmpty()) {
-            item {
+            item(key = "empty", contentType = "empty") {
                 TratyEmptyState(
                     icon = Icons.Filled.PieChart,
                     title = "Нет статистики",
@@ -235,11 +237,11 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
             }
         }
 
-        if (byStores) items(stores, key = { "store:" + it.key }) { st ->
+        if (byStores) items(stores, key = { "store:" + it.key }, contentType = { "store" }) { st ->
             StoreTotalRow(store = st, sum = sum, emojiById = emojiById)
         }
 
-        if (!byStores) items(totals, key = { it.categoryId }) { t ->
+        if (!byStores) items(totals, key = { "cat:${it.categoryId}" }, contentType = { "category" }) { t ->
             val frac = if (sum > 0) t.total.toFloat() / sum else 0f
             val p = prevMap[t.categoryId]
             val breakdown = breakdowns[t.categoryId]
