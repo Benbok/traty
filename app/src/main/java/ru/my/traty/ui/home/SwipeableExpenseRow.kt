@@ -69,7 +69,11 @@ fun SwipeableExpenseRow(
         gesturesEnabled = canDelete,
         modifier = modifier.fillMaxWidth(),
         backgroundContent = {
-            DismissBackground(dismissState)
+            // Красную подложку строим только во время свайпа. Иначе каждая строка списка при первом
+            // показе собирала бы лишнее дерево (фон, иконка, текст, анимация) — а их никто не видит.
+            if (dismissState.dismissDirection != SwipeToDismissBoxValue.Settled) {
+                DismissBackground(dismissState)
+            }
         },
     ) {
         Box(
