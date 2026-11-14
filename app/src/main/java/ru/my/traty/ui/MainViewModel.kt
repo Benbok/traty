@@ -106,6 +106,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.db.expenses().observeTotals(prev.startMillis(zone), prev.endMillisExclusive(zone))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** Траты прошлого расчётного периода — для линии накопленных трат «сейчас против прошлого». */
+    val prevExpenses: StateFlow<List<ExpenseWithCategory>> = _period.flatMapLatest { p ->
+        val prev = p.previous(startDay)
+        c.db.expenses().observeRange(prev.startMillis(zone), prev.endMillisExclusive(zone))
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     /**
      * Дни прошлого периода, с которыми честно сравнивать категории: пока период идёт — столько же первых дней,
      * сколько прошло в текущем (см. [ru.my.traty.data.PeriodComparison.comparableWindow]).
