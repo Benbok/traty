@@ -99,7 +99,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md),
         ) {
             // Чипсы выбора периода (прокручиваются: «Даты» — выбор произвольного диапазона)
-        item {
+        item(key = "period-chips", contentType = "period-chips") {
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
@@ -128,7 +128,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
         }
 
         // Карточка календаря и периода анализа (начальная и конечная даты, переключение, вызов календаря)
-        item {
+        item(key = "date-card", contentType = "date-card") {
             ChartDateCard(
                 period = state.period,
                 rangeStart = state.rangeStart,
@@ -143,23 +143,23 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
         }
 
         // Сводные метрики (Сальдо, Дебет, Кредит, Сбережения)
-        item {
+        item(key = "kpi", contentType = "kpi") {
             ChartKpiCard(summary = state.summary)
         }
 
         // График 1: Динамика баланса (Линейный с заливкой)
-        item {
+        item(key = "balance-chart", contentType = "balance-chart") {
             BalanceAreaChart(points = state.balancePoints)
         }
 
         // График 2: Дебет vs Кредит (Столбчатый)
-        item {
+        item(key = "debit-credit-chart", contentType = "debit-credit-chart") {
             DebitCreditBarChart(bars = state.debitCreditBars)
         }
 
         // Структура трат (Кредит по категориям)
         if (state.categoryShares.isNotEmpty()) {
-            item {
+            item(key = "category-shares", contentType = "category-shares") {
                 TratyCard(
                     modifier = Modifier.fillMaxWidth(),
                     backgroundColor = TratyTheme.colors.surface,
@@ -266,7 +266,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
 
         // Траты по магазинам (все категории вместе)
         if (state.topStores.isNotEmpty()) {
-            item {
+            item(key = "top-stores", contentType = "top-stores") {
                 val credit = state.summary.totalCreditKopecks
                 TratyCard(
                     modifier = Modifier.fillMaxWidth(),
@@ -321,7 +321,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
 
         // Блок последних доходов периода
         if (state.recentIncomes.isNotEmpty()) {
-            item {
+            item(key = "recent-incomes", contentType = "recent-incomes") {
                 TratyCard(
                     modifier = Modifier.fillMaxWidth(),
                     backgroundColor = TratyTheme.colors.surface,
@@ -369,7 +369,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
             }
         }
 
-        item {
+        item(key = "bottom-spacer", contentType = "bottom-spacer") {
             Spacer(Modifier.height(TratyTheme.spacing.lg))
         }
     }
