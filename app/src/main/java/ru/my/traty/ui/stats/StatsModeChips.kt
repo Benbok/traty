@@ -14,12 +14,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
-/** Переключатель режима статистики: расчётный период или произвольные даты. */
+/** Переключатель режима статистики: расчётный период, день, неделя или произвольные даты. */
 @Composable
 fun StatsModeChips(
-    customSelected: Boolean,
-    onPeriod: () -> Unit,
-    onDates: () -> Unit,
+    selected: StatsSpan,
+    onSelect: (StatsSpan) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -28,8 +27,9 @@ fun StatsModeChips(
             .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
         horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
     ) {
-        ModeChip("Расчётный период", selected = !customSelected, onClick = onPeriod)
-        ModeChip("Даты", selected = customSelected, onClick = onDates)
+        StatsSpan.entries.forEach { span ->
+            ModeChip(span.title, selected = span == selected, onClick = { onSelect(span) })
+        }
     }
 }
 
