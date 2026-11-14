@@ -102,4 +102,44 @@ class RecordControllerTest {
         assertTrue(texts.isEmpty())
         assertEquals(RecordState.Idle, c.state.value)
     }
+
+    private class FakeCues : RecordCues {
+        var startDone: (() -> Unit)? = null
+        var ended = 0
+        override fun playStart(onDone: () -> Unit) { startDone = onDone }
+        override fun playEnd() { ended++ }
+    }
+
+    @Test
+    fun engineStartsOnlyAfterStartCueFinishes() {
+        val cues = FakeCues()
+        val c = RecordController({ FakeEngine().also { engines += it } }, cues) { texts += it }
+        c.toggle()
+        assertEquals(0, engines.single().started)
+        cues.startDone!!.invoke()
+        assertEquals(1, engines.single().started)
+    }
+
+    @Test
+    fun cancelDuringStartCueNeverStartsEngine() {
+        val cues = FakeCues()
+        val c = RecordController({ FakeEngine().also { engines += it } }, cues) { texts += it }
+        c.toggle()
+        c.toggle() // второе нажатие, пока играет сигнал
+        cues.startDone!!.invoke()
+        assertEquals(0, engines.single().started)
+        assertEquals(RecordState.Idle, c.state.value)
+    }
+
+    @Test
+    fun endCuePlaysOnlyWhenTextRecognized() {
+        val cues = FakeCues()
+        val c = RecordController({ FakeEngine().also { engines += it } }, cues) { texts += it }
+        c.toggle(); cues.startDone!!.invoke()
+        engines.last().listener!!.onFinal("кофе 250")
+        assertEquals(1, cues.ended)
+        c.toggle(); cues.startDone!!.invoke()
+        engines.last().listener!!.onFinal("")
+        assertEquals(1, cues.ended)
+    }
 }

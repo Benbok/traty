@@ -10,6 +10,17 @@
 
 **Spec:** [docs/superpowers/specs/2026-11-14-voice-quick-entry-design.md](../specs/2026-11-14-voice-quick-entry-design.md)
 
+## Статус (2026-11-14)
+
+Задачи 1–11, 13 и 15 выполнены; задача 12 (отдельный пробный запуск) пропущена, задача 14 выполнена, кроме замера на телефоне.
+GigaAM v3 проверена на телефоне Xiaomi 22041216G (Android 14) и работает.
+
+Осталось (неотмеченные шаги ниже):
+- на телефоне: плитка (Task 9, шаг 3), виджет (Task 10, шаг 5), очередь в авиарежиме (Task 11, шаг 5), панель записи
+  (Review Focus 4–5: повторный тап, отказ в микрофоне);
+- критерий готовности: ≥9 из 10 фраз с GigaAM сохранены правильно, в том числе через плитку и виджет (Task 14, шаг 6);
+- мелочи после ревью — список в README.
+
 ## Global Constraints
 
 - minSdk 26, compileSdk/targetSdk 35. Только разблокированный телефон, `showWhenLocked` не используем.
@@ -52,7 +63,7 @@
   - `object OfflineEntryParser { fun parse(text: String, categories: List<CategoryWithSubs>): List<ParsedEntry> }`
   - `class LlmHttpException(val code: Int, message: String) : IOException(message)`
 
-- [ ] **Step 1: Написать падающие тесты**
+- [x] **Step 1: Написать падающие тесты**
 
 ```kotlin
 @Test fun decodesMixedTypes() {
@@ -83,12 +94,12 @@
 }
 ```
 
-- [ ] **Step 2: Запустить, убедиться что падают**
+- [x] **Step 2: Запустить, убедиться что падают**
 
 Run: `./gradlew :app:testDebugUnitTest --tests "ru.my.traty.ai.EntryParsingTest"`
 Expected: FAIL — `Unresolved reference: EntryParsing`
 
-- [ ] **Step 3: Реализовать**
+- [x] **Step 3: Реализовать**
 
 - `EntryPrompt.system` — объединение текущих `ParsePrompt.system` и `IncomePrompt.system`: формат `{"items":[{"type":"expense"|"income", ...поля траты..., "source":"для income: одно из IncomeSources.ALL"}]}`; правило «зарплата, аванс, дежурства, перевод мне, вернули долг, кэшбэк → income; остальное — expense»; «несколько операций — несколько элементов, могут быть разного типа». Остальные правила (числа словами, даты, категории, выученные правила) — дословно из `ParsePrompt`.
 - `decode` — та же логика чистки ```/массива, что в `ExpenseParsing.decode`; фильтр `amount > 0`; для `income` — `source = IncomeSources.normalize(source ?: IncomeSources.DEFAULT)`.
@@ -96,9 +107,9 @@ Expected: FAIL — `Unresolved reference: EntryParsing`
 - `LlmClients.kt:45`: `throw LlmHttpException(r.code, "HTTP ${r.code}: ${text.take(300)}")`.
 - `ExpenseParsing`/`IncomeParsing` пока не удалять (используются `testConnection`); удаление — в Task 7.
 
-- [ ] **Step 4: Запустить тесты** — тот же Run, Expected: PASS (6 tests)
+- [x] **Step 4: Запустить тесты** — тот же Run, Expected: PASS (6 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/src/main/java/ru/my/traty/ai/EntryParsing.kt app/src/main/java/ru/my/traty/ai/LlmClients.kt app/src/test/java/ru/my/traty/ai/EntryParsingTest.kt
@@ -117,7 +128,7 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
   - `data class RuledEntry(val entry: ParsedEntry, val matchedRule: Rule?)` + `val ruleMatched get() = matchedRule != null`
   - `object RuleMatcher { fun apply(entries: List<ParsedEntry>, rules: List<Rule>, categories: List<CategoryWithSubs>): List<RuledEntry> }`
 
-- [ ] **Step 1: Падающие тесты**
+- [x] **Step 1: Падающие тесты**
 
 ```kotlin
 // rules: Rule(id=1, pattern="пятёрочка", categoryId=<Продукты>), Rule(id=2, pattern="кафе", categoryId=<Кафе и рестораны>)
@@ -137,10 +148,10 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
 @Test fun subcategoryFromRuleWins() { /* правило с subcategoryId → entry.subcategory == имя подкатегории */ }
 ```
 
-- [ ] **Step 2: Run** `./gradlew :app:testDebugUnitTest --tests "ru.my.traty.capture.RuleMatcherTest"` — Expected: FAIL (unresolved)
-- [ ] **Step 3: Реализовать** — поиск: `listOfNotNull(place, note).joinToString(" ").lowercase().contains(rule.pattern)`, первый по порядку `rules` (они уже отсортированы по `hits DESC`); подстановка категории/подкатегории — как в текущем `MainViewModel.applyRules`. `incrementHits` здесь не вызывается (функция чистая) — это делает `QuickEntry` (Task 5).
-- [ ] **Step 4: Run** — Expected: PASS
-- [ ] **Step 5: Commit** — `git commit -m "feat(capture): rule matching on place/note only"`
+- [x] **Step 2: Run** `./gradlew :app:testDebugUnitTest --tests "ru.my.traty.capture.RuleMatcherTest"` — Expected: FAIL (unresolved)
+- [x] **Step 3: Реализовать** — поиск: `listOfNotNull(place, note).joinToString(" ").lowercase().contains(rule.pattern)`, первый по порядку `rules` (они уже отсортированы по `hits DESC`); подстановка категории/подкатегории — как в текущем `MainViewModel.applyRules`. `incrementHits` здесь не вызывается (функция чистая) — это делает `QuickEntry` (Task 5).
+- [x] **Step 4: Run** — Expected: PASS
+- [x] **Step 5: Commit** — `git commit -m "feat(capture): rule matching on place/note only"`
 
 ### Task 3: Правило автосохранения `ParsePolicy`
 
@@ -152,11 +163,11 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
 - Consumes: `RuledEntry` (Task 2)
 - Produces: `enum class EntryDecision { AUTO_SAVE, CONFIRM }`; `object ParsePolicy { fun decide(entries: List<RuledEntry>): EntryDecision }`
 
-- [ ] **Step 1: Падающие тесты** — `autoSavesWhenAllExpensesMatched` (2 траты с правилом → AUTO_SAVE); `confirmsWhenAnyIncome`; `confirmsWhenAnyWithoutRule`; `confirmsWhenEmpty`; `confirmsWhenUnknownType` (`type="goal_deposit"` с правилом → CONFIRM); `confirmsWhenZeroAmount`.
-- [ ] **Step 2: Run** `--tests "ru.my.traty.capture.ParsePolicyTest"` — FAIL
-- [ ] **Step 3: Реализовать** — `AUTO_SAVE` iff `entries.isNotEmpty() && entries.all { it.entry.entryType == EntryType.EXPENSE && it.entry.amount > 0 && it.ruleMatched }`.
-- [ ] **Step 4: Run** — PASS
-- [ ] **Step 5: Commit** — `git commit -m "feat(capture): autosave policy"`
+- [x] **Step 1: Падающие тесты** — `autoSavesWhenAllExpensesMatched` (2 траты с правилом → AUTO_SAVE); `confirmsWhenAnyIncome`; `confirmsWhenAnyWithoutRule`; `confirmsWhenEmpty`; `confirmsWhenUnknownType` (`type="goal_deposit"` с правилом → CONFIRM); `confirmsWhenZeroAmount`.
+- [x] **Step 2: Run** `--tests "ru.my.traty.capture.ParsePolicyTest"` — FAIL
+- [x] **Step 3: Реализовать** — `AUTO_SAVE` iff `entries.isNotEmpty() && entries.all { it.entry.entryType == EntryType.EXPENSE && it.entry.amount > 0 && it.ruleMatched }`.
+- [x] **Step 4: Run** — PASS
+- [x] **Step 5: Commit** — `git commit -m "feat(capture): autosave policy"`
 
 ### Task 4: Таблица очереди и миграция 6→7
 
@@ -173,11 +184,11 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
   - `AppDatabase.pendingPhrases(): PendingPhraseDao`
   - `ExpenseDao.sumRange(startMillis: Long, endMillisExclusive: Long): Long` — `SELECT COALESCE(SUM(amountKopecks),0) FROM expenses WHERE timestamp >= :startMillis AND timestamp < :endMillisExclusive`
 
-- [ ] **Step 1: Падающий тест** `upgradesFrom6To7KeepingData` в `DatabaseUpgradeTest` — создать базу v6 (SQL из `6.json`, по образцу `createV3Database`), вставить трату, открыть через `AppDatabase.build(context, dbName)`; assert: трата на месте, `pendingPhrases().insert(...)` и `getByStatus(WAITING)` работают.
-- [ ] **Step 2: Run** `--tests "ru.my.traty.data.DatabaseUpgradeTest"` — FAIL (нет миграции / нет DAO)
-- [ ] **Step 3: Реализовать** — `MIGRATION_6_7`: `CREATE TABLE IF NOT EXISTS pending_phrases (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, text TEXT NOT NULL, createdAt INTEGER NOT NULL, status TEXT NOT NULL, resultJson TEXT, error TEXT)` + `CREATE INDEX IF NOT EXISTS index_pending_phrases_status ON pending_phrases (status)`. SQL сверить с сгенерированным `7.json`.
-- [ ] **Step 4: Run** весь `DatabaseUpgradeTest` — PASS
-- [ ] **Step 5: Commit** — включая `app/schemas/.../7.json`: `git commit -m "feat(data): pending_phrases queue, migration 6->7"`
+- [x] **Step 1: Падающий тест** `upgradesFrom6To7KeepingData` в `DatabaseUpgradeTest` — создать базу v6 (SQL из `6.json`, по образцу `createV3Database`), вставить трату, открыть через `AppDatabase.build(context, dbName)`; assert: трата на месте, `pendingPhrases().insert(...)` и `getByStatus(WAITING)` работают.
+- [x] **Step 2: Run** `--tests "ru.my.traty.data.DatabaseUpgradeTest"` — FAIL (нет миграции / нет DAO)
+- [x] **Step 3: Реализовать** — `MIGRATION_6_7`: `CREATE TABLE IF NOT EXISTS pending_phrases (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, text TEXT NOT NULL, createdAt INTEGER NOT NULL, status TEXT NOT NULL, resultJson TEXT, error TEXT)` + `CREATE INDEX IF NOT EXISTS index_pending_phrases_status ON pending_phrases (status)`. SQL сверить с сгенерированным `7.json`.
+- [x] **Step 4: Run** весь `DatabaseUpgradeTest` — PASS
+- [x] **Step 5: Commit** — включая `app/schemas/.../7.json`: `git commit -m "feat(data): pending_phrases queue, migration 6->7"`
 
 ### Task 5: `QuickEntry` — общий движок ввода
 
@@ -204,8 +215,8 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
     - `fun emptyDraft(origin: EntryOrigin, rawText: String = ""): EntryDraft` — одна пустая строка EXPENSE
     - `val changes: SharedFlow<Unit>` — эмитит после каждого сохранения (для виджета, Task 10)
 
-- [ ] **Step 1: Падающие тесты `EntryDraftTest`** — `rowFromParsedExpenseUsesKnownCategory`, `rowFromUnknownCategorySuggestsNew` (как текущий `toDraft`), `rowDefaultDateIsSpokenAtDay` (`spokenAt` = 2026-11-13 12:00 → `dateText == "2026-11-13"`), `incomeRowToIncomeKeepsSource`, `invalidAmountRowIsSkipped`.
-- [ ] **Step 2: Падающие тесты `QuickEntryTest`** (Robolectric, `TestTratyApp`, фейковый `LlmClient`, возвращающий заданный JSON или бросающий исключение):
+- [x] **Step 1: Падающие тесты `EntryDraftTest`** — `rowFromParsedExpenseUsesKnownCategory`, `rowFromUnknownCategorySuggestsNew` (как текущий `toDraft`), `rowDefaultDateIsSpokenAtDay` (`spokenAt` = 2026-11-13 12:00 → `dateText == "2026-11-13"`), `incomeRowToIncomeKeepsSource`, `invalidAmountRowIsSkipped`.
+- [x] **Step 2: Падающие тесты `QuickEntryTest`** (Robolectric, `TestTratyApp`, фейковый `LlmClient`, возвращающий заданный JSON или бросающий исключение):
   - `autoSavesMatchedExpenses` — правило «пятёрочка», ответ 2 траты с place → `AutoSaved`, `count == 2`, в `expenses` 2 строки, `hits` правила вырос.
   - `mixedPhraseNeedsConfirm` — 1 трата + 1 income → `NeedsConfirm`, rows типов `[EXPENSE, INCOME]`, в базе ничего.
   - `networkErrorQueues` — клиент бросает `java.net.UnknownHostException` → `Queued`, в `pending_phrases` одна запись `WAITING` с `createdAt == spokenAt`.
@@ -214,14 +225,14 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
   - `garbageGivesEmptyRow` — ответ `{"items":[]}` → `NeedsConfirm`, одна пустая строка EXPENSE, `rawText` сохранён.
   - `replaceSwapsSavedEntries` — `save(draftFor(saved).copy(rows = отредактированные))` → старых id нет, новые есть.
   - `todayInPromptIsSpokenAtDay` — фейковый клиент запоминает `system`; `spokenAt` = 2026-11-13 → промпт содержит `2026-11-13`.
-- [ ] **Step 3: Run** `--tests "ru.my.traty.capture.*"` — FAIL
-- [ ] **Step 4: Реализовать** — логику `parseInput`/`parseIncomeInput`/`saveDraft`/`applyRules`/`toDraft` из `MainViewModel.kt` переносом, с изменениями:
+- [x] **Step 3: Run** `--tests "ru.my.traty.capture.*"` — FAIL
+- [x] **Step 4: Реализовать** — логику `parseInput`/`parseIncomeInput`/`saveDraft`/`applyRules`/`toDraft` из `MainViewModel.kt` переносом, с изменениями:
   - сетевая ошибка = `IOException`, кроме `LlmHttpException` → `pendingPhrases().insert(PendingPhrase(text = text, createdAt = spokenAt))` → `Queued`;
   - `LlmHttpException` и `SerializationException`/`IllegalArgumentException` → `OfflineEntryParser` + `NeedsConfirm(notice = "${client.name}: … Использован простой разбор.")`;
   - после `RuleMatcher.apply` — `incrementHits` для сработавших правил; решение — `ParsePolicy.decide`; при `AUTO_SAVE` — `save()`.
   - `RuleOffer` — как сейчас: по первой сохранённой трате с непустым place без правила.
-- [ ] **Step 5: Run** — PASS; затем весь `./gradlew :app:testDebugUnitTest` — PASS
-- [ ] **Step 6: Commit** — `git commit -m "feat(capture): QuickEntry shared entry pipeline"`
+- [x] **Step 5: Run** — PASS; затем весь `./gradlew :app:testDebugUnitTest` — PASS
+- [x] **Step 6: Commit** — `git commit -m "feat(capture): QuickEntry shared entry pipeline"`
 
 ### Task 6: Общий экран подтверждения `EntryConfirmSheet`
 
@@ -233,10 +244,10 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
 - Consumes: `EntryDraft`, `EntryRow`, `EntryType` (Task 5); `CategoryWithSubs`; `IncomeSources.ALL`.
 - Produces: `@Composable fun EntryConfirmSheet(draft: EntryDraft, categories: List<CategoryWithSubs>, onDismiss: () -> Unit, onSave: (EntryDraft) -> Unit, modifier: Modifier = Modifier)`
 
-- [ ] **Step 1: Реализовать** — список строк; у каждой строки переключатель «Трата / Пополнение» (segmented button); для траты — поля и выбор категории/подкатегории как в текущем `ConfirmDialog.kt`, для пополнения — сумма, источник, заметка, дата как в `IncomeConfirmDialog.kt`; «+ строка», удаление строки; кнопка «Сохранить N». Поля переиспользовать из существующих диалогов (вынести общие composable, если они там приватные), `DateField.kt` — как есть.
-- [ ] **Step 2: Превью** — `@Preview` со смешанным черновиком («кофе 250, такси 400, зарплата 80000»); проверить через render compose preview.
-- [ ] **Step 3: Сборка** `./gradlew :app:assembleDebug` — BUILD SUCCESSFUL
-- [ ] **Step 4: Commit** — `git commit -m "feat(ui): unified confirm sheet for mixed entries"`
+- [x] **Step 1: Реализовать** — список строк; у каждой строки переключатель «Трата / Пополнение» (segmented button); для траты — поля и выбор категории/подкатегории как в текущем `ConfirmDialog.kt`, для пополнения — сумма, источник, заметка, дата как в `IncomeConfirmDialog.kt`; «+ строка», удаление строки; кнопка «Сохранить N». Поля переиспользовать из существующих диалогов (вынести общие composable, если они там приватные), `DateField.kt` — как есть.
+- [x] **Step 2: Превью** — `@Preview` со смешанным черновиком («кофе 250, такси 400, зарплата 80000»); проверить через render compose preview.
+- [x] **Step 3: Сборка** `./gradlew :app:assembleDebug` — BUILD SUCCESSFUL
+- [x] **Step 4: Commit** — `git commit -m "feat(ui): unified confirm sheet for mixed entries"`
 
 ### Task 7: `SpeechEngine` + системный движок + новая главная
 
@@ -266,15 +277,15 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
   - `MainViewModel`: `var confirm: EntryDraft?`, `var lastSaved: Pair<SavedEntries, EntryDraft>?` (для «Изменить»), `fun onSpokenText(text: String)`, `fun saveEntry(d: EntryDraft)`, `fun editLastSaved()`, `val pending: StateFlow<List<PendingPhrase>>`, `fun openParsedPending(p: PendingPhrase)`; `useTemplate` остаётся.
   - `@Composable fun MicButton(state: RecordState, onClick: () -> Unit, modifier: Modifier = Modifier)` — крупная круглая кнопка (≈96 dp) с пульсацией по `level`, под ней строка `partial`.
 
-- [ ] **Step 1: Падающие тесты `MainViewModelEntryTest`** (по образцу `MainViewModelDeleteTest`, фейковый клиент через `TestTratyApp` → `AppContainer` принимает `quickEntry` параметром):
+- [x] **Step 1: Падающие тесты `MainViewModelEntryTest`** (по образцу `MainViewModelDeleteTest`, фейковый клиент через `TestTratyApp` → `AppContainer` принимает `quickEntry` параметром):
   - `spokenMixedPhraseOpensConfirm` — `onSpokenText(...)` → `confirm != null`, 2 строки.
   - `spokenMatchedPhraseAutosavesAndOffersEdit` — `message == "Сохранено 2"`, `lastSaved != null`; `editLastSaved()` → `confirm.replaces == lastSaved.first`.
   - `queuedPhraseShowsNotice` — сетевая ошибка → `message == "Нет сети, разберу позже"`, `pending.value.size == 1`.
-- [ ] **Step 2: Run** `--tests "ru.my.traty.ui.MainViewModelEntryTest"` — FAIL
-- [ ] **Step 3: Реализовать** ViewModel, `SystemSpeechEngine`, `RecordController`, `MicButton`, правки `HomeScreen`/`TratyRoot`; запрос `RECORD_AUDIO` через `rememberLauncherForActivityResult(RequestPermission())` при первом нажатии; отказ → `message = "Нужен доступ к микрофону"`. Пустой список на главной: текст «Нажмите 🎤 и скажите, например: «кофе 250 и такси 400»». Карточки очереди над лентой: «N фраз ждут разбора» (WAITING, без действия) и «Разобрано, проверьте» (PARSED → `openParsedPending`, после сохранения запись удаляется).
-- [ ] **Step 4: Run** весь `./gradlew :app:testDebugUnitTest` — PASS; `./gradlew :app:assembleDebug` — BUILD SUCCESSFUL
-- [ ] **Step 5: Проверка на устройстве** — установить; сказать «кофе 250 и такси 400» → подтверждение с 2 строками; создать правило «пятёрочка», сказать «пятёрочка 500» → снекбар «Сохранено 1 · Изменить»; «Изменить» открывает строку; «зарплата 80 тысяч и кофе 200» → подтверждение со строками разного типа; запретить микрофон → сообщение, не падает.
-- [ ] **Step 6: Commit** — `git commit -m "feat(home): single mic button, unified voice entry"`
+- [x] **Step 2: Run** `--tests "ru.my.traty.ui.MainViewModelEntryTest"` — FAIL
+- [x] **Step 3: Реализовать** ViewModel, `SystemSpeechEngine`, `RecordController`, `MicButton`, правки `HomeScreen`/`TratyRoot`; запрос `RECORD_AUDIO` через `rememberLauncherForActivityResult(RequestPermission())` при первом нажатии; отказ → `message = "Нужен доступ к микрофону"`. Пустой список на главной: текст «Нажмите 🎤 и скажите, например: «кофе 250 и такси 400»». Карточки очереди над лентой: «N фраз ждут разбора» (WAITING, без действия) и «Разобрано, проверьте» (PARSED → `openParsedPending`, после сохранения запись удаляется).
+- [x] **Step 4: Run** весь `./gradlew :app:testDebugUnitTest` — PASS; `./gradlew :app:assembleDebug` — BUILD SUCCESSFUL
+- [x] **Step 5: Проверка на устройстве** — установить; сказать «кофе 250 и такси 400» → подтверждение с 2 строками; создать правило «пятёрочка», сказать «пятёрочка 500» → снекбар «Сохранено 1 · Изменить»; «Изменить» открывает строку; «зарплата 80 тысяч и кофе 200» → подтверждение со строками разного типа; запретить микрофон → сообщение, не падает.
+- [x] **Step 6: Commit** — `git commit -m "feat(home): single mic button, unified voice entry"`
 
 ---
 
@@ -291,11 +302,11 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
 - Consumes: `QuickEntry`, `RecordController`, `SpeechEngines`, `EntryConfirmSheet`, `MicButton`.
 - Produces: `CaptureActivity` (exported=false; запускается `Intent(context, CaptureActivity::class.java)`), `CaptureViewModel` с `sealed interface CaptureUi { Recording; Confirm(draft); Saved(result, draft); Queued; Error(message) }` и `fun finishRequested: StateFlow<Boolean>`.
 
-- [ ] **Step 1: Падающие тесты `CaptureViewModelTest`** — `autosaveShowsSavedThenFinishes` (Saved → через 2 000 мс `finishRequested == true`, с `TestDispatcher.advanceTimeBy`); `editFromSavedOpensConfirmWithReplaces`; `queuedFinishesAfterNotice`; `confirmSaveFinishes`.
-- [ ] **Step 2: Run** `--tests "ru.my.traty.ui.capture.CaptureViewModelTest"` — FAIL
-- [ ] **Step 3: Реализовать** — манифест: `android:theme="@style/Theme.Traty.Capture"`, `launchMode="singleInstance"`, `taskAffinity="ru.my.traty.capture"`, `excludeFromRecents="true"`, `noHistory="false"`; `onNewIntent` — игнорировать, если запись идёт. Открытие → (нет разрешения → запрос) → сразу `RecordController.toggle()`. Панель — нижний лист: `MicButton`, текст, «Отмена»; тап вне листа / «назад» — `cancel()` + `finish()`. После сохранения — `TratyWidget.updateAll` (Task 10; до него — no-op).
-- [ ] **Step 4: Run** — PASS; assembleDebug — SUCCESS
-- [ ] **Step 5: Commit** — `git commit -m "feat(capture): translucent quick capture activity"`
+- [x] **Step 1: Падающие тесты `CaptureViewModelTest`** — `autosaveShowsSavedThenFinishes` (Saved → через 2 000 мс `finishRequested == true`, с `TestDispatcher.advanceTimeBy`); `editFromSavedOpensConfirmWithReplaces`; `queuedFinishesAfterNotice`; `confirmSaveFinishes`.
+- [x] **Step 2: Run** `--tests "ru.my.traty.ui.capture.CaptureViewModelTest"` — FAIL
+- [x] **Step 3: Реализовать** — манифест: `android:theme="@style/Theme.Traty.Capture"`, `launchMode="singleInstance"`, `taskAffinity="ru.my.traty.capture"`, `excludeFromRecents="true"`, `noHistory="false"`; `onNewIntent` — игнорировать, если запись идёт. Открытие → (нет разрешения → запрос) → сразу `RecordController.toggle()`. Панель — нижний лист: `MicButton`, текст, «Отмена»; тап вне листа / «назад» — `cancel()` + `finish()`. После сохранения — `TratyWidget.updateAll` (Task 10; до него — no-op).
+- [x] **Step 4: Run** — PASS; assembleDebug — SUCCESS
+- [x] **Step 5: Commit** — `git commit -m "feat(capture): translucent quick capture activity"`
 
 ### Task 9: Плитка в шторке
 
@@ -306,10 +317,10 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
 **Interfaces:**
 - Consumes: `CaptureActivity`.
 
-- [ ] **Step 1: Реализовать** `onClick()`: `if (isLocked) unlockAndRun { launch() } else launch()`; `launch()`: API ≥ 34 — `startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, FLAG_IMMUTABLE or FLAG_UPDATE_CURRENT))`, иначе `@Suppress("DEPRECATION") startActivityAndCollapse(intent.addFlags(FLAG_ACTIVITY_NEW_TASK))`. `onStartListening`: `qsTile.state = Tile.STATE_INACTIVE; updateTile()`.
-- [ ] **Step 2: Сборка** — SUCCESS
-- [ ] **Step 3: Проверка на устройстве** — добавить плитку в шторку; тап → шторка закрывается, панель записи поверх текущего приложения, главное приложение не открывается; тап на заблокированном → просит разблокировать, затем панель.
-- [ ] **Step 4: Commit** — `git commit -m "feat(tile): quick settings voice tile"`
+- [x] **Step 1: Реализовать** `onClick()`: `if (isLocked) unlockAndRun { launch() } else launch()`; `launch()`: API ≥ 34 — `startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, FLAG_IMMUTABLE or FLAG_UPDATE_CURRENT))`, иначе `@Suppress("DEPRECATION") startActivityAndCollapse(intent.addFlags(FLAG_ACTIVITY_NEW_TASK))`. `onStartListening`: `qsTile.state = Tile.STATE_INACTIVE; updateTile()`.
+- [x] **Step 2: Сборка** — SUCCESS
+- [ ] **Step 3: Проверка на устройстве** — добавить плитку в шторку; тап → шторка закрывается, панель записи поверх текущего приложения, главное приложение не открывается; тап на заблокированном → просит разблокировать, затем панель. — **не проверено на телефоне**
+- [x] **Step 4: Commit** — `git commit -m "feat(tile): quick settings voice tile"`
 
 ### Task 10: Виджет на рабочем столе
 
@@ -324,12 +335,12 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
 - Consumes: `ExpenseDao.sumRange` (Task 4), `BillingPeriod.containing`, `SettingsRepository`, `QuickEntry.changes`.
 - Produces: `data class WidgetTotals(val todayKopecks: Long, val periodKopecks: Long)`; `suspend fun loadWidgetTotals(db: AppDatabase, settings: AppSettings, today: LocalDate, zone: ZoneId): WidgetTotals`.
 
-- [ ] **Step 1: Падающий тест `WidgetTotalsTest`** — `periodStartDay = 10`, today = 2026-11-14; траты 2026-11-09 (100 ₽, прошлый период), 2026-11-10 (200 ₽), 2026-11-14 (300 ₽), запись «Неучтённые» 2026-11-12 (50 ₽), доход 2026-11-14 → `today == 30000`, `period == 55000` (доход не учитывается).
-- [ ] **Step 2: Run** `--tests "ru.my.traty.widget.WidgetTotalsTest"` — FAIL
-- [ ] **Step 3: Реализовать** — Glance-виджет 2×1 (resizable до 4×2): кнопка «🎤 Сказать трату» (`actionStartActivity<CaptureActivity>()`), строки «Сегодня: X», «За период: Y» через `formatRub`; `updatePeriodMillis = 86400000`.
-- [ ] **Step 4: Run** — PASS; assembleDebug — SUCCESS
-- [ ] **Step 5: Проверка на устройстве** — добавить виджет; тап → панель записи; после сохранения суммы обновились.
-- [ ] **Step 6: Commit** — `git commit -m "feat(widget): home screen voice widget with totals"`
+- [x] **Step 1: Падающий тест `WidgetTotalsTest`** — `periodStartDay = 10`, today = 2026-11-14; траты 2026-11-09 (100 ₽, прошлый период), 2026-11-10 (200 ₽), 2026-11-14 (300 ₽), запись «Неучтённые» 2026-11-12 (50 ₽), доход 2026-11-14 → `today == 30000`, `period == 55000` (доход не учитывается).
+- [x] **Step 2: Run** `--tests "ru.my.traty.widget.WidgetTotalsTest"` — FAIL
+- [x] **Step 3: Реализовать** — Glance-виджет 2×1 (resizable до 4×2): кнопка «🎤 Сказать трату» (`actionStartActivity<CaptureActivity>()`), строки «Сегодня: X», «За период: Y» через `formatRub`; `updatePeriodMillis = 86400000`.
+- [x] **Step 4: Run** — PASS; assembleDebug — SUCCESS
+- [ ] **Step 5: Проверка на устройстве** — добавить виджет; тап → панель записи; после сохранения суммы обновились. — **не проверено на телефоне**
+- [x] **Step 6: Commit** — `git commit -m "feat(widget): home screen voice widget with totals"`
 
 ---
 
@@ -347,12 +358,12 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
 - Consumes: `PendingPhraseDao`, `QuickEntry.process` (с `spokenAt = createdAt`).
 - Produces: `QuickEntry.processPending(): Int` (сколько фраз обработано); `object PendingParseWork { fun enqueue(context: Context) }` — `enqueueUniqueWork("pending-parse", ExistingWorkPolicy.KEEP, OneTimeWorkRequest с Constraints(NetworkType.CONNECTED) и экспоненциальным backoff)`.
 
-- [ ] **Step 1: Падающие тесты `PendingParseTest`** — `matchedPhraseIsSavedAndRemoved`; `mixedPhraseBecomesParsedWithDraftJson` (status PARSED, `resultJson` декодируется в `EntryDraft` с 2 строками); `stillOfflineStaysWaiting` (клиент снова бросает `UnknownHostException` → WAITING, `processPending` возвращает 0 и worker вернёт `Result.retry()`); `relativeDateUsesCreatedAt` (createdAt = 2026-11-13, клиент получает «Сегодня: 2026-11-13»).
-- [ ] **Step 2: Run** `--tests "ru.my.traty.capture.PendingParseTest"` — FAIL
-- [ ] **Step 3: Реализовать** — `processPending` проходит `getByStatus(WAITING)`: `AutoSaved` → `delete(id)`; `NeedsConfirm` → `update(status = PARSED, resultJson = Json.encodeToString(draft))`; `Queued` от повторной сетевой ошибки — не создавать новую запись (вызывать внутренний разбор без вставки в очередь) и прекратить проход. Worker: `processPending()`; если остались WAITING → `Result.retry()`. Также ставить работу при старте приложения, если есть WAITING.
-- [ ] **Step 4: Run** — PASS; весь набор — PASS
-- [ ] **Step 5: Проверка на устройстве** — авиарежим → сказать «пятёрочка 500 и зарплата 1000» → «Нет сети, разберу позже», карточка «1 фраза ждёт разбора»; выключить авиарежим → карточка «Разобрано, проверьте» → подтверждение со строками.
-- [ ] **Step 6: Commit** — `git commit -m "feat(capture): offline phrase queue with background parsing"`
+- [x] **Step 1: Падающие тесты `PendingParseTest`** — `matchedPhraseIsSavedAndRemoved`; `mixedPhraseBecomesParsedWithDraftJson` (status PARSED, `resultJson` декодируется в `EntryDraft` с 2 строками); `stillOfflineStaysWaiting` (клиент снова бросает `UnknownHostException` → WAITING, `processPending` возвращает 0 и worker вернёт `Result.retry()`); `relativeDateUsesCreatedAt` (createdAt = 2026-11-13, клиент получает «Сегодня: 2026-11-13»).
+- [x] **Step 2: Run** `--tests "ru.my.traty.capture.PendingParseTest"` — FAIL
+- [x] **Step 3: Реализовать** — `processPending` проходит `getByStatus(WAITING)`: `AutoSaved` → `delete(id)`; `NeedsConfirm` → `update(status = PARSED, resultJson = Json.encodeToString(draft))`; `Queued` от повторной сетевой ошибки — не создавать новую запись (вызывать внутренний разбор без вставки в очередь) и прекратить проход. Worker: `processPending()`; если остались WAITING → `Result.retry()`. Также ставить работу при старте приложения, если есть WAITING.
+- [x] **Step 4: Run** — PASS; весь набор — PASS
+- [ ] **Step 5: Проверка на устройстве** — авиарежим → сказать «пятёрочка 500 и зарплата 1000» → «Нет сети, разберу позже», карточка «1 фраза ждёт разбора»; выключить авиарежим → карточка «Разобрано, проверьте» → подтверждение со строками. — **не проверено на телефоне**
+- [x] **Step 6: Commit** — `git commit -m "feat(capture): offline phrase queue with background parsing"`
 
 ---
 
@@ -364,11 +375,11 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
 - Modify: `app/build.gradle.kts` — sherpa-onnx: AAR последнего релиза из `github.com/k2-fsa/sherpa-onnx/releases` в `app/libs/` (`implementation(files("libs/sherpa-onnx-<ver>.aar"))`), `ndk { abiFilters += "arm64-v8a" }`
 - Create: `docs/superpowers/notes/2026-xx-gigaam-spike.md` — итог
 
-- [ ] **Step 1:** Скачать на ПК кандидата №1 — GigaAM v3 e2e CTC int8 из `huggingface.co/protocolvoice/asr-models` (файл модели + tokens), Silero VAD (`silero_vad.onnx` из релизов sherpa-onnx). Скопировать на телефон: `adb push <files> /sdcard/Android/data/ru.my.traty/files/models/gigaam/`.
-- [ ] **Step 2:** Временная кнопка в debug-настройках: загрузить `OfflineRecognizer` (тип модели — по карточке модели: NeMo CTC), распознать 5 фраз из WAV/микрофона: «кофе двести пятьдесят и такси четыреста», «пятёрочка полторы тысячи», «пришла зарплата восемьдесят тысяч», «вчера аптека шестьсот сорок», «доставка еды тысяча двести и мойка пятьсот». Замерить время загрузки модели и распознавания, пиковую память.
-- [ ] **Step 3:** Если v3 не грузится или ≥2 фразы из 5 с ошибкой в сумме — повторить с официальной GigaAM v2 sherpa-onnx (`sherpa-onnx-nemo-ctc-giga-am-v2-russian-2025-04-19` или transducer 2024-10-24).
-- [ ] **Step 4:** Записать в заметку: выбранная модель, URL каждого файла, размеры и SHA-256, тип модели для sherpa-конфига, замеры. Удалить временную кнопку.
-- [ ] **Step 5: Commit** — `git commit -m "chore(speech): gigaam spike notes, sherpa-onnx dependency"`
+- [x] **Step 1:** Скачать на ПК кандидата №1 — GigaAM v3 e2e CTC int8 из `huggingface.co/protocolvoice/asr-models` (файл модели + tokens), Silero VAD (`silero_vad.onnx` из релизов sherpa-onnx). Скопировать на телефон: `adb push <files> /sdcard/Android/data/ru.my.traty/files/models/gigaam/`.
+- [ ] **Step 2:** Временная кнопка в debug-настройках: загрузить `OfflineRecognizer` (тип модели — по карточке модели: NeMo CTC), распознать 5 фраз из WAV/микрофона: «кофе двести пятьдесят и такси четыреста», «пятёрочка полторы тысячи», «пришла зарплата восемьдесят тысяч», «вчера аптека шестьсот сорок», «доставка еды тысяча двести и мойка пятьсот». Замерить время загрузки модели и распознавания, пиковую память. — **пропущено**: движок написан сразу, модель проверена уже в составе приложения
+- [ ] **Step 3:** Если v3 не грузится или ≥2 фразы из 5 с ошибкой в сумме — повторить с официальной GigaAM v2 sherpa-onnx (`sherpa-onnx-nemo-ctc-giga-am-v2-russian-2025-04-19` или transducer 2024-10-24). — **не понадобилось**: v3 работает на телефоне
+- [x] **Step 4:** Записать в заметку: выбранная модель, URL каждого файла, размеры и SHA-256, тип модели для sherpa-конфига, замеры. Удалить временную кнопку. — сведения о модели (URL, размер, SHA-256, словарь, VAD) записаны в README вместо отдельной заметки; замеров скорости и памяти нет
+- [x] **Step 5: Commit** — `git commit -m "chore(speech): gigaam spike notes, sherpa-onnx dependency"`
 
 ### Task 13: `ModelManager` — скачивание и проверка модели
 
@@ -386,11 +397,11 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
   - `sealed interface ModelState { Missing; Downloading(progress: Float); Ready(dir: File); Failed(message: String) }`
   - `class ModelManager(context: Context, manifest: ModelManifest = GIGAAM_MANIFEST, http: OkHttpClient = OkHttpClient())`: `val state: StateFlow<ModelState>`, `suspend fun download()`, `fun delete()`, `fun refresh()` (проверяет `getExternalFilesDir("models/gigaam")` — ручное копирование — и `filesDir/models/gigaam`)
 
-- [ ] **Step 1: Падающие тесты** (MockWebServer или фейковый `OkHttpClient` interceptor) — `missingWhenNoFiles`; `readyWhenAllFilesWithRightSize` (файлы созданы вручную с нужным размером → Ready; SHA проверяется только после скачивания); `downloadWritesTmpThenRenames` (после успешной загрузки нет `*.part`, state Ready); `badHashFailsAndDeletesPart`; `interruptedDownloadLeavesMissing`.
-- [ ] **Step 2: Run** `--tests "ru.my.traty.speech.ModelManagerTest"` — FAIL
-- [ ] **Step 3: Реализовать** — файлы качаются по одному в `<name>.part`, прогресс по сумме байтов, проверка SHA-256, `renameTo`. Добавить `testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")`, если выбран MockWebServer.
-- [ ] **Step 4: Run** — PASS
-- [ ] **Step 5: Commit** — `git commit -m "feat(speech): model manager with download and verification"`
+- [x] **Step 1: Падающие тесты** (MockWebServer или фейковый `OkHttpClient` interceptor) — `missingWhenNoFiles`; `readyWhenAllFilesWithRightSize` (файлы созданы вручную с нужным размером → Ready; SHA проверяется только после скачивания); `downloadWritesTmpThenRenames` (после успешной загрузки нет `*.part`, state Ready); `badHashFailsAndDeletesPart`; `interruptedDownloadLeavesMissing`.
+- [x] **Step 2: Run** `--tests "ru.my.traty.speech.ModelManagerTest"` — FAIL
+- [x] **Step 3: Реализовать** — файлы качаются по одному в `<name>.part`, прогресс по сумме байтов, проверка SHA-256, `renameTo`. Добавить `testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")`, если выбран MockWebServer.
+- [x] **Step 4: Run** — PASS
+- [x] **Step 5: Commit** — `git commit -m "feat(speech): model manager with download and verification"`
 
 ### Task 14: `GigaAmEngine` и выбор движка
 
@@ -405,18 +416,18 @@ git commit -m "feat(ai): unified expense/income parsing with type field"
   - `class VadSegmenter(silenceToStopMs: Int = 1500, maxDurationMs: Int = 30_000)` — чистая логика поверх флагов «речь/тишина» от VAD: `fun onFrame(isSpeech: Boolean, frameMs: Int): VadAction` где `enum class VadAction { CONTINUE, SEGMENT_END, STOP }`
   - `class GigaAmEngine(context: Context, modelDir: File, kind: String) : SpeechEngine`
 
-- [ ] **Step 1: Падающие тесты `VadSegmenterTest`** — `silenceBeforeSpeechNeverStops` (5 с тишины до речи → только CONTINUE; общий лимит 30 с всё равно действует); `pauseAfterSpeechEndsSegment` (речь, затем 400 мс тишины → SEGMENT_END один раз); `longPauseStops` (речь, затем 1500 мс тишины → STOP); `maxDurationStops` (30 с непрерывной речи → STOP).
-- [ ] **Step 2: Run** `--tests "ru.my.traty.speech.VadSegmenterTest"` — FAIL
-- [ ] **Step 3: Реализовать** `VadSegmenter`; Run — PASS
-- [ ] **Step 4: Реализовать `GigaAmEngine`** — `AudioRecord` 16 кГц mono PCM16 на отдельном потоке (`Dispatchers.IO`); Silero VAD (sherpa `Vad`, модель из assets) → `VadSegmenter`; на `SEGMENT_END` — распознать сегмент `OfflineRecognizer`, `onPartial(накопленный текст)`; на `STOP`/`stop()` — распознать остаток, `onFinal(весь текст)`; `onLevel` — RMS кадра. `OfflineRecognizer` создаётся в `start()` и освобождается через 30 с после `onFinal` (повторная запись в этом окне переиспользует его); `release()` освобождает сразу.
-- [ ] **Step 5: Сборка** — SUCCESS; весь набор тестов — PASS
-- [ ] **Step 6: Проверка на устройстве** — с моделью: 10 фраз из Task 12 + 5 смешанных через плитку и виджет; цель — ≥9 из 10 сохранены правильно (сумма, тип, категория после подтверждения/автосохранения). Без модели — кнопка работает через системный движок. Авиарежим — распознавание работает, фраза уходит в очередь.
-- [ ] **Step 7: Commit** — `git commit -m "feat(speech): on-device GigaAM engine"`
+- [x] **Step 1: Падающие тесты `VadSegmenterTest`** — `silenceBeforeSpeechNeverStops` (5 с тишины до речи → только CONTINUE; общий лимит 30 с всё равно действует); `pauseAfterSpeechEndsSegment` (речь, затем 400 мс тишины → SEGMENT_END один раз); `longPauseStops` (речь, затем 1500 мс тишины → STOP); `maxDurationStops` (30 с непрерывной речи → STOP).
+- [x] **Step 2: Run** `--tests "ru.my.traty.speech.VadSegmenterTest"` — FAIL
+- [x] **Step 3: Реализовать** `VadSegmenter`; Run — PASS
+- [x] **Step 4: Реализовать `GigaAmEngine`** — `AudioRecord` 16 кГц mono PCM16 на отдельном потоке (`Dispatchers.IO`); Silero VAD (sherpa `Vad`, модель из assets) → `VadSegmenter`; на `SEGMENT_END` — распознать сегмент `OfflineRecognizer`, `onPartial(накопленный текст)`; на `STOP`/`stop()` — распознать остаток, `onFinal(весь текст)`; `onLevel` — RMS кадра. `OfflineRecognizer` создаётся в `start()` и освобождается через 30 с после `onFinal` (повторная запись в этом окне переиспользует его); `release()` освобождает сразу.
+- [x] **Step 5: Сборка** — SUCCESS; весь набор тестов — PASS
+- [ ] **Step 6: Проверка на устройстве** — с моделью: 10 фраз из Task 12 + 5 смешанных через плитку и виджет; цель — ≥9 из 10 сохранены правильно (сумма, тип, категория после подтверждения/автосохранения). Без модели — кнопка работает через системный движок. Авиарежим — распознавание работает, фраза уходит в очередь. — **частично**: GigaAM на телефоне работает (проверено 2026-11-14); замер «≥9 из 10» не делался, плитка/виджет/авиарежим с GigaAM не проверялись
+- [x] **Step 7: Commit** — `git commit -m "feat(speech): on-device GigaAM engine"`
 
 ### Task 15: Документация
 
 **Files:**
 - Modify: `docs/PLAN.md` — этап 2: отметить сделанное (✅), «Готово, когда» с итогом проверки; таблица §1 строка «Голосовой ввод» → этап 2 ✅; в §3 добавить `pending_phrases` (этап 2)
 
-- [ ] **Step 1:** Обновить `PLAN.md`
-- [ ] **Step 2: Commit** — `git commit -m "docs: stage 2 done"`
+- [x] **Step 1:** Обновить `PLAN.md`
+- [x] **Step 2: Commit** — `git commit -m "docs: stage 2 done"`

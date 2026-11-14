@@ -49,6 +49,7 @@ import ru.my.traty.data.PendingStatus
 import ru.my.traty.speech.SpeechEngines
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.capture.MicButton
+import ru.my.traty.ui.capture.ChimeRecordCues
 import ru.my.traty.ui.capture.RecordController
 import ru.my.traty.ui.capture.RecordState
 import ru.my.traty.ui.designsystem.components.TratyButton
@@ -134,7 +135,7 @@ fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: Reconcile
     val totalIncome = remember(displayedIncomes) { displayedIncomes.sumOf { it.amountKopecks } }
 
     val context = LocalContext.current
-    val recorder = remember { RecordController({ SpeechEngines.create(context, vm.settings.value) }) { vm.onSpokenText(it) } }
+    val recorder = remember { RecordController({ SpeechEngines.create(context, vm.settings.value) }, ChimeRecordCues()) { vm.onSpokenText(it) } }
     DisposableEffect(recorder) { onDispose { recorder.cancel() } }
     val recordState by recorder.state.collectAsStateWithLifecycle()
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
