@@ -131,6 +131,8 @@ fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
                             repeatText(item, PlanMonth.of(period)),
                             style = TratyTheme.typography.labelSmall,
                             color = TratyTheme.colors.onSurfaceVariant,
+                            // Под текстом строки, а не под значком категории (32 dp значок + отступ)
+                            modifier = Modifier.padding(start = 32.dp + TratyTheme.spacing.md),
                         )
                     }
                 }

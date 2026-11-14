@@ -157,3 +157,27 @@ class PlanProgressTest {
         assertEquals(listOf(2L, 1L), list.map { it.plan.categoryId })
     }
 }
+
+class PlanOverviewTest {
+    private val period = BillingPeriod(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 30))
+
+    @Test
+    fun runningPeriodGivesElapsedAndPerDay() {
+        // 15 ноября: прошло 15 из 30 дней, осталось 16 с сегодняшним
+        val o = PlanOverview.of(25_000_00, 6_945_00, period, LocalDate.of(2026, 11, 15))
+        assertEquals(0.5f, o.elapsed!!, 0.0001f)
+        assertEquals(16, o.daysLeft)
+        assertEquals(18_055_00L / 16, o.perDay)
+    }
+
+    @Test
+    fun pastAndFuturePeriods() {
+        val past = PlanOverview.of(25_000_00, 30_000_00, period, LocalDate.of(2026, 12, 2))
+        assertEquals(1f, past.elapsed!!, 0.0001f)
+        assertEquals(0, past.daysLeft)
+        assertNull(past.perDay)
+        val future = PlanOverview.of(25_000_00, 0, period, LocalDate.of(2026, 10, 2))
+        assertNull(future.elapsed)
+        assertNull(future.perDay)
+    }
+}

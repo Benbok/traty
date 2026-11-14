@@ -154,3 +154,31 @@ object PlanProgresses {
         plans.map { of(it, spent[it.key] ?: 0L, period, today) }
             .sortedWith(compareByDescending<PlanProgress> { it.status.ordinal }.thenByDescending { it.fraction })
 }
+
+/** Сводка по всем планам периода: для шапки карточки «План трат». */
+data class PlanOverview(
+    val planned: Long,
+    val spent: Long,
+    /** Доля прошедших дней периода (0..1), считая сегодняшний; null — период ещё не начался. */
+    val elapsed: Float?,
+    /** Сколько дней осталось, считая сегодняшний; 0 — период прошёл. */
+    val daysLeft: Int,
+    val daysTotal: Int,
+) {
+    val remaining: Long get() = planned - spent
+    val fraction: Float get() = if (planned > 0) spent.toFloat() / planned else 0f
+
+    /** Можно тратить в день до конца периода; null — период не идёт или остатка нет. */
+    val perDay: Long? get() = if (daysLeft > 0 && elapsed != null && remaining > 0) remaining / daysLeft else null
+
+    companion object {
+        fun of(planned: Long, spent: Long, period: BillingPeriod, today: LocalDate): PlanOverview {
+            val total = (java.time.temporal.ChronoUnit.DAYS.between(period.startDate, period.endDate) + 1).toInt()
+            val pace = SpendingPaces.of(period, today, spent)
+            val running = pace?.forecast != null
+            val elapsed = pace?.let { it.daysPassed.toFloat() / total }
+            val left = if (running) pace!!.daysLeft + 1 else 0
+            return PlanOverview(planned, spent, elapsed, left, total)
+        }
+    }
+}
