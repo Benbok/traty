@@ -67,7 +67,7 @@ private fun CaptureScreen(vm: CaptureViewModel, onFinish: () -> Unit) {
     val finish by vm.finishRequested.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
 
-    val recorder = remember { RecordController({ SpeechEngines.create(context, vm.settings.value) }) { vm.onSpokenText(it) } }
+    val recorder = remember { RecordController({ SpeechEngines.create(context, vm.settings.value) }, ChimeRecordCues()) { vm.onSpokenText(it) } }
     val recordState by recorder.state.collectAsStateWithLifecycle()
     DisposableEffect(recorder) { onDispose { recorder.cancel() } }
 

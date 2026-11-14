@@ -19,17 +19,19 @@ sealed interface RecordState {
  */
 class RecordController(
     private val engineFactory: () -> SpeechEngine,
+    private val cues: RecordCues = RecordCues.None,
     private val onText: (String) -> Unit,
 ) {
     private val _state = MutableStateFlow<RecordState>(RecordState.Idle)
     val state: StateFlow<RecordState> = _state.asStateFlow()
 
     private var engine: SpeechEngine? = null
+    private var engineStarted = false
 
     /** Нажатие на кнопку: начать запись или закончить текущую. */
     fun toggle() {
         when (_state.value) {
-            is RecordState.Listening -> engine?.stop()
+            is RecordState.Listening -> if (engineStarted) engine?.stop() else cancel() // нажали во время сигнала — отмена
             else -> start()
         }
     }
@@ -45,7 +47,14 @@ class RecordController(
     private fun start() {
         val e = engineFactory()
         engine = e
+        engineStarted = false
         _state.value = RecordState.Listening()
+        // Микрофон включаем после сигнала начала, чтобы он не попал в запись
+        cues.playStart { if (engine === e) startEngine(e) }
+    }
+
+    private fun startEngine(e: SpeechEngine) {
+        engineStarted = true
         e.start(object : SpeechListener {
             override fun onPartial(text: String) {
                 if (engine !== e) return
@@ -65,6 +74,7 @@ class RecordController(
                     _state.value = RecordState.Error("Не расслышал, повторите")
                 } else {
                     _state.value = RecordState.Idle
+                    cues.playEnd()
                     onText(text.trim())
                 }
             }
