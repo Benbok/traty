@@ -31,8 +31,10 @@ import androidx.compose.ui.unit.dp
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 /**
- * Большая кнопка микрофона — единственный способ ввода на главной и в панели быстрой записи.
- * Кольцо вокруг кнопки пульсирует по громкости, под кнопкой — подсказка или промежуточный текст.
+ * Кнопка микрофона — единственный способ ввода на главной и в панели быстрой записи.
+ * Кольцо вокруг кнопки пульсирует по громкости.
+ * Обычный вид (панель быстрой записи) — большая кнопка с подсказкой или промежуточным текстом под ней.
+ * [compact] (экран «Траты») — кнопка поменьше и без текста; ошибки показывает сам экран.
  */
 @Composable
 fun MicButton(
@@ -40,6 +42,7 @@ fun MicButton(
     busy: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     val listening = state as? RecordState.Listening
     val level by animateFloatAsState(targetValue = listening?.level ?: 0f, label = "micLevel")
@@ -49,34 +52,42 @@ fun MicButton(
         state is RecordState.Error -> state.message
         else -> "Нажмите и скажите: «кофе 250 и такси 400»"
     }
+    val buttonSize = if (compact) 64 else 96
+    val ringExtra = if (compact) 20 else 36
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = TratyTheme.spacing.md),
+            .padding(vertical = if (compact) TratyTheme.spacing.xs else TratyTheme.spacing.md),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.size(132.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size((buttonSize + ringExtra).dp), contentAlignment = Alignment.Center) {
             if (listening != null) {
                 Box(
                     Modifier
-                        .size((96 + 36 * level).dp)
+                        .size((buttonSize + ringExtra * level).dp)
                         .clip(CircleShape)
                         .background(TratyTheme.colors.primary.copy(alpha = 0.18f)),
                 )
             }
             Box(
                 modifier = Modifier
-                    .size(96.dp)
-                    .shadow(6.dp, CircleShape)
+                    .size(buttonSize.dp)
+                    .shadow(if (compact) 4.dp else 6.dp, CircleShape)
                     .clip(CircleShape)
                     .background(TratyTheme.colors.primary)
                     .clickable(enabled = !busy, role = Role.Button, onClick = onClick)
-                    .semantics { contentDescription = if (listening != null) "Закончить запись" else "Сказать трату" },
+                    .semantics {
+                        contentDescription = when {
+                            busy -> "Разбираю трату"
+                            listening != null -> "Закончить запись"
+                            else -> "Сказать трату"
+                        }
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 if (busy) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier.size(if (compact) 28.dp else 40.dp),
                         strokeWidth = 3.dp,
                         color = TratyTheme.colors.onPrimary,
                     )
@@ -85,12 +96,12 @@ fun MicButton(
                         imageVector = if (listening != null) Icons.Filled.Stop else Icons.Filled.Mic,
                         contentDescription = null,
                         tint = TratyTheme.colors.onPrimary,
-                        modifier = Modifier.size(44.dp),
+                        modifier = Modifier.size(if (compact) 30.dp else 44.dp),
                     )
                 }
             }
         }
-        Text(
+        if (!compact) Text(
             text = caption,
             style = TratyTheme.typography.bodyMedium,
             color = if (state is RecordState.Error && !busy) TratyTheme.colors.expense else TratyTheme.colors.onSurfaceVariant,
@@ -106,6 +117,12 @@ fun MicButton(
 @Composable
 private fun MicButtonIdlePreview() {
     TratyTheme(darkTheme = false) { MicButton(RecordState.Idle, busy = false, onClick = {}) }
+}
+
+@Preview(name = "Mic: compact", showBackground = true)
+@Composable
+private fun MicButtonCompactPreview() {
+    TratyTheme(darkTheme = false) { MicButton(RecordState.Idle, busy = false, onClick = {}, compact = true) }
 }
 
 @Preview(name = "Mic: listening", showBackground = true)

@@ -62,7 +62,6 @@ fun SettingsScreen(
     onOpenCategories: () -> Unit,
     onOpenReconcile: () -> Unit,
     onRedoReconcile: () -> Unit,
-    onOpenTemplates: () -> Unit = {},
     onOpenRules: () -> Unit = {},
     onOpenRecurring: () -> Unit = {},
     onOpenBudget: () -> Unit = {},
@@ -236,24 +235,6 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(TratyTheme.spacing.md))
                 TratyOutlinedButton(onClick = onOpenCategories) { Text("Категории и подкатегории") }
-            }
-        }
-
-        // Секция: Шаблоны
-        TratyCard(
-            modifier = Modifier.fillMaxWidth(),
-            backgroundColor = TratyTheme.colors.surface,
-        ) {
-            Column(Modifier.padding(TratyTheme.spacing.lg)) {
-                Text("Шаблоны быстрых трат", style = TratyTheme.typography.titleMedium)
-                Spacer(Modifier.height(TratyTheme.spacing.xs))
-                Text(
-                    "Чипсы над строкой ввода: одно нажатие — трата сохранена.",
-                    style = TratyTheme.typography.bodySmall,
-                    color = TratyTheme.colors.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(TratyTheme.spacing.md))
-                TratyOutlinedButton(onClick = onOpenTemplates) { Text("Управление шаблонами") }
             }
         }
 

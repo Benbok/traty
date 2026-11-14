@@ -29,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -149,6 +150,10 @@ fun HomeScreen(
     val recorder = remember { RecordController({ SpeechEngines.create(context, vm.settings.value) }, ChimeRecordCues()) { vm.onSpokenText(it) } }
     DisposableEffect(recorder) { onDispose { recorder.cancel() } }
     val recordState by recorder.state.collectAsStateWithLifecycle()
+    // Под компактной кнопкой нет текста, поэтому ошибку записи показываем всплывающим сообщением
+    LaunchedEffect(recordState) {
+        (recordState as? RecordState.Error)?.let { vm.message = it.message }
+    }
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) recorder.toggle() else vm.message = "Нужен доступ к микрофону"
     }
@@ -352,7 +357,7 @@ fun HomeScreen(
                         TratyEmptyState(
                             icon = Icons.AutoMirrored.Filled.ReceiptLong,
                             title = "Трат пока нет",
-                            description = "Нажмите микрофон и скажите, например: «кофе 250 и такси 400».",
+                            description = "Нажмите микрофон внизу и скажите, например: «кофе 250 и такси 400».",
                         )
                     }
                 }
@@ -385,18 +390,10 @@ fun HomeScreen(
             }
         }
 
-        // Чипсы шаблонов быстрых трат
-        val templates by vm.templates.collectAsStateWithLifecycle()
-        if (templates.isNotEmpty()) {
-            TemplateChips(
-                templates = templates,
-                onUse = vm::useTemplate,
-            )
-        }
-
         MicButton(
             state = recordState,
             busy = vm.busy,
+            compact = true,
             onClick = {
                 val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
                     PackageManager.PERMISSION_GRANTED
