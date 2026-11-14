@@ -219,10 +219,33 @@ class RecurringRepositoryTest {
     }
 
     @Test
+    fun phraseWithoutPlaceAndNoteIsNamedBySubcategoryOrCategory() = runTest {
+        // «мобильная связь 1200» и «подписка 2100»: ни места, ни заметки, только категория и подкатегория
+        assertEquals("Мобильная связь", repo.onExpenseSaved(spent(null, null, today, kopecks = 120_000), "Связь и подписки", zone, "Мобильная связь"))
+        assertEquals("Подписки", repo.onExpenseSaved(spent(null, null, today, kopecks = 210_000), "Связь и подписки", zone, "Подписки"))
+        assertEquals(setOf("Мобильная связь", "Подписки"), db.recurring().getAll().map { it.title }.toSet())
+
+        // без подкатегории — по названию категории
+        val housing = db.categories().getAllWithSubs().single { it.category.name == "Жильё" }.category.id
+        assertEquals("Жильё", repo.onExpenseSaved(spent(null, null, today, housing), "Жильё", zone))
+    }
+
+    @Test
+    fun repeatedPhraseWithoutPlaceDoesNotDuplicate() = runTest {
+        repo.onExpenseSaved(spent(null, null, today, kopecks = 120_000), "Связь и подписки", zone, "Мобильная связь")
+        assertEquals(
+            null,
+            repo.onExpenseSaved(spent(null, null, LocalDate.of(2026, 12, 14), kopecks = 125_000), "Связь и подписки", zone, "Мобильная связь"),
+        )
+        val saved = db.recurring().getAll().single()
+        assertEquals(125_000L, saved.amountKopecks)
+        assertEquals(LocalDate.of(2027, 1, 14).toEpochDay(), saved.nextEpochDay)
+    }
+
+    @Test
     fun generatedAndReconcileExpensesAreIgnored() = runTest {
         assertEquals(null, repo.onExpenseSaved(spent("Клод", null, today, source = ExpenseSource.RECURRING), "Связь и подписки", zone))
         assertEquals(null, repo.onExpenseSaved(spent("Неучтённые", null, today, source = ExpenseSource.RECONCILE), "Связь и подписки", zone))
-        assertEquals(null, repo.onExpenseSaved(spent(null, null, today), "Связь и подписки", zone))
         assertTrue(db.recurring().getAll().isEmpty())
     }
 

@@ -98,6 +98,24 @@ class QuickEntryTest {
     }
 
     @Test
+    fun phraseWithoutPlaceOrNoteStillAppearsInSubscriptions() = runTest {
+        app.container.categories.seedIfEmpty()
+        val today = LocalDate.now().toString()
+        val draft = EntryDraft(
+            rows = listOf(
+                EntryRow(EntryType.EXPENSE, "1200", "Связь и подписки", "Мобильная связь", "", "", "", today),
+                EntryRow(EntryType.EXPENSE, "2100", "Связь и подписки", "Подписки", "", "", "", today),
+            ),
+            rawText = "мобильная связь 1200 и подписка две сто",
+            origin = EntryOrigin.VOICE,
+        )
+        val result = quickEntry(null).save(draft)
+
+        assertEquals(listOf("Мобильная связь", "Подписки"), result.recurringAdded)
+        assertEquals(listOf(120_000L, 210_000L), db.recurring().getAll().map { it.amountKopecks })
+    }
+
+    @Test
     fun mixedPhraseNeedsConfirm() = runTest {
         seedWithRule("пятёрочка", "Продукты")
         val reply = """{"items":[{"type":"expense","amount":500,"place":"Пятёрочка"},{"type":"income","amount":80000,"source":"Зарплата"}]}"""

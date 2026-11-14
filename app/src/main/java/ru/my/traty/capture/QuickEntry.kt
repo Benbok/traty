@@ -196,7 +196,7 @@ class QuickEntry(
                     )
                     val expenseId = db.expenses().insert(expense)
                     expenseIds += expenseId
-                    recurring.onExpenseSaved(expense.copy(id = expenseId), row.category, zone)?.let { recurringAdded += it }
+                    recurring.onExpenseSaved(expense.copy(id = expenseId), row.category, zone, row.subcategory)?.let { recurringAdded += it }
                     if (ruleOffer == null && place != null) {
                         if (db.rules().findByPattern(place.lowercase()) == null) {
                             ruleOffer = RuleOffer(place, ids.categoryId, ids.subcategoryId, row.category)
