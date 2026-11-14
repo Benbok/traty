@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,8 +31,6 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -68,6 +67,7 @@ import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.home.ExpenseRow
+import ru.my.traty.ui.stats.ModeChip
 
 /** Готовые вопросы на пустом экране: чтобы не думать, что спросить. */
 private val SUGGESTIONS = listOf(
@@ -128,6 +128,7 @@ fun AssistantScreen(vm: AssistantViewModel = viewModel()) {
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentPadding = PaddingValues(vertical = TratyTheme.spacing.sm),
             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
         ) {
             if (vm.messages.isEmpty()) {
@@ -177,17 +178,11 @@ private fun Intro(hasAi: Boolean, onPick: (String) -> Unit) {
         Spacer(Modifier.height(TratyTheme.spacing.md))
         Text("Можно спросить", style = TratyTheme.typography.labelMedium, color = TratyTheme.colors.onSurfaceVariant)
         Spacer(Modifier.height(TratyTheme.spacing.xs))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {
-            SUGGESTIONS.forEach { s ->
-                AssistChip(
-                    onClick = { onPick(s) },
-                    label = { Text(s, style = TratyTheme.typography.labelMedium) },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = TratyTheme.colors.surface,
-                        labelColor = TratyTheme.colors.onSurface,
-                    ),
-                )
-            }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
+        ) {
+            SUGGESTIONS.forEach { s -> ModeChip(s, selected = false, onClick = { onPick(s) }) }
         }
     }
 }
@@ -301,7 +296,7 @@ private fun InputBar(
                 onValueChange = onValueChange,
                 placeholder = { Text("Спросите о тратах…") },
                 modifier = Modifier.weight(1f),
-                shape = TratyTheme.shapes.medium,
+                shape = TratyTheme.shapes.small,
                 maxLines = 4,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { if (!busy && value.isNotBlank()) onSend() }),
