@@ -11,7 +11,11 @@ import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Income
 import ru.my.traty.data.IncomeOrigin
+import ru.my.traty.data.Category
+import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.Recurring
+import ru.my.traty.data.Subcategory
+import ru.my.traty.data.budget.Budget
 import java.time.LocalDate
 import java.time.ZoneOffset
 
@@ -50,11 +54,20 @@ class AssistantEngineTest {
         exp(nov(13), 99_999, source = ExpenseSource.RECONCILE),
     )
 
+    private val categories = listOf(
+        CategoryWithSubs(Category(id = 1, name = "Продукты", emoji = "🛒"), emptyList()),
+        CategoryWithSubs(Category(id = 2, name = "Кафе и рестораны", emoji = "☕"), listOf(Subcategory(id = 20, categoryId = 2, name = "Кофе"))),
+        CategoryWithSubs(Category(id = 3, name = "Транспорт", emoji = "🚕"), listOf(Subcategory(id = 30, categoryId = 3, name = "Такси"))),
+        CategoryWithSubs(Category(id = 9, name = "Спорт", emoji = "🏋️"), emptyList()),
+    )
+
     private fun ctx(
         expenses: List<ExpenseWithCategory> = rows,
         incomes: List<Income> = emptyList(),
         recurring: List<Recurring> = emptyList(),
-    ) = AssistantContext(expenses, incomes, recurring, today, 1, zone)
+        budgets: List<Budget> = emptyList(),
+        balance: Balance? = null,
+    ) = AssistantContext(expenses, incomes, recurring, today, 1, zone, budgets, categories, balance)
 
     private fun run(q: AssistantQuery, c: AssistantContext = ctx()) = AssistantEngine.run(q, c)
 
@@ -157,7 +170,7 @@ class AssistantEngineTest {
     @Test
     fun affordWithoutIncomeSaysBalanceIsUnknown() {
         val d = run(AssistantQuery(intent = Intents.AFFORD, amount = 15000.0))
-        assertTrue("не записаны" in d.facts)
+        assertTrue(d.facts, "неизвестно" in d.facts)
         assertNull(d.headline)
     }
 
@@ -198,5 +211,114 @@ class AssistantEngineTest {
         val text = AssistantPrompts.queryUser("а в сентябре?", h)
         assertFalse("q1" in text)
         assertTrue("q3" in text && "q4" in text && "а в сентябре?" in text)
+    }
+
+    // --- Шаг 2: план трат и баланс ---
+
+    private val cafePlan = Budget(id = 1, categoryId = 2, month = 202611, amountKopecks = 300_000) // 3000 ₽ на кафе
+    private val foodPlan = Budget(id = 2, categoryId = 1, month = 202610, amountKopecks = 500_000) // повторяется с октября
+
+    @Test
+    fun planShowsProgressAndRepeatingRows() {
+        val d = run(AssistantQuery(intent = Intents.PLAN), ctx(budgets = listOf(cafePlan, foodPlan)))
+        // продукты: 1000 + 2500 + 600 = 4100 из 5000; кафе 450 из 3000
+        assertTrue(d.facts, "Продукты: план 5" in d.facts)
+        assertTrue(d.facts, "Кафе и рестораны: план 3" in d.facts)
+    }
+
+    @Test
+    fun planForOneCategory() {
+        val d = run(AssistantQuery(intent = Intents.PLAN, categories = listOf("Кафе и рестораны")), ctx(budgets = listOf(cafePlan, foodPlan)))
+        assertTrue(d.headline!!.startsWith("+2"))
+        assertTrue("Кафе" in d.caption!!)
+    }
+
+    @Test
+    fun planForCategoryWithoutSpendingIsKnown() {
+        // «Спорт» есть среди категорий, но трат в нём нет — это не «неизвестная категория»
+        val d = run(AssistantQuery(intent = Intents.PLAN, categories = listOf("Спорт")), ctx(budgets = listOf(cafePlan)))
+        assertTrue(d.facts, "для этой категории плана нет" in d.facts)
+    }
+
+    @Test
+    fun noPlanIsExplained() {
+        val d = run(AssistantQuery(intent = Intents.PLAN))
+        assertTrue("не задан" in d.facts)
+        assertNull(d.headline)
+    }
+
+    @Test
+    fun balanceKnownAndUnknown() {
+        assertTrue("неизвестен" in run(AssistantQuery(intent = Intents.BALANCE)).facts)
+        val d = run(AssistantQuery(intent = Intents.BALANCE), ctx(balance = Balance(4_000_000, nov(10))))
+        assertTrue(d.headline!!.startsWith("40"))
+        assertTrue("10 ноября" in d.caption!!)
+    }
+
+    @Test
+    fun affordPrefersBalanceAndSubtractsUpcoming() {
+        val rent = Recurring(title = "Аренда", amountKopecks = 3_000_000, categoryId = 5, periodUnit = "month", nextEpochDay = nov(25).toEpochDay())
+        val d = run(
+            AssistantQuery(intent = Intents.AFFORD, amount = 5000.0),
+            ctx(recurring = listOf(rent), balance = Balance(10_000_000, nov(10))),
+        )
+        assertTrue(d.facts, "На счёте сейчас" in d.facts)
+        assertTrue("Аренда" in d.facts)
+        assertEquals("останется к концу периода с покупкой", d.caption)
+    }
+
+    @Test
+    fun affordInCategoryUsesItsPlan() {
+        val d = run(
+            AssistantQuery(intent = Intents.AFFORD, amount = 4000.0, categories = listOf("Кафе и рестораны")),
+            ctx(budgets = listOf(cafePlan)),
+        )
+        // 3000 − 450 − 4000 = −1450
+        assertTrue(d.facts, "План «Кафе и рестораны»" in d.facts)
+        assertTrue(d.headline!!.startsWith("−1"))
+    }
+
+    @Test
+    fun adviceMentionsPlanOverrunAndExpensiveSubscriptions() {
+        val tightPlan = Budget(id = 3, categoryId = 1, month = 202611, amountKopecks = 200_000) // 2000 при 4100 потраченных
+        val plus = Recurring(title = "Кинопоиск", amountKopecks = 39_900, categoryId = 4, periodUnit = "month", nextEpochDay = nov(20).toEpochDay())
+        val d = run(AssistantQuery(intent = Intents.ADVICE), ctx(budgets = listOf(tightPlan), recurring = listOf(plus)))
+        assertTrue(d.facts, "превышен" in d.facts)
+        assertTrue("Кинопоиск" in d.facts && "сэкономит" in d.facts)
+    }
+
+    // --- Предложения в план трат ---
+
+    @Test
+    fun suggestPlanFromPreviousPeriods() {
+        val d = run(AssistantQuery(intent = Intents.SUGGEST_PLAN), ctx(budgets = listOf(cafePlan)))
+        // октябрь: продукты 3000 → 2700, кафе 900 → 800 (−10 %, до 100 ₽); транспорта в октябре не было
+        assertEquals(listOf("Продукты", "Кафе и рестораны"), d.planProposals.map { it.title })
+        assertEquals(270_000L, d.planProposals[0].amountKopecks)
+        assertEquals(80_000L, d.planProposals[1].amountKopecks)
+        assertEquals(300_000L, d.planProposals[1].currentKopecks)
+        assertEquals(202611, d.planMonth)
+    }
+
+    @Test
+    fun suggestPlanForNamedCategoryOnly() {
+        val d = run(AssistantQuery(intent = Intents.SUGGEST_PLAN, categories = listOf("Кафе и рестораны")))
+        assertEquals(listOf("Кафе и рестораны"), d.planProposals.map { it.title })
+    }
+
+    @Test
+    fun setPlanMakesOneProposalButChangesNothing() {
+        val d = run(AssistantQuery(intent = Intents.SET_PLAN, categories = listOf("Такси"), amount = 3000.0))
+        val p = d.planProposals.single()
+        assertEquals(3L to 30L, p.categoryId to p.subcategoryId)
+        assertEquals(300_000L, p.amountKopecks)
+        assertTrue("подтверждает" in d.facts)
+    }
+
+    @Test
+    fun setPlanWithoutAmountAsksAgain() {
+        val d = run(AssistantQuery(intent = Intents.SET_PLAN, categories = listOf("Продукты")))
+        assertTrue(d.planProposals.isEmpty())
+        assertTrue("сумму" in d.facts)
     }
 }

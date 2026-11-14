@@ -47,6 +47,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import ru.my.traty.ui.formatRub
+import ru.my.traty.ui.designsystem.components.TratyButton
+import ru.my.traty.assistant.PlanProposal
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
@@ -77,12 +85,15 @@ private val SUGGESTIONS = listOf(
     "Топ-5 покупок за месяц",
     "Какие у меня подписки?",
     "Могу ли я потратить 10 000 ₽ до конца месяца?",
+    "Как я иду по плану трат?",
+    "Предложи план трат на месяц",
+    "Сколько у меня денег на счёте?",
     "Где я могу сэкономить?",
 )
 
 /** Вкладка «ИИ»: вопросы о тратах текстом или голосом, ответы по данным на телефоне. */
 @Composable
-fun AssistantScreen(vm: AssistantViewModel = viewModel()) {
+fun AssistantScreen(vm: AssistantViewModel = viewModel(), onOpenBudget: () -> Unit = {}) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var input by rememberSaveable { mutableStateOf("") }
@@ -137,7 +148,12 @@ fun AssistantScreen(vm: AssistantViewModel = viewModel()) {
                 }
             }
             items(vm.messages, key = { it.id }) { m ->
-                if (m.fromUser) UserBubble(m.text) else AssistantBubble(m, onShowExpenses = { vm.showExpenses(m.expenseIds) })
+                if (m.fromUser) UserBubble(m.text) else AssistantBubble(
+                    m,
+                    onShowExpenses = { vm.showExpenses(m.expenseIds) },
+                    onApplyPlan = { vm.applyPlan(m.id, it) },
+                    onOpenBudget = onOpenBudget,
+                )
             }
             if (vm.busy) {
                 item(key = "busy") { Thinking() }
@@ -203,7 +219,12 @@ private fun UserBubble(text: String) {
 }
 
 @Composable
-private fun AssistantBubble(m: ChatMessage, onShowExpenses: () -> Unit) {
+private fun AssistantBubble(
+    m: ChatMessage,
+    onShowExpenses: () -> Unit,
+    onApplyPlan: (List<PlanProposal>) -> Unit,
+    onOpenBudget: () -> Unit,
+) {
     var showFacts by rememberSaveable(m.id) { mutableStateOf(false) }
     TratyCard(
         modifier = Modifier.fillMaxWidth().padding(horizontal = TratyTheme.spacing.lg),
@@ -222,6 +243,10 @@ private fun AssistantBubble(m: ChatMessage, onShowExpenses: () -> Unit) {
                 style = TratyTheme.typography.bodyMedium,
                 color = if (m.error) TratyTheme.colors.expense else TratyTheme.colors.onSurface,
             )
+            if (m.planProposals.isNotEmpty()) {
+                Spacer(Modifier.height(TratyTheme.spacing.sm))
+                PlanProposals(m, onApply = onApplyPlan, onOpenBudget = onOpenBudget)
+            }
             if (m.expenseIds.isNotEmpty() || m.sentFacts != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {
                     if (m.expenseIds.isNotEmpty()) {
@@ -245,6 +270,69 @@ private fun AssistantBubble(m: ChatMessage, onShowExpenses: () -> Unit) {
                     modifier = Modifier.padding(top = TratyTheme.spacing.xs),
                 )
             }
+        }
+    }
+}
+
+/** Предложенные строки плана: отметить нужные и добавить в «План трат». Без нажатия план не меняется. */
+@Composable
+private fun PlanProposals(m: ChatMessage, onApply: (List<PlanProposal>) -> Unit, onOpenBudget: () -> Unit) {
+    var selected by remember(m.id) { mutableStateOf(m.planProposals.indices.toList()) }
+    val applied = m.planApplied
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(TratyTheme.colors.surfaceContainer, TratyTheme.shapes.small)
+            .padding(vertical = TratyTheme.spacing.xs),
+    ) {
+        m.planProposals.forEachIndexed { i, p ->
+            val checked = i in selected
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .toggleable(
+                        value = checked,
+                        enabled = applied == null,
+                        role = Role.Checkbox,
+                        onValueChange = { on -> selected = if (on) selected + i else selected - i },
+                    )
+                    .padding(horizontal = TratyTheme.spacing.sm, vertical = TratyTheme.spacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = checked,
+                    onCheckedChange = null,
+                    enabled = applied == null,
+                    colors = CheckboxDefaults.colors(checkedColor = TratyTheme.colors.primary),
+                )
+                Spacer(Modifier.width(TratyTheme.spacing.sm))
+                Column(Modifier.weight(1f)) {
+                    Text("${p.emoji} ${p.title}", style = TratyTheme.typography.bodyMedium, color = TratyTheme.colors.onSurface)
+                    Text(
+                        p.currentKopecks?.let { "сейчас ${formatRub(it)}" } ?: "плана нет",
+                        style = TratyTheme.typography.labelSmall,
+                        color = TratyTheme.colors.onSurfaceVariant,
+                    )
+                }
+                TratyAmountText(amountKopecks = p.amountKopecks, size = AmountSize.SMALL)
+            }
+        }
+    }
+    Spacer(Modifier.height(TratyTheme.spacing.xs))
+    if (applied == null) {
+        TratyButton(
+            onClick = { onApply(selected.sorted().map { m.planProposals[it] }) },
+            enabled = selected.isNotEmpty(),
+        ) { Text(if (m.planProposals.size == 1) "Добавить в план" else "Добавить в план (${selected.size})") }
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "✓ Добавлено в план трат: $applied",
+                style = TratyTheme.typography.bodySmall,
+                color = TratyTheme.colors.income,
+                modifier = Modifier.weight(1f),
+            )
+            TratyTextButton(onClick = onOpenBudget) { Text("Открыть план", style = TratyTheme.typography.labelMedium) }
         }
     }
 }
