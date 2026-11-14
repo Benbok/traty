@@ -44,7 +44,6 @@ import ru.my.traty.ui.recurring.RecurringScreen
 import ru.my.traty.ui.settings.AiSettingsScreen
 import ru.my.traty.ui.settings.RulesScreen
 import ru.my.traty.ui.settings.SettingsScreen
-import ru.my.traty.ui.settings.TemplatesScreen
 import ru.my.traty.ui.stats.StatsScreen
 
 /**
@@ -54,7 +53,6 @@ import ru.my.traty.ui.stats.StatsScreen
 fun TratyRoot(vm: MainViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(TratyNavTab.HOME) }
     var showCategories by rememberSaveable { mutableStateOf(false) }
-    var showTemplates by rememberSaveable { mutableStateOf(false) }
     var showRules by rememberSaveable { mutableStateOf(false) }
     var showRecurring by rememberSaveable { mutableStateOf(false) }
     var showBudget by rememberSaveable { mutableStateOf(false) }
@@ -150,7 +148,6 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onOpenCategories = { showCategories = true },
                         onOpenReconcile = { reconcileMode = ReconcileMode.NORMAL },
                         onRedoReconcile = { reconcileMode = ReconcileMode.REDO },
-                        onOpenTemplates = { showTemplates = true },
                         onOpenRules = { showRules = true },
                         onOpenRecurring = { showRecurring = true },
                         onOpenBudget = { showBudget = true },
@@ -164,12 +161,6 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
         if (showCategories) {
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
                 CategoriesScreen(onBack = { showCategories = false })
-            }
-        }
-
-        if (showTemplates) {
-            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
-                TemplatesScreen(vm = vm, onBack = { showTemplates = false })
             }
         }
 
