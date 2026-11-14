@@ -25,6 +25,7 @@ import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyCategoryBadge
 import ru.my.traty.ui.designsystem.components.TratyDeltaBadge
 import ru.my.traty.ui.designsystem.components.TratyEmptyState
+import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.capture.MicButton
 import ru.my.traty.ui.capture.RecordState
@@ -48,6 +49,13 @@ fun TratyDesignSystemShowcase() {
             text = "Traty Design System",
             style = TratyTheme.typography.headlineLarge,
             color = TratyTheme.colors.onBackground,
+        )
+
+        // Header Card Showcase
+        TratyHeaderCard(
+            title = "Траты",
+            subtitle = "Учёт расходов и доходов",
+            icon = Icons.AutoMirrored.Filled.ReceiptLong,
         )
 
         // Month Picker

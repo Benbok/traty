@@ -8,14 +8,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.Template
@@ -33,6 +38,7 @@ import ru.my.traty.data.TemplateWithCategory
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
+import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
@@ -45,29 +51,42 @@ fun TemplatesScreen(vm: MainViewModel, onBack: () -> Unit) {
     val categories by vm.categories.collectAsStateWithLifecycle()
     var showAdd by remember { mutableStateOf(false) }
 
-    Column(Modifier.fillMaxSize().padding(TratyTheme.spacing.lg)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TratyIconButton(
-                icon = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Назад",
-                onClick = onBack,
-            )
-            Text("Шаблоны быстрых трат", style = TratyTheme.typography.headlineMedium)
-        }
-        Spacer(Modifier.height(TratyTheme.spacing.sm))
-        Text(
-            "Одно нажатие на чипс — трата сохраняется мгновенно.",
-            style = TratyTheme.typography.bodySmall,
-            color = TratyTheme.colors.onSurfaceVariant,
+    Column(Modifier.fillMaxSize()) {
+        TratyHeaderCard(
+            title = "Шаблоны трат",
+            subtitle = "Быстрое сохранение частых расходов",
+            onBack = onBack,
+            actions = {
+                TratyIconButton(
+                    icon = Icons.Filled.Add,
+                    contentDescription = "Добавить шаблон",
+                    onClick = { showAdd = true },
+                    containerColor = TratyTheme.colors.primaryContainer,
+                    tint = TratyTheme.colors.primary,
+                    modifier = Modifier.size(40.dp),
+                )
+            },
         )
-        Spacer(Modifier.height(TratyTheme.spacing.md))
-        TratyButton(onClick = { showAdd = true }) { Text("Добавить шаблон") }
-        Spacer(Modifier.height(TratyTheme.spacing.md))
 
-        LazyColumn(Modifier.weight(1f)) {
-            items(templates, key = { it.template.id }) { t ->
-                TemplateRow(t, onDelete = { vm.deleteTemplate(t.template) })
-                HorizontalDivider(color = TratyTheme.colors.borderSubtle)
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = TratyTheme.spacing.lg),
+        ) {
+            TratyButton(
+                onClick = { showAdd = true },
+                modifier = Modifier.padding(vertical = TratyTheme.spacing.sm),
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(TratyTheme.spacing.xs))
+                Text("Добавить шаблон")
+            }
+
+            LazyColumn(Modifier.weight(1f)) {
+                items(templates, key = { it.template.id }) { t ->
+                    TemplateRow(t, onDelete = { vm.deleteTemplate(t.template) })
+                    HorizontalDivider(color = TratyTheme.colors.borderSubtle)
+                }
             }
         }
     }

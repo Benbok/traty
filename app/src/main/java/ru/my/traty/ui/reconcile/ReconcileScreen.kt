@@ -3,15 +3,9 @@ package ru.my.traty.ui.reconcile
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,11 +14,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import ru.my.traty.ui.designsystem.components.TratyIconButton
+import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 /** Сверка баланса поверх вкладок: шаг 1 - калькулятор остатка, шаг 2 - итог. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReconcileScreen(mode: ReconcileMode, onBack: () -> Unit) {
     // Свой ViewModel на каждое открытие: прошлый итог не должен показываться снова.
@@ -44,12 +37,10 @@ fun ReconcileScreen(mode: ReconcileMode, onBack: () -> Unit) {
         containerColor = TratyTheme.colors.background,
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            TopAppBar(
-                title = { Text("Сверка баланса", style = TratyTheme.typography.headlineMedium) },
-                navigationIcon = {
-                    TratyIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack)
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = TratyTheme.colors.surface),
+            TratyHeaderCard(
+                title = "Сверка баланса",
+                subtitle = "Контроль соответствия с остатком на счетах",
+                onBack = onBack,
             )
         },
     ) { pad ->

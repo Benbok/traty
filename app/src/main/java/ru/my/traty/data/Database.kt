@@ -153,6 +153,9 @@ interface ExpenseDao {
     @Query("$EXPENSE_JOIN WHERE e.timestamp >= :from AND e.timestamp < :to ORDER BY e.timestamp DESC")
     fun observeRange(from: Long, to: Long): Flow<List<ExpenseWithCategory>>
 
+    @Query("$EXPENSE_JOIN WHERE e.timestamp >= :from AND e.timestamp < :to ORDER BY e.timestamp DESC LIMIT :limit")
+    suspend fun getRange(from: Long, to: Long, limit: Int = 10): List<ExpenseWithCategory>
+
     @Query("$EXPENSE_JOIN ORDER BY e.timestamp ASC")
     fun observeAllWithCategory(): Flow<List<ExpenseWithCategory>>
 

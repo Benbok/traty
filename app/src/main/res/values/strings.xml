@@ -2,4 +2,8 @@
     <string name="app_name">Траты</string>
     <string name="tile_label">Сказать трату</string>
     <string name="widget_description">Сказать трату голосом и расходы за сегодня и за период</string>
+    <string name="widget_totals_label">Траты: сегодня и период</string>
+    <string name="widget_totals_description">Расходы за сегодня, список трат и быстрая запись</string>
+    <string name="widget_record_label">Траты: быстрая запись</string>
+    <string name="widget_record_description">Кнопка записи расхода без лишнего текста</string>
 </resources>

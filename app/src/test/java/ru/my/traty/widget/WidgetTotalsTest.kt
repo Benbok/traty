@@ -50,4 +50,38 @@ class WidgetTotalsTest {
         val totals = loadWidgetTotals(app.container.db, AppSettings(), today, zone)
         assertEquals(WidgetTotals(0, 0), totals)
     }
+
+    @Test
+    fun loadWidgetDataIncludesTotalsAndTodayExpenses() = runTest {
+        val app = ApplicationProvider.getApplicationContext<TratyApp>()
+        val db = app.container.db
+        app.container.categories.seedIfEmpty()
+        val cat = db.categories().getAllWithSubs().first().category.id
+
+        val morningToday = today.atTime(9, 0).atZone(zone).toInstant().toEpochMilli()
+        val eveningToday = today.atTime(19, 0).atZone(zone).toInstant().toEpochMilli()
+        val yesterday = today.minusDays(1).atTime(15, 0).atZone(zone).toInstant().toEpochMilli()
+
+        db.expenses().insert(Expense(amountKopecks = 150_00, categoryId = cat, place = "Кофейня", timestamp = morningToday))
+        db.expenses().insert(Expense(amountKopecks = 500_00, categoryId = cat, place = "Супермаркет", timestamp = eveningToday))
+        db.expenses().insert(Expense(amountKopecks = 200_00, categoryId = cat, place = "Вчерашняя трата", timestamp = yesterday))
+
+        val data = loadWidgetData(db, AppSettings(periodStartDay = 1), today, zone, limit = 5)
+
+        assertEquals(650_00L, data.totals.todayKopecks)
+        assertEquals(2, data.todayExpenses.size)
+        // Проверяем сортировку: сначала более свежая (eveningToday), затем утренняя (morningToday)
+        assertEquals(500_00L, data.todayExpenses[0].expense.amountKopecks)
+        assertEquals("Супермаркет", data.todayExpenses[0].expense.place)
+        assertEquals(150_00L, data.todayExpenses[1].expense.amountKopecks)
+        assertEquals("Кофейня", data.todayExpenses[1].expense.place)
+    }
+
+    @Test
+    fun widgetReceiversProvideExpectedWidgets() {
+        org.junit.Assert.assertNotNull(TratyWidgetReceiver().glanceAppWidget)
+        org.junit.Assert.assertNotNull(TratyRecordWidgetReceiver().glanceAppWidget)
+        org.junit.Assert.assertTrue(TratyWidgetReceiver().glanceAppWidget is TratyWidget)
+        org.junit.Assert.assertTrue(TratyRecordWidgetReceiver().glanceAppWidget is TratyRecordWidget)
+    }
 }

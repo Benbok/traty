@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -46,6 +47,7 @@ import ru.my.traty.data.period.MIN_PERIOD_START_DAY
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
+import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyOutlinedButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
@@ -71,13 +73,24 @@ fun SettingsScreen(
         if (uri != null) vm.importCsv(uri)
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(TratyTheme.spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md),
-    ) {
+    Column(Modifier.fillMaxSize()) {
+        TratyHeaderCard(
+            title = "Настройки",
+            subtitle = "Параметры приложения и данные",
+            icon = Icons.Filled.Settings,
+        )
+
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = TratyTheme.spacing.lg,
+                    end = TratyTheme.spacing.lg,
+                    bottom = TratyTheme.spacing.lg,
+                ),
+            verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md),
+        ) {
         // Секция: Тема оформления
         TratyCard(
             modifier = Modifier.fillMaxWidth(),
@@ -355,6 +368,7 @@ fun SettingsScreen(
             }
         }
     }
+}
 }
 
 @Composable

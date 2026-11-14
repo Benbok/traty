@@ -22,6 +22,7 @@ import ru.my.traty.data.SettingsRepository
 import ru.my.traty.speech.GigaAmRuntime
 import ru.my.traty.speech.ModelManager
 import java.io.File
+import ru.my.traty.widget.TratyRecordWidget
 import ru.my.traty.widget.TratyWidget
 
 open class TratyApp : Application() {
@@ -35,8 +36,11 @@ open class TratyApp : Application() {
         if (updateWidgetOnChanges) {
             appScope.launch {
                 container.quickEntry.changes.collect {
-                    // Виджет не должен ронять приложение, если его нет на рабочем столе
-                    runCatching { TratyWidget().updateAll(this@TratyApp) }
+                    // Виджеты не должны ронять приложение, если их нет на рабочем столе
+                    runCatching {
+                        TratyWidget().updateAll(this@TratyApp)
+                        TratyRecordWidget().updateAll(this@TratyApp)
+                    }
                 }
             }
         }

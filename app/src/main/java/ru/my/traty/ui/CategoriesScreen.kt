@@ -56,6 +56,7 @@ import ru.my.traty.data.DefaultCategories
 import ru.my.traty.data.Subcategory
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCategoryBadge
+import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyOutlinedButton
 import ru.my.traty.ui.designsystem.components.TratyTextButton
@@ -98,12 +99,20 @@ fun CategoriesScreen(onBack: () -> Unit, vm: CategoriesViewModel = viewModel()) 
         containerColor = TratyTheme.colors.background,
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            TopAppBar(
-                title = { Text("Категории", style = TratyTheme.typography.headlineMedium) },
-                navigationIcon = {
-                    TratyIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Назад", onClick = onBack)
+            TratyHeaderCard(
+                title = "Категории",
+                subtitle = "Управление категориями и подкатегориями",
+                onBack = onBack,
+                actions = {
+                    TratyIconButton(
+                        icon = Icons.Filled.Add,
+                        contentDescription = "Добавить категорию",
+                        onClick = { adding = true },
+                        containerColor = TratyTheme.colors.primaryContainer,
+                        tint = TratyTheme.colors.primary,
+                        modifier = Modifier.size(40.dp),
+                    )
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = TratyTheme.colors.surface),
             )
         },
         floatingActionButton = {

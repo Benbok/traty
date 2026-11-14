@@ -54,6 +54,8 @@ import ru.my.traty.ui.capture.RecordController
 import ru.my.traty.ui.capture.RecordState
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyEmptyState
+import ru.my.traty.ui.designsystem.components.TratyHeaderCard
+import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyMonthPicker
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
@@ -146,6 +148,58 @@ fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: Reconcile
     val parsedPending = remember(pending) { pending.filter { it.status == PendingStatus.PARSED } }
 
     Column(Modifier.fillMaxSize().imePadding()) {
+        TratyHeaderCard(
+            title = "Траты",
+            subtitle = if (selectedDate != null) "День: ${formatDate(selectedDate!!)}" else "Учёт расходов и доходов",
+            icon = Icons.AutoMirrored.Filled.ReceiptLong,
+            actions = {
+                TratyIconButton(
+                    icon = Icons.Filled.Search,
+                    contentDescription = "Поиск",
+                    onClick = { searchActive = !searchActive; if (!searchActive) searchQuery = "" },
+                    containerColor = if (searchActive) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
+                    tint = if (searchActive) TratyTheme.colors.primary else TratyTheme.colors.onSurfaceVariant,
+                    modifier = Modifier.size(40.dp),
+                )
+            },
+            content = if (searchActive) {
+                {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = {
+                            Text(
+                                text = "Поиск по тратам…",
+                                style = TratyTheme.typography.bodyMedium,
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                androidx.compose.material3.IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Close,
+                                        contentDescription = "Очистить",
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = TratyTheme.shapes.small,
+                        textStyle = TratyTheme.typography.bodyMedium,
+                    )
+                }
+            } else null,
+        )
+
         TratyMonthPicker(
             periodLabel = formatPeriod(period, settings.periodStartDay),
             totalKopecks = totalExpense,
@@ -154,46 +208,7 @@ fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: Reconcile
             onNext = vm::nextPeriod,
             onDateClick = { showDatePicker = true },
             onClearDate = { vm.clearSelectedDate() },
-            onSearchClick = { searchActive = !searchActive; if (!searchActive) searchQuery = "" },
         )
-
-        // Строка поиска
-        if (searchActive) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = {
-                    Text(
-                        text = "Поиск по тратам…",
-                        style = TratyTheme.typography.bodyMedium,
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.Search,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                    )
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        androidx.compose.material3.IconButton(onClick = { searchQuery = "" }) {
-                            Icon(
-                                imageVector = Icons.Filled.Close,
-                                contentDescription = "Очистить",
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    }
-                },
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
-                shape = TratyTheme.shapes.small,
-                textStyle = TratyTheme.typography.bodyMedium,
-            )
-        }
 
         // Чип активного фильтра по конкретной дате
         if (selectedDate != null) {

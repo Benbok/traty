@@ -23,8 +23,9 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.PieChart
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -55,6 +56,7 @@ import ru.my.traty.ui.designsystem.components.AmountSize
 import ru.my.traty.ui.designsystem.components.TratyAmountText
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyCategoryBadge
+import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyProgressBar
 import ru.my.traty.ui.designsystem.components.TratyTextButton
@@ -73,24 +75,30 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
     // Категории, раскрытые до магазинов
     var expandedCats by remember { mutableStateOf(emptySet<Long>()) }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = TratyTheme.spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md),
-    ) {
-        // Шапка и переключатель периодов
-        item {
-            Spacer(Modifier.height(TratyTheme.spacing.xs))
-            Text(
-                text = "Финансовая аналитика",
-                style = TratyTheme.typography.headlineLarge,
-                color = TratyTheme.colors.onSurface,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+    Column(Modifier.fillMaxSize()) {
+        TratyHeaderCard(
+            title = "Графики",
+            subtitle = "Финансовая аналитика и динамика",
+            icon = Icons.Filled.ShowChart,
+            actions = {
+                TratyIconButton(
+                    icon = Icons.Filled.DateRange,
+                    contentDescription = "Выбрать диапазон дат",
+                    onClick = { showRangePicker = true },
+                    containerColor = if (state.period == ChartPeriod.CUSTOM) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
+                    tint = if (state.period == ChartPeriod.CUSTOM) TratyTheme.colors.primary else TratyTheme.colors.onSurfaceVariant,
+                    modifier = Modifier.size(40.dp),
+                )
+            },
+        )
 
-        // Чипсы выбора периода (прокручиваются: «Даты» — выбор произвольного диапазона)
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = TratyTheme.spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md),
+        ) {
+            // Чипсы выбора периода (прокручиваются: «Даты» — выбор произвольного диапазона)
         item {
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -365,6 +373,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
             Spacer(Modifier.height(TratyTheme.spacing.lg))
         }
     }
+}
 
     if (showRangePicker) {
         DateRangePickerModal(
