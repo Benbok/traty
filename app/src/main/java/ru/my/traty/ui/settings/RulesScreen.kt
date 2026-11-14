@@ -1,5 +1,6 @@
 package ru.my.traty.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,6 +30,7 @@ import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 @Composable
 fun RulesScreen(vm: MainViewModel, onBack: () -> Unit) {
+    BackHandler(onBack = onBack)
     val rules by vm.rules.collectAsStateWithLifecycle()
 
     Scaffold(

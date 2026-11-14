@@ -37,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -67,12 +68,7 @@ import ru.my.traty.ui.designsystem.components.TratyOutlinedButton
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
-/** Палитра цветов категории (ARGB). null — цвет по умолчанию. */
-private val CategoryColors = listOf(
-    0xFFE57373, 0xFFFFB74D, 0xFFFFD54F, 0xFF81C784, 0xFF4DB6AC, 0xFF64B5F6, 0xFF9575CD, 0xFFF06292,
-).map { it.toInt() }
-
-private fun isOther(c: Category) = c.name == DefaultCategories.OTHER
+private fun isOther(c: Category) = isOtherCategory(c)
 
 private fun subcategoriesLabel(n: Int): String {
     val word = when {
@@ -170,18 +166,19 @@ fun CategoriesScreen(onBack: () -> Unit, vm: CategoriesViewModel = viewModel()) 
         }
     }
 
-    if (adding) AddCategoryDialog(onDismiss = { adding = false }) { name, emoji ->
-        vm.add(name, emoji) { adding = false }
-    }
-
-    // Берём актуальную версию из потока, чтобы правки подкатегорий были видны сразу
-    all.firstOrNull { it.category.id == editingId }?.let { c ->
-        EditCategoryDialog(
-            item = c,
-            mergeTargets = active.filter { it.category.id != c.category.id },
-            vm = vm,
-            onDismiss = { editingId = null },
-        )
+    if (adding || editingId != null) {
+        val itemToEdit = all.firstOrNull { it.category.id == editingId }
+        Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+            EditCategoryScreen(
+                item = itemToEdit,
+                mergeTargets = active.filter { it.category.id != itemToEdit?.category?.id },
+                vm = vm,
+                onDismiss = {
+                    adding = false
+                    editingId = null
+                },
+            )
+        }
     }
 }
 
@@ -216,201 +213,4 @@ private fun CategoryRow(
             TratyIconButton(Icons.Filled.KeyboardArrowDown, "Ниже", onClick = { onMove(false) }, enabled = canMoveDown)
         }
     }
-}
-
-@Composable
-private fun AddCategoryDialog(onDismiss: () -> Unit, onAdd: (name: String, emoji: String) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var emoji by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = TratyTheme.shapes.large,
-        containerColor = TratyTheme.colors.surface,
-        title = { Text("Новая категория", style = TratyTheme.typography.titleMedium) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm)) {
-                OutlinedTextField(name, { name = it }, label = { Text("Название") }, singleLine = true, shape = TratyTheme.shapes.small)
-                OutlinedTextField(emoji, { emoji = it }, label = { Text("Эмодзи") }, singleLine = true, shape = TratyTheme.shapes.small)
-            }
-        },
-        confirmButton = { TratyButton(onClick = { onAdd(name, emoji) }) { Text("Добавить") } },
-        dismissButton = { TratyTextButton(onClick = onDismiss) { Text("Отмена") } },
-    )
-}
-
-@Composable
-private fun EditCategoryDialog(
-    item: CategoryWithSubs,
-    mergeTargets: List<CategoryWithSubs>,
-    vm: CategoriesViewModel,
-    onDismiss: () -> Unit,
-) {
-    val c = item.category
-    val other = isOther(c)
-    var name by remember(c.id) { mutableStateOf(c.name) }
-    var emoji by remember(c.id) { mutableStateOf(c.emoji) }
-    var color by remember(c.id) { mutableStateOf(c.color) }
-    var impulsive by remember(c.id) { mutableStateOf(c.isImpulsive) }
-    var newSub by remember(c.id) { mutableStateOf("") }
-    var merging by remember(c.id) { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = TratyTheme.shapes.large,
-        containerColor = TratyTheme.colors.surface,
-        title = { Text(c.name, style = TratyTheme.typography.titleMedium) },
-        text = {
-            Column(
-                Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
-            ) {
-                if (!other) {
-                    OutlinedTextField(name, { name = it }, label = { Text("Название") }, singleLine = true, shape = TratyTheme.shapes.small)
-                }
-                OutlinedTextField(emoji, { emoji = it }, label = { Text("Эмодзи") }, singleLine = true, shape = TratyTheme.shapes.small)
-
-                Text("Цвет", style = TratyTheme.typography.labelMedium, color = TratyTheme.colors.onSurfaceVariant)
-                ColorRow(selected = color, onPick = { color = it })
-
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .toggleable(value = impulsive, role = Role.Switch, onValueChange = { impulsive = it }),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Импульсивные траты ⚡", style = TratyTheme.typography.bodyMedium)
-                        Text(
-                            "Ночные покупки и серии мелких покупок за день получат метку ⚡",
-                            style = TratyTheme.typography.bodySmall,
-                            color = TratyTheme.colors.onSurfaceVariant,
-                        )
-                    }
-                    Switch(checked = impulsive, onCheckedChange = null)
-                }
-
-                HorizontalDivider(color = TratyTheme.colors.borderSubtle)
-                Text("Подкатегории", style = TratyTheme.typography.labelMedium, color = TratyTheme.colors.onSurfaceVariant)
-                item.subs.sortedBy { it.sortOrder }.forEach { s -> SubcategoryRow(s, vm) }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        newSub, { newSub = it },
-                        label = { Text("Новая подкатегория") },
-                        singleLine = true,
-                        shape = TratyTheme.shapes.small,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TratyIconButton(Icons.Filled.Add, "Добавить подкатегорию", onClick = {
-                        if (newSub.isNotBlank()) { vm.addSub(c.id, newSub); newSub = "" }
-                    })
-                }
-
-                if (!other) {
-                    HorizontalDivider(color = TratyTheme.colors.borderSubtle)
-                    Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm)) {
-                        TratyOutlinedButton(onClick = { vm.setArchived(c.id, !c.isArchived, onDismiss) }) {
-                            Text(if (c.isArchived) "Вернуть из архива" else "В архив")
-                        }
-                        if (mergeTargets.isNotEmpty()) {
-                            TratyOutlinedButton(onClick = { merging = true }) { Text("Объединить…") }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TratyButton(onClick = { vm.update(c.id, name, emoji, color, impulsive, onDismiss) }) { Text("Сохранить") }
-        },
-        dismissButton = { TratyTextButton(onClick = onDismiss) { Text("Закрыть") } },
-    )
-
-    if (merging) MergeDialog(source = c, targets = mergeTargets, vm = vm, onDismiss = { merging = false }, onMerged = onDismiss)
-}
-
-@Composable
-private fun SubcategoryRow(s: Subcategory, vm: CategoriesViewModel) {
-    var text by remember(s.id, s.name) { mutableStateOf(s.name) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedTextField(
-            value = text,
-            onValueChange = { text = it },
-            singleLine = true,
-            shape = TratyTheme.shapes.small,
-            modifier = Modifier.weight(1f),
-            trailingIcon = if (text.trim() != s.name && text.isNotBlank()) {
-                { TratyTextButton(onClick = { vm.renameSub(s.id, text) }) { Text("OK") } }
-            } else null,
-        )
-        TratyIconButton(Icons.Filled.Close, "Удалить «${s.name}»", onClick = { vm.deleteSub(s.id) }, tint = TratyTheme.colors.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun ColorRow(selected: Int?, onPick: (Int?) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-        // «Без цвета»
-        Swatch(color = TratyTheme.colors.surfaceContainer, selected = selected == null, label = "∅") { onPick(null) }
-        CategoryColors.forEach { argb -> Swatch(Color(argb), selected == argb) { onPick(argb) } }
-    }
-}
-
-@Composable
-private fun Swatch(color: Color, selected: Boolean, label: String? = null, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .size(28.dp)
-            .background(color, CircleShape)
-            .border(if (selected) 3.dp else 1.dp, if (selected) TratyTheme.colors.primary else TratyTheme.colors.borderSubtle, CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (label != null) Text(label, style = TratyTheme.typography.labelSmall, color = TratyTheme.colors.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun MergeDialog(
-    source: Category,
-    targets: List<CategoryWithSubs>,
-    vm: CategoriesViewModel,
-    onDismiss: () -> Unit,
-    onMerged: () -> Unit,
-) {
-    var target by remember { mutableStateOf<Category?>(null) }
-    var count by remember { mutableStateOf<Int?>(null) }
-    LaunchedEffect(source.id) { count = vm.expenseCount(source.id) }
-
-    val t = target
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = TratyTheme.shapes.large,
-        containerColor = TratyTheme.colors.surface,
-        title = { Text(if (t == null) "Объединить «${source.name}» с…" else "Объединить?", style = TratyTheme.typography.titleMedium) },
-        text = {
-            if (t == null) {
-                LazyColumn {
-                    items(targets, key = { it.category.id }) { c ->
-                        Row(
-                            Modifier.fillMaxWidth().clickable { target = c.category }.padding(vertical = TratyTheme.spacing.sm),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("${c.category.emoji} ${c.category.name}", style = TratyTheme.typography.bodyLarge)
-                        }
-                    }
-                }
-            } else {
-                Text(
-                    "Все траты (${count ?: "…"}) и подкатегории перейдут в «${t.name}». " +
-                        "Категория «${source.name}» будет удалена.",
-                    style = TratyTheme.typography.bodyMedium,
-                )
-            }
-        },
-        confirmButton = {
-            if (t != null) {
-                TratyButton(onClick = { vm.merge(source.id, t.id) { onDismiss(); onMerged() } }) { Text("Объединить") }
-            }
-        },
-        dismissButton = { TratyTextButton(onClick = onDismiss) { Text("Отмена") } },
-    )
 }

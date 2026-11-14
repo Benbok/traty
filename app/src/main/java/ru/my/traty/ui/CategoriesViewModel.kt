@@ -34,7 +34,14 @@ class CategoriesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun add(name: String, emoji: String, onDone: () -> Unit) = run(onDone) { repo.addCategory(name, emoji); null }
+    fun add(name: String, emoji: String, color: Int? = null, isImpulsive: Boolean = false, onDone: () -> Unit) =
+        run(onDone) {
+            val id = repo.addCategory(name, emoji)
+            if (color != null || isImpulsive) {
+                repo.updateCategory(id, name, emoji, color, isImpulsive)
+            }
+            "Категория добавлена"
+        }
 
     fun update(id: Long, name: String, emoji: String, color: Int?, isImpulsive: Boolean, onDone: () -> Unit) =
         run(onDone) { repo.updateCategory(id, name, emoji, color, isImpulsive); "Сохранено" }

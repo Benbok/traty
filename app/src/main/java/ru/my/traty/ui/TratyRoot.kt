@@ -1,5 +1,6 @@
 package ru.my.traty.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,6 +64,10 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     val snackbar = remember { SnackbarHostState() }
     val categories by vm.categories.collectAsStateWithLifecycle()
     val labels by vm.labels.collectAsStateWithLifecycle()
+
+    BackHandler(enabled = tab != TratyNavTab.HOME) {
+        tab = TratyNavTab.HOME
+    }
 
     LaunchedEffect(vm.message) {
         val msg = vm.message ?: return@LaunchedEffect

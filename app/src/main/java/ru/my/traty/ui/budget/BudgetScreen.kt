@@ -1,5 +1,6 @@
 package ru.my.traty.ui.budget
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -50,12 +51,12 @@ import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
 import ru.my.traty.ui.home.CategoryPicker
 
-/** Что открыто в диалоге плана: новый план или правка существующего. */
-private data class PlanEdit(val key: PlanKey?, val amountKopecks: Long, val repeats: Boolean)
+import androidx.compose.material3.Surface
 
 /** Настройки → «План трат»: лимиты по категориям и подкатегориям на расчётный месяц. */
 @Composable
 fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
+    BackHandler(onBack = onBack)
     val period by vm.period.collectAsStateWithLifecycle()
     val startDay by vm.startDay.collectAsStateWithLifecycle()
     val plans by vm.items.collectAsStateWithLifecycle()
@@ -151,22 +152,24 @@ fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
     }
 
     editing?.let { edit ->
-        PlanEditDialog(
-            edit = edit,
-            categories = categories,
-            taken = plans.map { it.key }.toSet(),
-            monthTitle = formatMonth(PlanMonth.toYearMonth(PlanMonth.of(period))),
-            hint = vm::hint,
-            onDismiss = { editing = null },
-            onSave = { key, amount, repeats ->
-                vm.save(key, amount, repeats)
-                editing = null
-            },
-            onRemove = { key ->
-                vm.remove(key)
-                editing = null
-            },
-        )
+        Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+            EditPlanScreen(
+                edit = edit,
+                categories = categories,
+                taken = plans.map { it.key }.toSet(),
+                monthTitle = formatMonth(PlanMonth.toYearMonth(PlanMonth.of(period))),
+                hint = vm::hint,
+                onDismiss = { editing = null },
+                onSave = { key, amount, repeats ->
+                    vm.save(key, amount, repeats)
+                    editing = null
+                },
+                onRemove = { key ->
+                    vm.remove(key)
+                    editing = null
+                },
+            )
+        }
     }
 }
 
@@ -176,115 +179,5 @@ private fun repeatText(item: PlanItem, month: Int): String {
         plan.month != month -> "Повторяется с ${formatMonth(PlanMonth.toYearMonth(plan.month)).lowercase()}"
         plan.repeats -> "Повторяется каждый месяц"
         else -> "Только на этот месяц"
-    }
-}
-
-@Composable
-private fun PlanEditDialog(
-    edit: PlanEdit,
-    categories: List<CategoryWithSubs>,
-    taken: Set<PlanKey>,
-    monthTitle: String,
-    hint: (PlanKey) -> Long?,
-    onDismiss: () -> Unit,
-    onSave: (PlanKey, Long, Boolean) -> Unit,
-    onRemove: (PlanKey) -> Unit,
-) {
-    val isNew = edit.key == null
-    var categoryName by remember {
-        mutableStateOf(
-            categories.firstOrNull { it.category.id == edit.key?.categoryId }?.category?.name
-                ?: categories.firstOrNull()?.category?.name.orEmpty()
-        )
-    }
-    val category = categories.firstOrNull { it.category.name == categoryName }
-    var subId by remember { mutableStateOf(edit.key?.subcategoryId) }
-    var amount by remember { mutableStateOf(if (edit.amountKopecks > 0) AmountInput.fromKopecks(edit.amountKopecks) else "") }
-    var repeats by remember { mutableStateOf(edit.repeats) }
-    val key = category?.let { PlanKey(it.category.id, subId?.takeIf { id -> it.subs.any { s -> s.id == id } }) }
-    val suggestion = remember(key) { key?.let(hint) }
-    val duplicate = isNew && key != null && key in taken
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = TratyTheme.shapes.large,
-        containerColor = TratyTheme.colors.surface,
-        title = { Text(if (isNew) "План на ${monthTitle.lowercase()}" else "План · $monthTitle", style = TratyTheme.typography.titleMedium) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {
-                if (isNew) {
-                    CategoryPicker(categoryName, categories, null) {
-                        categoryName = it
-                        subId = null
-                    }
-                    if (category != null && category.subs.isNotEmpty()) {
-                        SubcategoryPicker(category, subId) { subId = it }
-                    }
-                } else {
-                    Text(
-                        "${category?.category?.emoji.orEmpty()} $categoryName" +
-                            (category?.subs?.firstOrNull { it.id == subId }?.let { " · ${it.name}" } ?: ""),
-                        style = TratyTheme.typography.titleSmall,
-                    )
-                }
-                TratyAmountTextField(
-                    value = amount,
-                    onValueChange = { amount = it },
-                    label = "Сумма на месяц",
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                if (suggestion != null) {
-                    TratyTextButton(onClick = { amount = (suggestion / 100).toString() }) {
-                        Text("Подсказка: ${formatRub(suggestion)} (средняя за 3 месяца − 10 %)")
-                    }
-                }
-                FilterChip(
-                    selected = repeats,
-                    onClick = { repeats = !repeats },
-                    label = { Text("Повторять каждый месяц") },
-                )
-                if (duplicate) {
-                    Text(
-                        "План на эту категорию уже есть, сохранение заменит его сумму.",
-                        style = TratyTheme.typography.bodySmall,
-                        color = TratyTheme.colors.warning,
-                    )
-                }
-                if (!isNew) {
-                    TratyTextButton(onClick = { edit.key?.let(onRemove) }) {
-                        Text("Убрать план с этого месяца", color = TratyTheme.colors.expense)
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            val kopecks = AmountInput.parsePositiveKopecks(amount)
-            TratyButton(
-                enabled = key != null && kopecks != null,
-                onClick = {
-                    if (key != null && kopecks != null) onSave(key, kopecks, repeats)
-                },
-            ) { Text("Сохранить") }
-        },
-        dismissButton = { TratyTextButton(onClick = onDismiss) { Text("Отмена") } },
-    )
-}
-
-/** Выбор подкатегории; «Вся категория» — план на категорию целиком. */
-@Composable
-private fun SubcategoryPicker(category: CategoryWithSubs, selected: Long?, onPick: (Long?) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    val subs = category.subs.sortedWith(compareBy({ it.sortOrder }, { it.name }))
-    val label = subs.firstOrNull { it.id == selected }?.name ?: "Вся категория"
-    Box {
-        OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth(), shape = TratyTheme.shapes.small) {
-            Text(label)
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("Вся категория") }, onClick = { onPick(null); open = false })
-            subs.forEach { s ->
-                DropdownMenuItem(text = { Text(s.name) }, onClick = { onPick(s.id); open = false })
-            }
-        }
     }
 }

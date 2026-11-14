@@ -2,6 +2,7 @@ package ru.my.traty.ui.home
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -95,6 +96,11 @@ fun HomeScreen(
     var searchQuery by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
     var expenseToDelete by remember { mutableStateOf<ExpenseWithCategory?>(null) }
+
+    BackHandler(enabled = searchActive) {
+        searchActive = false
+        searchQuery = ""
+    }
 
     val displayedExpenses = remember(expenses, selectedDate, searchQuery) {
         val base = if (selectedDate == null) {
