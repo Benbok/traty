@@ -3,14 +3,9 @@ package ru.my.traty.ui.budget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,6 +40,8 @@ import ru.my.traty.data.budget.PlanMonth
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyEmptyState
+import ru.my.traty.ui.designsystem.components.TratyHeaderCard
+import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyMonthPicker
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
@@ -59,7 +56,6 @@ import kotlin.math.roundToLong
 private data class PlanEdit(val key: PlanKey?, val amountKopecks: Long, val repeats: Boolean)
 
 /** Настройки → «План трат»: лимиты по категориям и подкатегориям на расчётный месяц. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
     val period by vm.period.collectAsStateWithLifecycle()
@@ -72,44 +68,30 @@ fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
     Scaffold(
         containerColor = TratyTheme.colors.background,
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("План трат", style = TratyTheme.typography.titleMedium)
-                        Text(
-                            "Сколько хотите тратить по категориям",
-                            style = TratyTheme.typography.bodySmall,
-                            color = TratyTheme.colors.onSurfaceVariant,
-                        )
-                    }
+            TratyHeaderCard(
+                modifier = Modifier.statusBarsPadding(),
+                title = "План трат",
+                subtitle = "Сколько хотите тратить по категориям",
+                onBack = onBack,
+                actions = {
+                    TratyIconButton(
+                        icon = Icons.Filled.Add,
+                        contentDescription = "Добавить план",
+                        onClick = { editing = PlanEdit(key = null, amountKopecks = 0, repeats = true) },
+                        containerColor = TratyTheme.colors.primaryContainer,
+                        tint = TratyTheme.colors.primary,
+                        modifier = Modifier.size(40.dp),
+                    )
                 },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = TratyTheme.colors.background,
-                    titleContentColor = TratyTheme.colors.onSurface,
-                    navigationIconContentColor = TratyTheme.colors.onSurface,
-                ),
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { editing = PlanEdit(key = null, amountKopecks = 0, repeats = true) },
-                containerColor = TratyTheme.colors.primary,
-                contentColor = TratyTheme.colors.onPrimary,
-            ) { Icon(Icons.Filled.Add, contentDescription = "Добавить план") }
         },
     ) { pad ->
         LazyColumn(
             Modifier
-                .fillMaxSize()
-                .consumeWindowInsets(pad),
-            contentPadding = PaddingValues(
-                top = pad.calculateTopPadding(),
-                // Запас снизу, чтобы последняя карточка не пряталась под кнопкой «+»
-                bottom = pad.calculateBottomPadding() + 88.dp,
-            ),
+                .padding(pad)
+                .consumeWindowInsets(pad)
+                .fillMaxSize(),
+            contentPadding = PaddingValues(bottom = TratyTheme.spacing.xxl),
             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
         ) {
             item {

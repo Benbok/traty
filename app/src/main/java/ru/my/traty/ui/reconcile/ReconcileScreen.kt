@@ -1,8 +1,10 @@
 package ru.my.traty.ui.reconcile
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -38,13 +40,17 @@ fun ReconcileScreen(mode: ReconcileMode, onBack: () -> Unit) {
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TratyHeaderCard(
+                modifier = Modifier.statusBarsPadding(),
                 title = "Сверка баланса",
                 subtitle = "Контроль соответствия с остатком на счетах",
                 onBack = onBack,
             )
         },
     ) { pad ->
-        val content = Modifier.padding(pad).fillMaxSize()
+        val content = Modifier
+            .padding(pad)
+            .consumeWindowInsets(pad)
+            .fillMaxSize()
         val result = vm.result
         if (result != null) {
             ReconcileResult(

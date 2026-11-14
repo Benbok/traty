@@ -31,7 +31,6 @@ import ru.my.traty.ui.home.ExpenseRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Storefront
@@ -86,7 +85,6 @@ import ru.my.traty.ui.designsystem.components.TratyCategoryBadge
 import ru.my.traty.ui.designsystem.components.TratyDeltaBadge
 import ru.my.traty.ui.designsystem.components.TratyEmptyState
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
-import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyMonthPicker
 import ru.my.traty.ui.designsystem.components.TratyProgressBar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
@@ -213,16 +211,6 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel(), o
                 StatsSpan.DATES -> "Выбран диапазон дат"
             },
             icon = Icons.Filled.PieChart,
-            actions = {
-                TratyIconButton(
-                    icon = Icons.Filled.DateRange,
-                    contentDescription = "Выбрать диапазон",
-                    onClick = { showRangePicker = true },
-                    containerColor = if (custom) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
-                    tint = if (custom) TratyTheme.colors.primary else TratyTheme.colors.onSurfaceVariant,
-                    modifier = Modifier.size(40.dp),
-                )
-            },
         )
 
         val ringSlices = remember(totals) { RingSlices.of(totals) }
