@@ -41,6 +41,8 @@ import ru.my.traty.data.CategoryBreakdowns
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Places
 import ru.my.traty.data.StoreTotal
+import ru.my.traty.data.period.SpendingPace
+import ru.my.traty.data.period.SpendingPaces
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.charts.components.DateRangePickerModal
 import ru.my.traty.ui.designsystem.components.AmountSize
@@ -98,6 +100,13 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
     val stores = remember(places) { Places.group(places) }
     val emojiById = remember(totals) { totals.associate { it.categoryId to it.emoji } }
 
+    // Средняя в день и прогноз на конец периода по текущему темпу (прогноз — пока период не кончился)
+    val paceEnd = range?.second ?: period.endDate
+    val pace = remember(sum, period, range) {
+        val today = LocalDate.now()
+        range?.let { SpendingPaces.of(it.first, it.second, today, sum) } ?: SpendingPaces.of(period, today, sum)
+    }
+
     val deltaDescription = if (prevSum > 0) {
         val label = if (custom) "Предыдущие такие же даты" else "Прошлый период"
         "$label: ${formatRub(prevSum)} (${deltaText(sum, prevSum)})"
@@ -123,6 +132,10 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
                 // В режиме «Даты» нажатие на подпись открывает календарь выбора диапазона
                 onDateClick = if (custom) { { showRangePicker = true } } else null,
             )
+        }
+
+        if (sum > 0 && pace != null) {
+            item { SpendingPaceCard(pace = pace, endDate = paceEnd, prevSum = prevSum, custom = custom) }
         }
 
         if (totals.isNotEmpty()) {
@@ -318,6 +331,72 @@ private fun StatsRangeDialog(
         onRangeSelected = onSelected,
         onDismiss = onDismiss,
     )
+}
+
+/**
+ * «В среднем в день» и «Прогноз к концу периода». Прогноз линейный: сколько потрачено, плюс средняя в день
+ * на каждый оставшийся день. Сравнивается с итогом прошлого периода, если он есть.
+ */
+@Composable
+private fun SpendingPaceCard(pace: SpendingPace, endDate: LocalDate, prevSum: Long, custom: Boolean) {
+    TratyCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
+        backgroundColor = TratyTheme.colors.surfaceContainer,
+    ) {
+        Row(Modifier.padding(TratyTheme.spacing.md)) {
+            Column(Modifier.weight(1f)) {
+                Text("В среднем в день", style = TratyTheme.typography.labelMedium, color = TratyTheme.colors.onSurfaceVariant)
+                TratyAmountText(amountKopecks = pace.dailyAverage, size = AmountSize.MEDIUM, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "за ${days(pace.daysPassed)}",
+                    style = TratyTheme.typography.bodySmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                )
+            }
+            val forecast = pace.forecast
+            if (forecast != null) {
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "Прогноз к ${endDate.dayOfMonth} ${shortMonth(endDate)}",
+                        style = TratyTheme.typography.labelMedium,
+                        color = TratyTheme.colors.onSurfaceVariant,
+                    )
+                    TratyAmountText(amountKopecks = forecast, size = AmountSize.MEDIUM, fontWeight = FontWeight.Bold)
+                    val note = if (prevSum > 0) {
+                        val diff = forecast - prevSum
+                        val label = if (custom) "прошлых дат" else "прошлого периода"
+                        when {
+                            diff > 0 -> "на ${formatRub(diff)} больше $label"
+                            diff < 0 -> "на ${formatRub(-diff)} меньше $label"
+                            else -> "как в прошлый раз"
+                        }
+                    } else "осталось ${days(pace.daysLeft)}"
+                    Text(
+                        text = note,
+                        style = TratyTheme.typography.bodySmall,
+                        color = if (prevSum > 0 && forecast > prevSum) TratyTheme.colors.expense else TratyTheme.colors.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private val SHORT_MONTHS_GEN = listOf("янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек")
+
+private fun shortMonth(d: LocalDate) = SHORT_MONTHS_GEN[d.monthValue - 1]
+
+/** 1 день, 3 дня, 5 дней. */
+internal fun days(n: Int): String {
+    val word = when {
+        n % 100 in 11..14 -> "дней"
+        n % 10 == 1 -> "день"
+        n % 10 in 2..4 -> "дня"
+        else -> "дней"
+    }
+    return "$n $word"
 }
 
 private fun groupKey(categoryId: Long, mode: BreakdownMode, g: BreakdownGroup) = "$categoryId/${mode.name}/${g.key}"
