@@ -24,6 +24,11 @@ enum class LlmProvider(val title: String) {
     OFFLINE("Без ИИ (простой разбор)"),
 }
 
+enum class VoiceEngine(val title: String) {
+    GIGAAM("GigaAM (на телефоне, без интернета)"),
+    SYSTEM("Системное распознавание (Google)"),
+}
+
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val provider: LlmProvider = LlmProvider.DEEPSEEK,
@@ -38,6 +43,8 @@ data class AppSettings(
     val reconcileSnoozeUntilEpochDay: Long = 0,
     /** Названия строк калькулятора остатка (без сумм). */
     val calculatorLines: List<String> = emptyList(),
+    /** Чем распознаётся речь. GigaAM работает, только когда модель скачана; иначе — системное. */
+    val voiceEngine: VoiceEngine = VoiceEngine.GIGAAM,
 )
 
 internal fun encodeLines(lines: List<String>): String =
@@ -64,6 +71,7 @@ class SettingsRepository(private val context: Context) {
         val periodStartDay = intPreferencesKey("period_start_day")
         val reconcileSnooze = longPreferencesKey("reconcile_snooze_until")
         val calculatorLines = stringPreferencesKey("calculator_lines")
+        val voiceEngine = stringPreferencesKey("voice_engine")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -80,6 +88,7 @@ class SettingsRepository(private val context: Context) {
                 .coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY),
             reconcileSnoozeUntilEpochDay = (p[K.reconcileSnooze] ?: 0L).coerceAtLeast(0L),
             calculatorLines = decodeLines(p[K.calculatorLines]),
+            voiceEngine = p[K.voiceEngine]?.let { runCatching { VoiceEngine.valueOf(it) }.getOrNull() } ?: d.voiceEngine,
         )
     }
 
@@ -110,6 +119,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setCalculatorLines(lines: List<String>) {
         context.dataStore.edit { p -> p[K.calculatorLines] = encodeLines(lines) }
+    }
+
+    suspend fun setVoiceEngine(engine: VoiceEngine) {
+        context.dataStore.edit { p -> p[K.voiceEngine] = engine.name }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {
