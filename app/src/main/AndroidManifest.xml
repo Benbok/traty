@@ -38,5 +38,16 @@
             android:taskAffinity="ru.my.traty.capture"
             android:excludeFromRecents="true"
             android:windowSoftInputMode="adjustResize" />
+
+        <service
+            android:name=".tile.VoiceTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_mic"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>
