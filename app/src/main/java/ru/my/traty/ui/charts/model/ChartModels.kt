@@ -1,5 +1,6 @@
 package ru.my.traty.ui.charts.model
 
+import ru.my.traty.data.StoreTotal
 import java.time.LocalDate
 
 /**
@@ -68,4 +69,6 @@ data class CategoryCreditShare(
     val emoji: String,
     val totalKopecks: Long,
     val percent: Float,
+    /** Разбивка категории по магазинам (по убыванию суммы, «Без магазина» последним). */
+    val stores: List<StoreTotal> = emptyList(),
 )

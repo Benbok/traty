@@ -19,8 +19,9 @@ object RuleMatcher {
     fun apply(entries: List<ParsedEntry>, rules: List<Rule>, categories: List<CategoryWithSubs>): List<RuledEntry> =
         entries.map { e ->
             if (e.entryType != EntryType.EXPENSE) return@map RuledEntry(e, null)
-            val text = listOfNotNull(e.place, e.note).joinToString(" ").lowercase()
-            val rule = rules.firstOrNull { it.pattern.isNotBlank() && text.contains(it.pattern) }
+            // «ё» и «е» не различаем: правило «пятёрочка» срабатывает и на «Пятерочка»
+            val text = listOfNotNull(e.place, e.note).joinToString(" ").lowercase().replace('ё', 'е')
+            val rule = rules.firstOrNull { it.pattern.isNotBlank() && text.contains(it.pattern.lowercase().replace('ё', 'е')) }
                 ?: return@map RuledEntry(e, null)
             // Правило на архивную/удалённую категорию не считается совпадением: иначе трата автосохранилась бы в категорию от ИИ
             val catName = categories.firstOrNull { it.category.id == rule.categoryId }?.category?.name

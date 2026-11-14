@@ -96,6 +96,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.db.expenses().observeTotals(p.startMillis(zone), p.endMillisExclusive(zone))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** Суммы по (категория, место) текущего периода — для разбивки по магазинам в статистике. */
+    val placeTotals: StateFlow<List<ru.my.traty.data.PlaceTotal>> = _period.flatMapLatest { p ->
+        c.db.expenses().observePlaceTotals(p.startMillis(zone), p.endMillisExclusive(zone))
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val prevTotals: StateFlow<List<CategoryTotal>> = _period.flatMapLatest { p ->
         val prev = p.previous(startDay)
         c.db.expenses().observeTotals(prev.startMillis(zone), prev.endMillisExclusive(zone))
@@ -302,7 +307,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     amountKopecks = amountKopecks,
                     categoryId = categoryId,
                     subcategoryId = subcategoryId,
-                    place = place?.trim()?.ifBlank { null },
+                    place = ru.my.traty.data.Places.normalize(place),
                 )
             )
             message = "Шаблон добавлен"
@@ -340,6 +345,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val day = runCatching { LocalDate.parse(fields.dateText.trim()) }.getOrNull()
         if (day == null) { message = "Некорректная дата"; return }
         viewModelScope.launch {
+            val place = ru.my.traty.data.Places.canonical(fields.place, c.db.expenses().distinctPlaces())
             val ids = c.categories.resolveForSave(
                 categoryName = fields.category,
                 newCategoryEmoji = null,
@@ -349,7 +355,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 amountKopecks = (amount * 100).roundToLong(),
                 categoryId = ids.categoryId,
                 subcategoryId = ids.subcategoryId,
-                place = fields.place.trim().ifBlank { null },
+                place = place,
                 note = fields.note.trim().ifBlank { null },
                 timestamp = ru.my.traty.data.entryTimestamp(day, zone),
             )

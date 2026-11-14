@@ -16,6 +16,12 @@ class EntryDraftTest {
     private val day = LocalDate.of(2026, 11, 13)
 
     @Test
+    fun rowFromParsedCleansShopName() {
+        val row = EntryRow.fromParsed(ParsedEntry(amount = 800.0, category = "Продукты", place = "магазин «Магнит»"), cats, day)
+        assertEquals("Магнит", row.place)
+    }
+
+    @Test
     fun rowFromParsedExpenseUsesKnownCategory() {
         val row = EntryRow.fromParsed(ParsedEntry(amount = 250.0, category = "кафе и рестораны", place = "Старбакс"), cats, day)
         assertEquals(EntryType.EXPENSE, row.type)

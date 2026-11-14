@@ -21,6 +21,9 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -40,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.data.Income
+import ru.my.traty.data.Places
 import ru.my.traty.data.isUserEditable
 import ru.my.traty.ui.charts.components.BalanceAreaChart
 import ru.my.traty.ui.charts.components.ChartDateCard
@@ -66,6 +70,8 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     var incomeToDelete by remember { mutableStateOf<Income?>(null) }
     var showRangePicker by remember { mutableStateOf(false) }
+    // Категории, раскрытые до магазинов
+    var expandedCats by remember { mutableStateOf(emptySet<Long>()) }
 
     LazyColumn(
         modifier = Modifier
@@ -168,7 +174,18 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                         Spacer(Modifier.height(TratyTheme.spacing.md))
 
                         state.categoryShares.forEach { cat ->
-                            Column(Modifier.padding(vertical = TratyTheme.spacing.xxs)) {
+                            val expandable = Places.hasNamed(cat.stores)
+                            val isExpanded = expandable && cat.categoryId in expandedCats
+                            Column(
+                                Modifier
+                                    .then(
+                                        if (expandable) Modifier.clickable {
+                                            expandedCats = if (cat.categoryId in expandedCats) expandedCats - cat.categoryId
+                                            else expandedCats + cat.categoryId
+                                        } else Modifier
+                                    )
+                                    .padding(vertical = TratyTheme.spacing.xxs),
+                            ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -195,9 +212,95 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                                         size = AmountSize.SMALL,
                                         fontWeight = FontWeight.SemiBold,
                                     )
+                                    if (expandable) {
+                                        Icon(
+                                            imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                            contentDescription = if (isExpanded) "Скрыть магазины" else "Показать магазины",
+                                            tint = TratyTheme.colors.onSurfaceVariant,
+                                            modifier = Modifier.padding(start = 2.dp).size(18.dp),
+                                        )
+                                    }
                                 }
                                 TratyProgressBar(
                                     progress = cat.percent,
+                                    color = TratyTheme.colors.expense,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                                if (isExpanded) {
+                                    cat.stores.forEach { st ->
+                                        val frac = if (cat.totalKopecks > 0) st.totalKopecks.toFloat() / cat.totalKopecks else 0f
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(start = 38.dp, top = TratyTheme.spacing.xs),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                text = st.name,
+                                                style = TratyTheme.typography.bodySmall,
+                                                color = if (st.isNoPlace) TratyTheme.colors.onSurfaceVariant else TratyTheme.colors.onSurface,
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            Text(
+                                                text = "${(frac * 100).roundToInt()}%",
+                                                style = TratyTheme.typography.labelSmall,
+                                                color = TratyTheme.colors.onSurfaceVariant,
+                                            )
+                                            Spacer(Modifier.width(TratyTheme.spacing.sm))
+                                            TratyAmountText(amountKopecks = st.totalKopecks, size = AmountSize.SMALL)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Траты по магазинам (все категории вместе)
+        if (state.topStores.isNotEmpty()) {
+            item {
+                val credit = state.summary.totalCreditKopecks
+                TratyCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    backgroundColor = TratyTheme.colors.surface,
+                    shape = TratyTheme.shapes.large,
+                ) {
+                    Column(Modifier.padding(TratyTheme.spacing.md)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Storefront,
+                                contentDescription = null,
+                                tint = TratyTheme.colors.expense,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(TratyTheme.spacing.xs))
+                            Text(text = "Траты по магазинам", style = TratyTheme.typography.titleMedium)
+                        }
+                        Spacer(Modifier.height(TratyTheme.spacing.md))
+
+                        state.topStores.take(10).forEach { st ->
+                            val frac = if (credit > 0) st.totalKopecks.toFloat() / credit else 0f
+                            Column(Modifier.padding(vertical = TratyTheme.spacing.xxs)) {
+                                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = st.name,
+                                        style = TratyTheme.typography.titleSmall,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Text(
+                                        text = "${(frac * 100).roundToInt()}%",
+                                        style = TratyTheme.typography.labelSmall,
+                                        color = TratyTheme.colors.onSurfaceVariant,
+                                    )
+                                    Spacer(Modifier.width(TratyTheme.spacing.sm))
+                                    TratyAmountText(
+                                        amountKopecks = st.totalKopecks,
+                                        size = AmountSize.SMALL,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                                TratyProgressBar(
+                                    progress = frac,
                                     color = TratyTheme.colors.expense,
                                     modifier = Modifier.padding(top = 4.dp),
                                 )

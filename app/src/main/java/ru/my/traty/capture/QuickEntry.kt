@@ -18,6 +18,7 @@ import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.Expense
 import ru.my.traty.data.Income
 import ru.my.traty.data.PendingPhrase
+import ru.my.traty.data.Places
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.SettingsRepository
 import ru.my.traty.data.entryTimestamp
@@ -153,6 +154,7 @@ class QuickEntry(
         val incomeIds = mutableListOf<Long>()
         var ruleOffer: RuleOffer? = null
         db.withTransaction {
+            val knownPlaces = db.expenses().distinctPlaces().toMutableList()
             draft.replaces?.let { old ->
                 old.expenseIds.forEach { db.expenses().deleteById(it) }
                 old.incomeIds.forEach { db.incomes().deleteById(it) }
@@ -175,16 +177,17 @@ class QuickEntry(
                         newCategoryEmoji = row.suggestedCategory?.takeIf { it.name == row.category }?.emoji,
                         subcategoryName = row.subcategory.ifBlank { null },
                     )
+                    // «пятерочка» → «Пятёрочка», если так магазин уже записан: в статистике это один магазин
+                    val place = Places.canonical(row.place, knownPlaces)?.also { if (it !in knownPlaces) knownPlaces += it }
                     val expense = Expense(
                         amountKopecks = kopecks, categoryId = ids.categoryId, subcategoryId = ids.subcategoryId,
-                        place = row.place.trim().ifBlank { null }, note = row.note.trim().ifBlank { null },
+                        place = place, note = row.note.trim().ifBlank { null },
                         timestamp = timestamp, rawText = draft.rawText.ifBlank { null },
                         source = draft.origin.toExpenseSource(),
                     )
                     expenseIds += db.expenses().insert(expense)
-                    if (ruleOffer == null) {
-                        val place = row.place.trim()
-                        if (place.isNotBlank() && db.rules().findByPattern(place.lowercase()) == null) {
+                    if (ruleOffer == null && place != null) {
+                        if (db.rules().findByPattern(place.lowercase()) == null) {
                             ruleOffer = RuleOffer(place, ids.categoryId, ids.subcategoryId, row.category)
                         }
                     }

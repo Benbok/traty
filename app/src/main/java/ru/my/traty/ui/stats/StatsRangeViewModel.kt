@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import ru.my.traty.TratyApp
 import ru.my.traty.data.CategoryTotal
+import ru.my.traty.data.PlaceTotal
 import ru.my.traty.ui.charts.customChartRange
 import java.time.LocalDate
 import java.time.ZoneId
@@ -33,6 +34,14 @@ class StatsRangeViewModel(app: Application) : AndroidViewModel(app) {
     /** Траты по категориям за выбранные даты (пусто, пока режим «Даты» выключен). */
     val totals: StateFlow<List<CategoryTotal>> = _range
         .flatMapLatest { r -> totalsFor(r) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Суммы по (категория, место) за выбранные даты — для разбивки по магазинам. */
+    val placeTotals: StateFlow<List<PlaceTotal>> = _range
+        .flatMapLatest { r ->
+            if (r == null) flowOf(emptyList())
+            else customChartRange(r.first, r.second, zone).let { c.db.expenses().observePlaceTotals(it.startMillis, it.endMillis) }
+        }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Траты за предыдущий отрезок такой же длины — для сравнения. */
