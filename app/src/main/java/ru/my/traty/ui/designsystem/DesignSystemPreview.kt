@@ -26,10 +26,12 @@ import ru.my.traty.ui.designsystem.components.TratyCategoryBadge
 import ru.my.traty.ui.designsystem.components.TratyDeltaBadge
 import ru.my.traty.ui.designsystem.components.TratyEmptyState
 import ru.my.traty.ui.designsystem.components.TratyIconButton
-import ru.my.traty.ui.designsystem.components.TratyInputBar
+import ru.my.traty.ui.capture.MicButton
+import ru.my.traty.ui.capture.RecordState
 import ru.my.traty.ui.designsystem.components.TratyMonthPicker
 import ru.my.traty.ui.designsystem.components.TratyOutlinedButton
 import ru.my.traty.ui.designsystem.components.TratyProgressBar
+import ru.my.traty.ui.designsystem.components.TratySnackbarContent
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 @Composable
@@ -118,23 +120,21 @@ fun TratyDesignSystemShowcase() {
             }
         }
 
-        // Input Bar
-        TratyInputBar(
-            value = "кофе 250",
-            onValueChange = {},
-            onManualClick = {},
-            onVoiceClick = {},
-            onSendClick = {},
-            onToggleIncomeMode = {},
+        // Mic button
+        MicButton(state = RecordState.Idle, busy = false, onClick = {})
+        MicButton(state = RecordState.Listening("кофе 250", 0.5f), busy = false, onClick = {})
+
+        // Notifications / Snackbars
+        Text("Уведомления (Snackbars)", style = TratyTheme.typography.titleMedium)
+        TratySnackbarContent(
+            message = "Трата удалена",
+            actionLabel = "Отменить",
+            onAction = {},
         )
-        TratyInputBar(
-            value = "зарплата 80000",
-            onValueChange = {},
-            onManualClick = {},
-            onVoiceClick = {},
-            onSendClick = {},
-            isIncomeMode = true,
-            onToggleIncomeMode = {},
+        TratySnackbarContent(
+            message = "Пополнение сохранено: 1",
+            withDismissAction = true,
+            onDismiss = {},
         )
 
         // Empty State

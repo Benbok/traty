@@ -2,12 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Понадобится на этапе 2 (встроенный GigaAM). Системному распознаванию не нужно. -->
+    <!-- Запись голоса: системное распознавание и встроенный GigaAM. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <queries>
+        <!-- SpeechRecognizer.isRecognitionAvailable видит сервис распознавания только с этим запросом (API 30+) -->
         <intent>
-            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 

@@ -9,8 +9,10 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,15 +26,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.withTimeoutOrNull
 import ru.my.traty.ui.charts.ChartsScreen
+import ru.my.traty.ui.designsystem.components.TratySnackbar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
-import ru.my.traty.ui.home.ConfirmDialog
+import ru.my.traty.ui.capture.EntryConfirmSheet
+import ru.my.traty.ui.home.EditExpenseDialog
 import ru.my.traty.ui.home.HomeScreen
-import ru.my.traty.ui.home.IncomeConfirmDialog
 import ru.my.traty.ui.navigation.TratyNavTab
 import ru.my.traty.ui.reconcile.ReconcileMode
 import ru.my.traty.ui.reconcile.ReconcileScreen
+import ru.my.traty.ui.settings.RulesScreen
 import ru.my.traty.ui.settings.SettingsScreen
+import ru.my.traty.ui.settings.TemplatesScreen
 import ru.my.traty.ui.stats.StatsScreen
 
 /**
@@ -43,21 +50,51 @@ import ru.my.traty.ui.stats.StatsScreen
 fun TratyRoot(vm: MainViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(TratyNavTab.HOME) }
     var showCategories by rememberSaveable { mutableStateOf(false) }
+    var showTemplates by rememberSaveable { mutableStateOf(false) }
+    var showRules by rememberSaveable { mutableStateOf(false) }
     // null - экран сверки закрыт
     var reconcileMode by rememberSaveable { mutableStateOf<ReconcileMode?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val categories by vm.categories.collectAsStateWithLifecycle()
 
     LaunchedEffect(vm.message) {
-        vm.message?.let {
-            snackbar.showSnackbar(it)
-            vm.message = null
+        val msg = vm.message ?: return@LaunchedEffect
+        val hasUndo = vm.deletedForUndo != null
+        val hasEdit = vm.lastSaved != null
+        val result = try {
+            withTimeoutOrNull(4.seconds) {
+                snackbar.showSnackbar(
+                    message = msg,
+                    actionLabel = when {
+                        hasUndo -> "Отменить"
+                        hasEdit -> "Изменить"
+                        else -> null
+                    },
+                    withDismissAction = !hasUndo && !hasEdit,
+                    duration = SnackbarDuration.Short,
+                )
+            }
+        } catch (_: Exception) {
+            null
         }
+        val acted = result == SnackbarResult.ActionPerformed
+        when {
+            acted && hasUndo -> vm.undoDelete()
+            acted && hasEdit -> vm.editLastSaved()
+            else -> vm.clearDeletedForUndo()
+        }
+        vm.lastSaved = null
+        vm.message = null
     }
 
     Box(Modifier.fillMaxSize()) {
         Scaffold(
-            snackbarHost = { SnackbarHost(snackbar) },
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = snackbar,
+                    snackbar = { data -> TratySnackbar(data) },
+                )
+            },
             containerColor = TratyTheme.colors.background,
             bottomBar = {
                 NavigationBar(
@@ -97,6 +134,8 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onOpenCategories = { showCategories = true },
                         onOpenReconcile = { reconcileMode = ReconcileMode.NORMAL },
                         onRedoReconcile = { reconcileMode = ReconcileMode.REDO },
+                        onOpenTemplates = { showTemplates = true },
+                        onOpenRules = { showRules = true },
                     )
                 }
             }
@@ -109,6 +148,18 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             }
         }
 
+        if (showTemplates) {
+            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                TemplatesScreen(vm = vm, onBack = { showTemplates = false })
+            }
+        }
+
+        if (showRules) {
+            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                RulesScreen(vm = vm, onBack = { showRules = false })
+            }
+        }
+
         reconcileMode?.let { mode ->
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
                 ReconcileScreen(mode = mode, onBack = { reconcileMode = null })
@@ -116,20 +167,59 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
         }
     }
 
-    vm.draft?.let { d ->
-        ConfirmDialog(
+    vm.confirm?.let { d ->
+        EntryConfirmSheet(
             draft = d,
             categories = categories,
-            onDismiss = { vm.draft = null },
-            onSave = vm::saveDraft,
+            notice = vm.confirmNotice,
+            onDismiss = vm::dismissConfirm,
+            onSave = { vm.saveEntry(it) },
         )
     }
 
-    vm.incomeDraft?.let { d ->
-        IncomeConfirmDialog(
-            draft = d,
-            onDismiss = { vm.incomeDraft = null },
-            onSave = vm::saveIncomeDraft,
+    vm.editing?.let { item ->
+        EditExpenseDialog(
+            item = item,
+            categories = categories,
+            onDismiss = { vm.editing = null },
+            onSave = { fields -> vm.updateExpense(item, fields) },
+            onDelete = {
+                vm.delete(item.expense)
+                vm.editing = null
+            },
+        )
+    }
+
+    vm.ruleOffer?.let { offer ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { vm.ruleOffer = null },
+            shape = TratyTheme.shapes.large,
+            containerColor = TratyTheme.colors.surface,
+            title = {
+                Text(
+                    "Запомнить правило?",
+                    style = TratyTheme.typography.titleMedium,
+                )
+            },
+            text = {
+                Text(
+                    "Всегда относить «${offer.place}» к категории «${offer.categoryName}»?",
+                    style = TratyTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                ru.my.traty.ui.designsystem.components.TratyButton(
+                    onClick = {
+                        vm.addRule(offer.place, offer.categoryId, offer.subcategoryId)
+                        vm.ruleOffer = null
+                    },
+                ) { Text("Запомнить") }
+            },
+            dismissButton = {
+                ru.my.traty.ui.designsystem.components.TratyTextButton(
+                    onClick = { vm.ruleOffer = null },
+                ) { Text("Нет") }
+            },
         )
     }
 }

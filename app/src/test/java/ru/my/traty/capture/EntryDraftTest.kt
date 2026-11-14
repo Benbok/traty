@@ -50,6 +50,19 @@ class EntryDraftTest {
     }
 
     @Test
+    fun kopecksParsesCommaAndSpaceVariants() {
+        val nbsp = 0x00A0.toChar()
+        val nnbsp = 0x202F.toChar()
+        val base = EntryRow.empty()
+        assertEquals(8_000_050L, base.copy(amountText = "80 000,50").kopecks())
+        assertEquals(8_000_050L, base.copy(amountText = "80${nbsp}000,50").kopecks())
+        assertEquals(8_000_050L, base.copy(amountText = "80${nnbsp}000,50").kopecks())
+        assertEquals(150L, base.copy(amountText = "1,5").kopecks())
+        assertEquals(3_000_000L, base.copy(amountText = "30000").kopecks())
+        assertNull(base.copy(amountText = "-5").kopecks())
+    }
+
+    @Test
     fun invalidAmountHasNoKopecks() {
         val base = EntryRow.fromParsed(ParsedEntry(amount = 1.0), cats, day)
         assertNull(base.copy(amountText = "").kopecks())

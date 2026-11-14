@@ -6,8 +6,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import ru.my.traty.ai.LlmClient
+import ru.my.traty.ai.clientFor
 import ru.my.traty.capture.QuickEntry
 import ru.my.traty.data.AppDatabase
+import ru.my.traty.data.AppSettings
 import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.ReconciliationRepository
 import ru.my.traty.data.SettingsRepository
@@ -32,11 +35,12 @@ open class TratyApp : Application() {
 class AppContainer(
     context: Context,
     val db: AppDatabase = AppDatabase.build(context),
+    clientProvider: (AppSettings) -> LlmClient? = ::clientFor,
 ) {
     val settings = SettingsRepository(context)
     val categories = CategoryRepository(db)
     val reconciliations = ReconciliationRepository(db, categories)
-    val quickEntry = QuickEntry(db, categories, settings)
+    val quickEntry = QuickEntry(db, categories, settings, clientProvider = clientProvider)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun seedIfEmpty() {

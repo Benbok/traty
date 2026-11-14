@@ -7,32 +7,6 @@ import org.junit.Test
 
 class IncomeParsingTest {
     @Test
-    fun decodeObjectInsideCodeFence() {
-        val r = IncomeParsing.decode(
-            "```json\n{\"items\":[{\"amount\":80000,\"source\":\"Зарплата\",\"date\":\"2026-11-10\"},{\"amount\":500,\"source\":\"Перевод\"}]}\n```"
-        )
-        assertEquals(listOf(80000.0, 500.0), r.map { it.amount })
-        assertEquals("Зарплата", r[0].source)
-        assertEquals("2026-11-10", r[0].date)
-        assertEquals("Перевод", r[1].source)
-    }
-
-    @Test
-    fun decodeDropsNonPositive() {
-        val r = IncomeParsing.decode("[{\"amount\":0,\"source\":\"Аванс\"},{\"amount\":-5},{\"amount\":99.5,\"source\":\"Аванс\"}]")
-        assertEquals(1, r.size)
-        assertEquals(99.5, r[0].amount, 0.0)
-    }
-
-    @Test
-    fun unknownSourceFallsBackToDefault() {
-        val r = IncomeParsing.decode(
-            "{\"items\":[{\"amount\":1,\"source\":\"зАРПЛАТА\"},{\"amount\":2,\"source\":\"Лотерея\"},{\"amount\":3,\"source\":\"  \"},{\"amount\":4}]}"
-        )
-        assertEquals(listOf("Зарплата", "Прочее", "Прочее", "Прочее"), r.map { it.source })
-    }
-
-    @Test
     fun offlineSalary() {
         val r = OfflineIncomeParser.parse("зарплата 80000")
         assertEquals(1, r.size)

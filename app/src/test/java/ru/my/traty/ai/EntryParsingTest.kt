@@ -36,6 +36,16 @@ class EntryParsingTest {
     }
 
     @Test
+    fun incomeKeepsDateAndFallsBackToDefaultSource() {
+        val r = EntryParsing.decode(
+            "{\"items\":[{\"type\":\"income\",\"amount\":80000,\"source\":\"Зарплата\",\"date\":\"2026-11-10\"}," +
+                "{\"type\":\"income\",\"amount\":2,\"source\":\"Лотерея\"},{\"type\":\"income\",\"amount\":3,\"source\":\"  \"},{\"type\":\"income\",\"amount\":4}]}"
+        )
+        assertEquals("2026-11-10", r[0].date)
+        assertEquals(listOf("Зарплата", "Прочее", "Прочее", "Прочее"), r.map { it.source })
+    }
+
+    @Test
     fun offlineDetectsIncomeByKeyword() {
         assertEquals(EntryType.INCOME, OfflineEntryParser.parse("пришла зарплата 80000", emptyList()).single().entryType)
         assertEquals(EntryType.EXPENSE, OfflineEntryParser.parse("кофе 250", emptyList()).single().entryType)

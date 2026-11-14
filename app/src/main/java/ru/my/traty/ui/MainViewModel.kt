@@ -9,6 +9,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,52 +20,39 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.my.traty.TratyApp
-import ru.my.traty.ai.ExpenseParsing
-import ru.my.traty.ai.IncomeParsing
-import ru.my.traty.ai.OfflineIncomeParser
-import ru.my.traty.ai.ParsedIncome
-import ru.my.traty.ai.OfflineParser
-import ru.my.traty.ai.ParsedExpense
+import kotlinx.serialization.json.Json
+import ru.my.traty.ai.EntryParsing
 import ru.my.traty.ai.clientFor
+import ru.my.traty.capture.EntryDraft
+import ru.my.traty.capture.EntryOrigin
+import ru.my.traty.capture.EntryOutcome
+import ru.my.traty.capture.RuleOffer
+import ru.my.traty.capture.SavedEntries
+import ru.my.traty.data.PendingPhrase
 import ru.my.traty.backup.CsvBackup
 import ru.my.traty.backup.CsvImporter
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.ThemeMode
 import ru.my.traty.data.CategoryTotal
 import ru.my.traty.data.CategoryWithSubs
-import ru.my.traty.data.DefaultCategories
 import ru.my.traty.data.Expense
 import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.ExpenseWithCategory
-import ru.my.traty.data.IncomeOrigin
+import ru.my.traty.data.Income
 import ru.my.traty.data.isUserEditable
-import ru.my.traty.data.IncomeSources
-import ru.my.traty.ui.home.IncomeDraft
-import ru.my.traty.ui.home.IncomeDraftItem
-import ru.my.traty.ui.home.toIncome
-import ru.my.traty.data.normalizeName
+import ru.my.traty.data.Rule
+import ru.my.traty.data.RuleWithNames
+import ru.my.traty.data.Template
+import ru.my.traty.data.TemplateWithCategory
+import ru.my.traty.ui.home.EditFields
 import ru.my.traty.data.selectable
 import ru.my.traty.data.period.BillingPeriod
-import ru.my.traty.data.sameName
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.roundToLong
 
-/** Новая категория, предложенная моделью (её ещё нет в базе). */
-data class NewCategory(val name: String, val emoji: String)
-
-data class DraftItem(
-    val amountText: String,
-    val category: String,
-    val subcategory: String,
-    val place: String,
-    val note: String,
-    val dateText: String,
-    /** Создаётся при сохранении, если пользователь оставил её выбранной. */
-    val suggestedCategory: NewCategory? = null,
-)
-
-data class Draft(val items: List<DraftItem>, val rawText: String, val source: String = ExpenseSource.TEXT)
+/** Последний автосохранённый ввод: по нему работает «Изменить» в снекбаре. */
+data class LastSaved(val saved: SavedEntries, val rawText: String, val origin: EntryOrigin)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -76,6 +64,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Активные (не архивные) категории — для выбора и для промпта. */
     val categories: StateFlow<List<CategoryWithSubs>> =
         c.db.categories().observeActiveWithSubs().map { it.selectable() }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Шаблоны быстрых трат — чипсы над строкой ввода. */
+    val templates: StateFlow<List<TemplateWithCategory>> =
+        c.db.templates().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Правила «место → категория». */
+    val rules: StateFlow<List<RuleWithNames>> =
+        c.db.rules().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** День начала расчётного периода из настроек (1 — календарный месяц). */
     private var startDay = 1
@@ -89,6 +85,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.db.expenses().observeRange(p.startMillis(zone), p.endMillisExclusive(zone))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** Доходы текущего периода. */
+    val incomes: StateFlow<List<Income>> = _period.flatMapLatest { p ->
+        c.db.incomes().observeRange(p.startMillis(zone), p.endMillisExclusive(zone))
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val totals: StateFlow<List<CategoryTotal>> = _period.flatMapLatest { p ->
         c.db.expenses().observeTotals(p.startMillis(zone), p.endMillisExclusive(zone))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -98,18 +99,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.db.expenses().observeTotals(prev.startMillis(zone), prev.endMillisExclusive(zone))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** Фразы без сети (ждут разбора) и разобранные в фоне (ждут проверки). */
+    val pending: StateFlow<List<PendingPhrase>> =
+        c.db.pendingPhrases().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     // --- Состояние экрана ---
-    var input by mutableStateOf("")
-    /** Текущий текст в поле пришёл из распознавания речи */
-    private var inputFromVoice = false
     var busy by mutableStateOf(false)
         private set
-    var draft by mutableStateOf<Draft?>(null)
-    /** Режим «+» в строке ввода: текст разбирается как пополнение. Сбрасывается после сохранения. */
-    var incomeMode by mutableStateOf(false)
+    /** Черновик фразы, ожидающий проверки (экран подтверждения). */
+    var confirm by mutableStateOf<EntryDraft?>(null)
+    var confirmNotice by mutableStateOf<String?>(null)
         private set
-    var incomeDraft by mutableStateOf<IncomeDraft?>(null)
+    /** Фраза из очереди, открытая на проверку: удаляется из очереди после сохранения. */
+    private var confirmPendingId: Long? = null
+    /** Что автосохранилось последним — для кнопки «Изменить» в снекбаре. */
+    var lastSaved by mutableStateOf<LastSaved?>(null)
     var message by mutableStateOf<String?>(null)
+    /** Трата, открытая для редактирования. */
+    var editing by mutableStateOf<ExpenseWithCategory?>(null)
+    /** Последняя удалённая трата для Undo. */
+    var deletedForUndo by mutableStateOf<Expense?>(null)
+        private set
+    /** Трата, для которой предлагается создать правило «место → категория». */
+    var ruleOffer by mutableStateOf<RuleOffer?>(null)
+
     var insight by mutableStateOf<String?>(null)
         private set
     var insightBusy by mutableStateOf(false)
@@ -170,120 +183,168 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         insight = null
     }
 
-    /** Результат распознавания речи: подставляем и сразу разбираем (подтверждение всё равно будет). */
-    fun onVoiceResult(text: String) {
-        input = text
-        inputFromVoice = true
-        parseInput()
-    }
-
-    /** Текст (набранный или надиктованный) → черновик трат для подтверждения. */
-    fun parseInput() {
-        val text = input.trim()
-        if (text.isEmpty() || busy) return
-        if (incomeMode) { parseIncomeInput(text); return }
-        val source = if (inputFromVoice) ExpenseSource.VOICE else ExpenseSource.TEXT
-        viewModelScope.launch {
+    /**
+     * Распознанная голосом фраза → разбор → автосохранение, экран подтверждения или очередь (нет сети).
+     * Возвращает задачу, чтобы тест мог дождаться результата.
+     */
+    fun onSpokenText(text: String): Job {
+        val phrase = text.trim()
+        if (phrase.isEmpty() || busy) return Job().also { it.complete() }
+        return viewModelScope.launch {
             busy = true
-            val cats = c.db.categories().getActiveWithSubs().selectable()
-            val client = clientFor(c.settings.current())
-            val parsed: List<ParsedExpense> = if (client == null) {
-                OfflineParser.parse(text, cats)
-            } else {
-                try {
-                    ExpenseParsing.parse(client, text, cats)
-                } catch (e: Exception) {
-                    message = "${client.name}: ${e.message ?: e.javaClass.simpleName}. Использован простой разбор."
-                    OfflineParser.parse(text, cats)
+            val outcome = try {
+                c.quickEntry.process(phrase, EntryOrigin.VOICE)
+            } finally {
+                busy = false
+            }
+            when (outcome) {
+                is EntryOutcome.AutoSaved -> {
+                    lastSaved = LastSaved(outcome.result.saved, phrase, EntryOrigin.VOICE)
+                    ruleOffer = outcome.result.ruleOffer
+                    message = "Сохранено ${outcome.result.saved.count}"
                 }
-            }
-            busy = false
-            draft = if (parsed.isEmpty()) {
-                // Ничего не распознали — откроем пустую форму, чтобы заполнить вручную
-                Draft(listOf(emptyItem()), text, source)
-            } else {
-                Draft(parsed.map { it.toDraft(cats) }, text, source)
-            }
-        }
-    }
-
-    fun toggleIncomeMode() { incomeMode = !incomeMode }
-
-    private fun parseIncomeInput(text: String) {
-        val origin = if (inputFromVoice) IncomeOrigin.VOICE else IncomeOrigin.TEXT
-        viewModelScope.launch {
-            busy = true
-            val client = clientFor(c.settings.current())
-            val parsed: List<ParsedIncome> = if (client == null) {
-                OfflineIncomeParser.parse(text)
-            } else {
-                try {
-                    IncomeParsing.parse(client, text)
-                } catch (e: Exception) {
-                    message = "${client.name}: ${e.message ?: e.javaClass.simpleName}. Использован простой разбор."
-                    OfflineIncomeParser.parse(text)
+                is EntryOutcome.NeedsConfirm -> {
+                    confirmPendingId = null
+                    confirmNotice = outcome.notice
+                    confirm = outcome.draft
                 }
+                is EntryOutcome.Queued -> message = "Нет сети, разберу позже"
             }
-            busy = false
-            val items = parsed.map { it.toDraftItem() }.ifEmpty {
-                // Ничего не распознали — пустая форма для ручного заполнения
-                listOf(IncomeDraftItem("", IncomeSources.DEFAULT, "", LocalDate.now().toString()))
-            }
-            incomeDraft = IncomeDraft(items, text, origin)
         }
     }
 
-    fun saveIncomeDraft(d: IncomeDraft) {
-        val incomes = d.items.mapNotNull { it.toIncome(d.origin, zone) }
-        if (incomes.isEmpty()) { message = "Нет корректных сумм — нечего сохранять"; return }
+    /** «Изменить» после автосохранения: открывает сохранённое на проверку; сохранение заменит старые записи. */
+    fun editLastSaved(): Job {
+        val last = lastSaved ?: return Job().also { it.complete() }
+        lastSaved = null
+        return viewModelScope.launch {
+            confirmPendingId = null
+            confirmNotice = null
+            confirm = c.quickEntry.draftFor(last.saved, last.rawText, last.origin)
+        }
+    }
+
+    /** Разобранная в фоне фраза из очереди → экран подтверждения. */
+    fun openParsedPending(p: PendingPhrase) {
+        val json = p.resultJson ?: return
+        val draft = runCatching { Json.decodeFromString<EntryDraft>(json) }.getOrNull() ?: return
+        confirmPendingId = p.id
+        confirmNotice = null
+        confirm = draft
+    }
+
+    fun dismissConfirm() {
+        confirm = null
+        confirmNotice = null
+        confirmPendingId = null
+    }
+
+    /** Сохранение черновика с экрана подтверждения: траты и пополнения одним списком. */
+    fun saveEntry(d: EntryDraft): Job = viewModelScope.launch {
+        val result = c.quickEntry.save(d)
+        if (result.saved.count == 0) { message = "Нет корректных сумм — нечего сохранять"; return@launch }
+        confirmPendingId?.let { c.db.pendingPhrases().delete(it) }
+        dismissConfirm()
+        ruleOffer = result.ruleOffer
+        message = "Сохранено: ${result.saved.count}" +
+            if (result.newCategories.isNotEmpty()) ". Новые категории: ${result.newCategories.joinToString()}" else ""
+    }
+
+    fun delete(e: Expense) = viewModelScope.launch {
+        if (e.isUserEditable) {
+            c.db.expenses().delete(e)
+            deletedForUndo = e
+            message = "Трата удалена"
+        }
+    }
+
+    fun undoDelete() {
+        val e = deletedForUndo ?: return
+        deletedForUndo = null
+        viewModelScope.launch { c.db.expenses().insert(e) }
+    }
+
+    fun clearDeletedForUndo() { deletedForUndo = null }
+
+    /** Мгновенное сохранение траты по шаблону — 1 нажатие. */
+    fun useTemplate(t: TemplateWithCategory) = viewModelScope.launch {
+        val e = Expense(
+            amountKopecks = t.template.amountKopecks,
+            categoryId = t.template.categoryId,
+            subcategoryId = t.template.subcategoryId,
+            place = t.template.place,
+            note = t.template.title,
+            timestamp = ru.my.traty.data.entryTimestamp(LocalDate.now(), zone),
+            source = ExpenseSource.MANUAL,
+        )
+        c.db.expenses().insert(e)
+        message = "${t.categoryEmoji} ${t.template.title}: ${t.template.amountKopecks / 100} ₽"
+    }
+
+    fun addTemplate(title: String, amountKopecks: Long, categoryId: Long, subcategoryId: Long?, place: String?) =
         viewModelScope.launch {
-            c.db.incomes().insertAll(incomes)
-            incomeDraft = null
-            input = ""
-            inputFromVoice = false
-            incomeMode = false
-            message = "Пополнение сохранено: ${incomes.size}"
+            c.db.templates().insert(
+                Template(
+                    title = title.trim(),
+                    amountKopecks = amountKopecks,
+                    categoryId = categoryId,
+                    subcategoryId = subcategoryId,
+                    place = place?.trim()?.ifBlank { null },
+                )
+            )
+            message = "Шаблон добавлен"
+        }
+
+    fun deleteTemplate(t: Template) = viewModelScope.launch {
+        c.db.templates().delete(t)
+        message = "Шаблон удалён"
+    }
+
+    /** Создать правило «место → категория». */
+    fun addRule(pattern: String, categoryId: Long, subcategoryId: Long?) = viewModelScope.launch {
+        val normalized = pattern.trim().lowercase()
+        if (normalized.isEmpty()) return@launch
+        val existing = c.db.rules().findByPattern(normalized)
+        if (existing != null) {
+            c.db.rules().update(existing.copy(categoryId = categoryId, subcategoryId = subcategoryId))
+            message = "Правило обновлено"
+        } else {
+            c.db.rules().insert(Rule(pattern = normalized, categoryId = categoryId, subcategoryId = subcategoryId))
+            message = "Правило создано: «$normalized»"
         }
     }
 
-    fun manualDraft() { draft = Draft(listOf(emptyItem()), "", ExpenseSource.MANUAL) }
+    fun deleteRule(r: Rule) = viewModelScope.launch {
+        c.db.rules().delete(r)
+    }
 
-    fun saveDraft(d: Draft) {
-        val valid = d.items.mapNotNull { item -> item.amountAndTime()?.let { item to it } }
-        if (valid.isEmpty()) { message = "Нет корректных сумм — нечего сохранять"; return }
+    /** Обновление существующей траты из диалога редактирования. */
+    fun updateExpense(original: ExpenseWithCategory, fields: EditFields) {
+        val e = original.expense
+        if (!e.isUserEditable) return
+        val amount = fields.amountText.replace(',', '.').replace(" ", "").toDoubleOrNull()
+        if (amount == null || amount <= 0) { message = "Некорректная сумма"; return }
+        val day = runCatching { LocalDate.parse(fields.dateText.trim()) }.getOrNull()
+        if (day == null) { message = "Некорректная дата"; return }
         viewModelScope.launch {
-            val known = c.db.categories().getAllWithSubs().map { it.category.name }
-            val expenses = valid.map { (item, at) ->
-                val ids = c.categories.resolveForSave(
-                    categoryName = item.category,
-                    newCategoryEmoji = item.suggestedCategory?.takeIf { it.name == item.category }?.emoji,
-                    subcategoryName = item.subcategory.ifBlank { null },
-                )
-                Expense(
-                    amountKopecks = at.first,
-                    categoryId = ids.categoryId,
-                    subcategoryId = ids.subcategoryId,
-                    place = item.place.trim().ifBlank { null },
-                    note = item.note.trim().ifBlank { null },
-                    timestamp = at.second,
-                    rawText = d.rawText.ifBlank { null },
-                    source = d.source,
-                )
-            }
-            c.db.expenses().insertAll(expenses)
-            val created = valid.map { it.first.category }
-                .filter { name -> known.none { sameName(it, name) } }
-                .map { normalizeName(it) }
-                .distinct()
-            draft = null
-            input = ""
-            inputFromVoice = false
-            message = "Сохранено: ${expenses.size}" +
-                if (created.isNotEmpty()) ". Новые категории: ${created.joinToString()}" else ""
+            val ids = c.categories.resolveForSave(
+                categoryName = fields.category,
+                newCategoryEmoji = null,
+                subcategoryName = fields.subcategory.ifBlank { null },
+            )
+            val updated = e.copy(
+                amountKopecks = (amount * 100).roundToLong(),
+                categoryId = ids.categoryId,
+                subcategoryId = ids.subcategoryId,
+                place = fields.place.trim().ifBlank { null },
+                note = fields.note.trim().ifBlank { null },
+                timestamp = ru.my.traty.data.entryTimestamp(day, zone),
+            )
+            c.db.expenses().update(updated)
+            editing = null
+            message = "Трата обновлена"
         }
     }
-
-    fun delete(e: Expense) = viewModelScope.launch { if (e.isUserEditable) c.db.expenses().delete(e) }
 
     fun setThemeMode(mode: ThemeMode) = viewModelScope.launch {
         c.settings.setThemeMode(mode)
@@ -302,7 +363,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.settings.save(s)
         val client = clientFor(s) ?: run { message = "Выбран режим без ИИ"; return@launch }
         message = try {
-            val r = ExpenseParsing.parse(client, "кофе двести пятьдесят и такси 400", c.db.categories().getActiveWithSubs().selectable())
+            val r = EntryParsing.parse(
+                client, "кофе двести пятьдесят и такси 400",
+                c.db.categories().getActiveWithSubs().selectable(), emptyList(), LocalDate.now(),
+            )
             "${client.name} работает: " + r.joinToString { "${it.category} ${it.amount.toInt()}" }
         } catch (e: Exception) {
             "${client.name}: ошибка — ${e.message}"
@@ -368,36 +432,5 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) {
             "Импорт не удался: ${e.message ?: e.javaClass.simpleName}"
         }
-    }
-
-    // --- Преобразования ---
-    private fun emptyItem() = DraftItem("", DefaultCategories.OTHER, "", "", "", LocalDate.now().toString())
-
-    private fun ParsedIncome.toDraftItem(): IncomeDraftItem {
-        val amountStr = if (amount % 1.0 == 0.0) amount.toLong().toString() else amount.toString()
-        val d = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()
-        return IncomeDraftItem(amountStr, IncomeSources.normalize(source), note.orEmpty(), d.toString())
-    }
-
-    private fun ParsedExpense.toDraft(cats: List<CategoryWithSubs>): DraftItem {
-        val name = normalizeName(category)
-        val known = cats.firstOrNull { sameName(it.category.name, name) }?.category?.name
-        // Категории нет в списке — предлагаем создать новую (создастся при сохранении)
-        val suggested = if (known == null && name.isNotBlank()) {
-            NewCategory(name, emoji?.trim()?.takeIf { it.isNotEmpty() && it.length <= 8 } ?: DefaultCategories.NEW_EMOJI)
-        } else null
-        val cat = known ?: suggested?.name ?: DefaultCategories.OTHER
-        val amountStr = if (amount % 1.0 == 0.0) amount.toLong().toString() else amount.toString()
-        val d = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: LocalDate.now()
-        return DraftItem(amountStr, cat, subcategory.orEmpty(), place.orEmpty(), note.orEmpty(), d.toString(), suggested)
-    }
-
-    /** Сумма в копейках и время траты, или null, если сумма некорректна. */
-    private fun DraftItem.amountAndTime(): Pair<Long, Long>? {
-        val amount = amountText.replace(',', '.').replace(" ", "").toDoubleOrNull() ?: return null
-        if (amount <= 0) return null
-        val day = runCatching { LocalDate.parse(dateText.trim()) }.getOrNull() ?: LocalDate.now()
-        // Для сегодняшних трат берём текущее время, для прошлых дат — полдень
-        return (amount * 100).roundToLong() to ru.my.traty.data.entryTimestamp(day, zone)
     }
 }
