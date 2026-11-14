@@ -106,6 +106,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.db.expenses().observeTotals(prev.startMillis(zone), prev.endMillisExclusive(zone))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /**
+     * Дни прошлого периода, с которыми честно сравнивать категории: пока период идёт — столько же первых дней,
+     * сколько прошло в текущем (см. [ru.my.traty.data.PeriodComparison.comparableWindow]).
+     */
+    val comparableWindow: StateFlow<Pair<LocalDate, LocalDate>> = _period.map { p ->
+        ru.my.traty.data.PeriodComparison.comparableWindow(p, p.previous(startDay), LocalDate.now())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, LocalDate.now() to LocalDate.now())
+
+    /** Траты по категориям за [comparableWindow] — для роста и падения по категориям и «Что изменилось». */
+    val comparableTotals: StateFlow<List<CategoryTotal>> = comparableWindow.flatMapLatest { (from, to) ->
+        c.db.expenses().observeTotals(
+            from.atStartOfDay(zone).toInstant().toEpochMilli(),
+            to.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     /** Фразы без сети (ждут разбора) и разобранные в фоне (ждут проверки). */
     val pending: StateFlow<List<PendingPhrase>> =
         c.db.pendingPhrases().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())

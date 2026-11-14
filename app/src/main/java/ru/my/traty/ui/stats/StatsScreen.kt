@@ -42,6 +42,8 @@ import ru.my.traty.data.CategoryBreakdowns
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Places
 import ru.my.traty.data.StoreTotal
+import ru.my.traty.data.CategoryChange
+import ru.my.traty.data.PeriodComparison
 import ru.my.traty.data.period.SpendingPace
 import ru.my.traty.data.period.SpendingPaces
 import ru.my.traty.ui.MainViewModel
@@ -60,7 +62,9 @@ import ru.my.traty.ui.designsystem.components.TratyProgressBar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
+import ru.my.traty.ui.formatDateSpan
 import ru.my.traty.ui.formatRub
+import ru.my.traty.ui.formatRubSigned
 import ru.my.traty.ui.formatTime
 import java.time.LocalDate
 import kotlin.math.roundToInt
@@ -74,6 +78,8 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val periodTotals by vm.totals.collectAsStateWithLifecycle()
     val periodPrev by vm.prevTotals.collectAsStateWithLifecycle()
+    val periodComparable by vm.comparableTotals.collectAsStateWithLifecycle()
+    val comparableWindow by vm.comparableWindow.collectAsStateWithLifecycle()
     val range by rangeVm.range.collectAsStateWithLifecycle()
     val customTotals by rangeVm.totals.collectAsStateWithLifecycle()
     val customPrev by rangeVm.prevTotals.collectAsStateWithLifecycle()
@@ -94,7 +100,14 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
     val custom = range != null
     val totals = if (custom) customTotals else periodTotals
     val prev = if (custom) customPrev else periodPrev
-    val prevMap = remember(prev) { prev.associate { it.categoryId to it.total } }
+    // Категории сравниваем с теми же днями прошлого периода (в режиме «Даты» прошлый отрезок и так той же длины)
+    val comparable = if (custom) customPrev else periodComparable
+    val prevMap = remember(comparable) { comparable.associate { it.categoryId to it.total } }
+    val topChanges = remember(totals, comparable) { PeriodComparison.top(totals, comparable) }
+    val compareLabel = when {
+        custom -> "с предыдущими такими же датами"
+        else -> "с ${formatDateSpan(comparableWindow.first, comparableWindow.second)}"
+    }
     val sum = totals.sumOf { it.total }
     val prevSum = prev.sumOf { it.total }
     val places = if (custom) customPlaces else periodPlaces
@@ -156,6 +169,10 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
 
         if (sum > 0 && pace != null) {
             item { SpendingPaceCard(pace = pace, endDate = paceEnd, prevSum = prevSum, custom = custom) }
+        }
+
+        if (topChanges.isNotEmpty() && comparable.isNotEmpty()) {
+            item { TopChangesCard(changes = topChanges, compareLabel = compareLabel) }
         }
 
         if (totals.isNotEmpty()) {
@@ -248,10 +265,20 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
                         color = TratyTheme.colors.onSurfaceVariant,
                     )
                     if (p != null) {
-                        TratyDeltaBadge(current = t.total, previous = p)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (t.total != p) {
+                                Text(
+                                    text = formatRubSigned(t.total - p),
+                                    style = TratyTheme.typography.labelSmall,
+                                    color = TratyTheme.colors.onSurfaceVariant,
+                                    modifier = Modifier.padding(end = TratyTheme.spacing.xs),
+                                )
+                            }
+                            TratyDeltaBadge(current = t.total, previous = p)
+                        }
                     } else {
                         Text(
-                            text = "новая категория",
+                            text = "раньше не было",
                             style = TratyTheme.typography.labelSmall,
                             color = TratyTheme.colors.info,
                         )
@@ -418,6 +445,48 @@ internal fun days(n: Int): String {
         else -> "дней"
     }
     return "$n $word"
+}
+
+/** «Что изменилось»: три категории с самой большой разницей в рублях, рост — красным, падение — зелёным. */
+@Composable
+private fun TopChangesCard(changes: List<CategoryChange>, compareLabel: String) {
+    TratyCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
+        backgroundColor = TratyTheme.colors.surfaceContainer,
+    ) {
+        Column(Modifier.padding(TratyTheme.spacing.md)) {
+            Text("Что изменилось", style = TratyTheme.typography.titleSmall)
+            Text(
+                text = "по сравнению $compareLabel",
+                style = TratyTheme.typography.bodySmall,
+                color = TratyTheme.colors.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(TratyTheme.spacing.xs))
+            changes.forEach { ch ->
+                val up = ch.diff > 0
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "${ch.emoji} ${ch.name}",
+                        style = TratyTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f),
+                    )
+                    val pct = ch.percent?.let { if (it > 0) " (+$it%)" else " ($it%)" } ?: " (новая)"
+                    Text(
+                        text = formatRubSigned(ch.diff) + pct,
+                        style = TratyTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (up) TratyTheme.colors.expense else TratyTheme.colors.income,
+                    )
+                }
+            }
+        }
+    }
 }
 
 private fun groupKey(categoryId: Long, mode: BreakdownMode, g: BreakdownGroup) = "$categoryId/${mode.name}/${g.key}"
