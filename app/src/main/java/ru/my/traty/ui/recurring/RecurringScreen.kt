@@ -81,6 +81,8 @@ fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
     }
     // null — диалог закрыт; id == 0 — новый платёж
     var editing by remember { mutableStateOf<Recurring?>(null) }
+    // платёж с меняющейся суммой: перед «Списалось» спрашиваем, сколько списалось на самом деле
+    var paying by remember { mutableStateOf<Recurring?>(null) }
 
     Column(Modifier.fillMaxSize()) {
         TratyHeaderCard(
@@ -107,7 +109,7 @@ fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
         ) {
             item {
                 Spacer(Modifier.height(TratyTheme.spacing.xs))
-                TotalsCard(totals.count, totals.monthlyKopecks, totals.yearlyKopecks)
+                TotalsCard(totals.count, totals.monthlyKopecks, totals.yearlyKopecks, totals.approximate)
             }
 
             if (upcoming.isNotEmpty()) {
@@ -146,13 +148,24 @@ fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
                 RecurringRow(
                     r,
                     onEdit = { editing = r.recurring },
-                    onMarkPaid = { vm.markPaid(r.recurring) },
+                    onMarkPaid = { if (r.recurring.amountVaries) paying = r.recurring else vm.markPaid(r.recurring) },
                     onTogglePause = { vm.setPaused(r.recurring, r.recurring.state == RecurringState.ACTIVE) },
                     onDelete = { vm.remove(r.recurring) },
                 )
             }
             item { Spacer(Modifier.height(TratyTheme.spacing.xxl)) }
         }
+    }
+
+    paying?.let { item ->
+        PaidAmountDialog(
+            item = item,
+            onDismiss = { paying = null },
+            onConfirm = { kopecks ->
+                vm.markPaid(item, kopecks)
+                paying = null
+            },
+        )
     }
 
     editing?.let { initial ->
@@ -180,14 +193,16 @@ private fun newRecurring(categories: List<CategoryWithSubs>): Recurring = Recurr
 )
 
 @Composable
-private fun TotalsCard(count: Int, monthly: Long, yearly: Long) {
+private fun TotalsCard(count: Int, monthly: Long, yearly: Long, approximate: Boolean) {
+    val sign = if (approximate) "≈ " else ""
     TratyCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(TratyTheme.spacing.lg)) {
             Text("Подписки и платежи в месяц", style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
-            Text(formatRub(monthly), style = TratyTheme.typography.titleMedium)
+            Text(sign + formatRub(monthly), style = TratyTheme.typography.titleMedium)
             Spacer(Modifier.height(TratyTheme.spacing.xs))
             Text(
-                "≈ ${formatRub(yearly)} в год · действующих платежей: $count",
+                "≈ ${formatRub(yearly)} в год · действующих платежей: $count" +
+                    if (approximate) " (часть сумм меняется)" else "",
                 style = TratyTheme.typography.bodySmall,
                 color = TratyTheme.colors.onSurfaceVariant,
             )
@@ -273,7 +288,7 @@ private fun RecurringRow(
                 Column(Modifier.weight(1f)) {
                     Text("${r.categoryEmoji} ${item.title}", style = TratyTheme.typography.titleSmall)
                     Text(
-                        "${formatRub(item.amountKopecks)} ${item.period().label()} · " +
+                        "${if (item.amountVaries) "≈ " else ""}${formatRub(item.amountKopecks)} ${item.period().label()} · " +
                             if (active) "следующее ${formatDateWithWeekday(item.nextDate())}" else "на паузе",
                         style = TratyTheme.typography.bodySmall,
                         color = TratyTheme.colors.onSurfaceVariant,
@@ -324,6 +339,7 @@ private fun RecurringEditDialog(
     var every by remember { mutableStateOf(initial.periodEvery.toString()) }
     var dateText by remember { mutableStateOf(LocalDate.ofEpochDay(initial.nextEpochDay).toString()) }
     var remind by remember { mutableStateOf(initial.remindDaysBefore) }
+    var varies by remember { mutableStateOf(initial.amountVaries) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -367,6 +383,11 @@ private fun RecurringEditDialog(
                     modifier = Modifier.fillMaxWidth(),
                     shape = TratyTheme.shapes.small,
                 )
+                FilterChip(
+                    selected = varies,
+                    onClick = { varies = !varies },
+                    label = { Text("Сумма меняется (коммуналка)") },
+                )
                 DateField(dateText = dateText, onDateTextChange = { dateText = it })
                 Text("Напомнить", style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
                 Row(
@@ -397,11 +418,43 @@ private fun RecurringEditDialog(
                                 periodEvery = n,
                                 nextEpochDay = date.toEpochDay(),
                                 remindDaysBefore = remind,
+                                amountVaries = varies,
                             )
                         )
                     }
                 },
             ) { Text(if (isNew) "Добавить" else "Сохранить") }
+        },
+        dismissButton = { TratyTextButton(onClick = onDismiss) { Text("Отмена") } },
+    )
+}
+
+@Composable
+private fun PaidAmountDialog(item: Recurring, onDismiss: () -> Unit, onConfirm: (Long) -> Unit) {
+    var amount by remember { mutableStateOf((item.amountKopecks / 100.0).toString().removeSuffix(".0")) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = TratyTheme.shapes.large,
+        containerColor = TratyTheme.colors.surface,
+        title = { Text("Сколько списалось?", style = TratyTheme.typography.titleMedium) },
+        text = {
+            OutlinedTextField(
+                value = amount,
+                onValueChange = { amount = it },
+                label = { Text("${item.title}, ₽") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = TratyTheme.shapes.small,
+            )
+        },
+        confirmButton = {
+            TratyButton(
+                onClick = {
+                    val rub = amount.replace(",", ".").replace(" ", "").toDoubleOrNull()
+                    if (rub != null && rub > 0) onConfirm(Math.round(rub * 100))
+                },
+            ) { Text("Списалось") }
         },
         dismissButton = { TratyTextButton(onClick = onDismiss) { Text("Отмена") } },
     )

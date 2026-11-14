@@ -44,12 +44,18 @@ class RecurringRepository(private val db: AppDatabase) {
      * «Списалось»: создаёт трату и переносит платёж на следующий период. Трата и сдвиг даты — в одной транзакции.
      * @return false, если платежа нет или он не действует (на паузе, скрыт).
      */
-    suspend fun markPaid(id: Long, today: LocalDate = LocalDate.now(), zone: ZoneId = ZoneId.systemDefault()): Boolean =
+    suspend fun markPaid(
+        id: Long,
+        today: LocalDate = LocalDate.now(),
+        zone: ZoneId = ZoneId.systemDefault(),
+        amountKopecks: Long? = null,
+    ): Boolean =
         db.withTransaction {
             val item = dao.getById(id)?.takeIf { it.state == RecurringState.ACTIVE } ?: return@withTransaction false
+            val paid = amountKopecks?.takeIf { it > 0 } ?: item.amountKopecks
             db.expenses().insert(
                 Expense(
-                    amountKopecks = item.amountKopecks,
+                    amountKopecks = paid,
                     currency = item.currency,
                     categoryId = item.categoryId,
                     subcategoryId = item.subcategoryId,
@@ -59,7 +65,8 @@ class RecurringRepository(private val db: AppDatabase) {
                     source = ExpenseSource.RECURRING,
                 )
             )
-            dao.update(item.copy(nextEpochDay = RecurringSchedule.nextAfterPaid(item, today).toEpochDay()))
+            // Новая сумма запоминается: для меняющихся платежей это лучшая оценка следующей
+            dao.update(item.copy(amountKopecks = paid, nextEpochDay = RecurringSchedule.nextAfterPaid(item, today).toEpochDay()))
             true
         }
 
@@ -82,7 +89,12 @@ class RecurringRepository(private val db: AppDatabase) {
         if (existing != null) {
             // Очередной платёж по расписанию (за неделю до срока и позже): сдвигаем дату, чтобы напоминание не просило отметить его ещё раз
             if (existing.state == RecurringState.ACTIVE && !day.isBefore(existing.nextDate().minusDays(7))) {
-                dao.update(existing.copy(nextEpochDay = RecurringSchedule.nextAfterPaid(existing, day).toEpochDay()))
+                dao.update(
+                    existing.copy(
+                        amountKopecks = expense.amountKopecks,
+                        nextEpochDay = RecurringSchedule.nextAfterPaid(existing, day).toEpochDay(),
+                    )
+                )
             }
             return null
         }
@@ -102,6 +114,7 @@ class RecurringRepository(private val db: AppDatabase) {
                 nextEpochDay = RecurrencePeriod.MONTHLY.advance(day).toEpochDay(),
                 autoDetected = true,
                 detectKey = key,
+                amountVaries = VARIABLE_AMOUNT_CATEGORIES.any { it.equals(categoryName, ignoreCase = true) },
             )
         )
         return title
@@ -122,6 +135,9 @@ class RecurringRepository(private val db: AppDatabase) {
          * аренда, коммуналка, кредиты). Такая трата сразу попадает в «Подписки».
          */
         val AUTO_ADD_CATEGORIES = listOf(SUBSCRIPTION_CATEGORY, "Жильё", "Коммунальные услуги", "Долги и кредиты")
+
+        /** Категории, где сумма каждый месяц другая. */
+        val VARIABLE_AMOUNT_CATEGORIES = listOf("Коммунальные услуги")
 
         /** Предложения по тратам: без уже заведённых и отклонённых платежей. */
         fun suggest(

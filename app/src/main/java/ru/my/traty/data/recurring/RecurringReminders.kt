@@ -69,10 +69,17 @@ class RecurringReminderWorker(context: Context, params: WorkerParameters) : Coro
             val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_popup_reminder)
                 .setContentTitle(RecurringSchedule.reminderTitle(daysLeft))
-                .setContentText("${item.title}: ${formatRub(item.amountKopecks)}")
+                .setContentText(
+                    if (item.amountVaries) "${item.title}: примерно ${formatRub(item.amountKopecks)}, сумма меняется"
+                    else "${item.title}: ${formatRub(item.amountKopecks)}"
+                )
                 .setContentIntent(open)
                 .setAutoCancel(true)
-                .addAction(0, "Списалось", paid)
+                .apply {
+                    // С меняющейся суммой кнопка «Списалось» из уведомления создала бы трату с чужой суммой:
+                    // точную сумму вводят в приложении
+                    if (!item.amountVaries) addAction(0, "Списалось", paid)
+                }
                 .build()
             try {
                 manager.notify(item.id.toInt(), notification)

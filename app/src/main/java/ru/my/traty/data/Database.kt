@@ -499,6 +499,8 @@ data class Recurring(
     val autoDetected: Boolean = false,
     /** Ключ автообнаружения ([ru.my.traty.data.recurring.RecurringDetector.keyOf]); у платежей, заведённых вручную, может быть пустым. */
     val detectKey: String? = null,
+    /** Сумма каждый раз другая (коммуналка): [amountKopecks] — последняя, ориентировочная. */
+    @ColumnInfo(defaultValue = "0") val amountVaries: Boolean = false,
 )
 
 data class RecurringWithNames(
@@ -584,7 +586,7 @@ interface PendingPhraseDao {
 
 @Database(
     entities = [Expense::class, Category::class, Subcategory::class, Income::class, Reconciliation::class, Template::class, Rule::class, PendingPhrase::class, Recurring::class],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -723,9 +725,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `recurring` ADD COLUMN `amountVaries` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun build(context: Context, name: String = "traty.db"): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, name)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                 // Решение владельца: в v1 реальных данных нет — базу v1 пересоздаём.
                 // Для версий 2+ — только Migration(n, n+1).
                 .fallbackToDestructiveMigrationFrom(true, 1)

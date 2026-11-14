@@ -64,7 +64,8 @@ class RecurringViewModel(app: Application) : AndroidViewModel(app) {
     fun setPaused(item: Recurring, paused: Boolean) = viewModelScope.launch { repo.setPaused(item, paused) }
 
     /** «Списалось»: трата создаётся, платёж переезжает на следующий период. */
-    fun markPaid(item: Recurring) = viewModelScope.launch { repo.markPaid(item.id) }
+    fun markPaid(item: Recurring, amountKopecks: Long? = null) =
+        viewModelScope.launch { repo.markPaid(item.id, amountKopecks = amountKopecks) }
 
     fun remove(item: Recurring) = viewModelScope.launch { repo.remove(item) }
 }

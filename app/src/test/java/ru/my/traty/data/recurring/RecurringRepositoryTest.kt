@@ -227,6 +227,39 @@ class RecurringRepositoryTest {
     }
 
     @Test
+    fun utilitiesAreMarkedAsVaryingAndOthersAreNot() = runTest {
+        val utilities = db.categories().getAllWithSubs().single { it.category.name == "Коммунальные услуги" }.category.id
+        repo.onExpenseSaved(spent(null, "квартплата", today, utilities, 650_000), "Коммунальные услуги", zone)
+        repo.onExpenseSaved(spent("Клод", null, today), "Связь и подписки", zone)
+        val byTitle = db.recurring().getAll().associateBy { it.title }
+        assertTrue(byTitle.getValue("Квартплата").amountVaries)
+        assertEquals(false, byTitle.getValue("Клод").amountVaries)
+    }
+
+    @Test
+    fun nextMonthsUtilityBillUpdatesTheEstimate() = runTest {
+        val utilities = db.categories().getAllWithSubs().single { it.category.name == "Коммунальные услуги" }.category.id
+        repo.onExpenseSaved(spent(null, "квартплата", today, utilities, 650_000), "Коммунальные услуги", zone)
+        repo.onExpenseSaved(spent(null, "квартплата", LocalDate.of(2026, 12, 14), utilities, 710_000), "Коммунальные услуги", zone)
+        val saved = db.recurring().getAll().single()
+        assertEquals(710_000L, saved.amountKopecks)
+        assertEquals(LocalDate.of(2027, 1, 14).toEpochDay(), saved.nextEpochDay)
+    }
+
+    @Test
+    fun markPaidWithActualAmountRemembersIt() = runTest {
+        val id = repo.save(
+            Recurring(
+                title = "Квартплата", amountKopecks = 650_000, categoryId = categoryId, periodUnit = "month",
+                nextEpochDay = today.toEpochDay(), amountVaries = true,
+            )
+        )
+        assertTrue(repo.markPaid(id, today, zone, amountKopecks = 702_550))
+        assertEquals(702_550L, db.expenses().getAllWithCategory().single().expense.amountKopecks)
+        assertEquals(702_550L, db.recurring().getById(id)!!.amountKopecks)
+    }
+
+    @Test
     fun mergingCategoriesMovesPayments() = runTest {
         val categories = CategoryRepository(db)
         val other = db.categories().getAllWithSubs().first { it.category.name == "Развлечения" }.category.id
