@@ -132,6 +132,8 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
     val prevMap = remember(comparable) { comparable.associate { it.categoryId to it.total } }
     val topChanges = remember(totals, comparable) { PeriodComparison.top(totals, comparable) }
     val compareLabel = when {
+        spanOf(range) == StatsSpan.DAY -> "с предыдущим днём"
+        spanOf(range) == StatsSpan.WEEK -> "с прошлой неделей"
         custom -> "с предыдущими такими же датами"
         else -> "с ${formatDateSpan(comparableWindow.first, comparableWindow.second)}"
     }
@@ -174,14 +176,24 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
     }
 
     val deltaDescription = if (prevSum > 0) {
-        val label = if (custom) "Предыдущие такие же даты" else "Прошлый период"
+        val label = when (spanOf(range)) {
+            StatsSpan.PERIOD -> "Прошлый период"
+            StatsSpan.DAY -> "Предыдущий день"
+            StatsSpan.WEEK -> "Прошлая неделя"
+            StatsSpan.DATES -> "Предыдущие такие же даты"
+        }
         "$label: ${formatRub(prevSum)} (${deltaText(sum, prevSum)})"
     } else null
 
     Column(Modifier.fillMaxSize()) {
         TratyHeaderCard(
             title = "Статистика",
-            subtitle = if (custom) "Выбран диапазон дат" else "Структура расходов по категориям",
+            subtitle = when (spanOf(range)) {
+                StatsSpan.PERIOD -> "Структура расходов по категориям"
+                StatsSpan.DAY -> "Траты за день"
+                StatsSpan.WEEK -> "Траты за неделю"
+                StatsSpan.DATES -> "Выбран диапазон дат"
+            },
             icon = Icons.Filled.PieChart,
             actions = {
                 TratyIconButton(
@@ -200,15 +212,29 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
         LazyColumn(Modifier.fillMaxSize()) {
             item(key = "mode-chips", contentType = "mode-chips") {
                 StatsModeChips(
-                customSelected = custom,
-                onPeriod = rangeVm::clear,
-                onDates = { showRangePicker = true },
-            )
-        }
+                    selected = spanOf(range),
+                    onSelect = { span ->
+                        // День и неделя берутся вокруг сегодняшнего дня; стрелки потом листают по дню / неделе
+                        val today = LocalDate.now()
+                        when (span) {
+                            StatsSpan.PERIOD -> rangeVm.clear()
+                            StatsSpan.DAY -> dayRange(today).let { rangeVm.setRange(it.first, it.second) }
+                            StatsSpan.WEEK -> weekRange(today).let { rangeVm.setRange(it.first, it.second) }
+                            StatsSpan.DATES -> showRangePicker = true
+                        }
+                    },
+                )
+            }
 
         item(key = "month-picker", contentType = "month-picker") {
             TratyMonthPicker(
-                periodLabel = range?.let { "${formatDate(it.first)} — ${formatDate(it.second)}" }
+                periodLabel = range?.let {
+                    when {
+                        it.first == it.second -> formatDateWithWeekday(it.first)
+                        spanOf(it) == StatsSpan.WEEK -> "Неделя: ${formatDateSpan(it.first, it.second)}"
+                        else -> "${formatDate(it.first)} — ${formatDate(it.second)}"
+                    }
+                }
                     ?: formatPeriod(period, settings.periodStartDay),
                 totalKopecks = sum,
                 onPrev = if (custom) { { rangeVm.shift(-1) } } else vm::prevBillingPeriod,
@@ -220,7 +246,7 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
         }
 
         if (sum > 0 && pace != null) {
-            item(key = "pace", contentType = "pace") { SpendingPaceCard(pace = pace, endDate = paceEnd, prevSum = prevSum, custom = custom) }
+            item(key = "pace", contentType = "pace") { SpendingPaceCard(pace = pace, endDate = paceEnd, prevSum = prevSum, span = spanOf(range)) }
         }
 
         if (!custom && cumulative.first.points.isNotEmpty() && cumulative.second.last > 0) {
@@ -463,7 +489,7 @@ private fun StatsRangeDialog(
  * на каждый оставшийся день. Сравнивается с итогом прошлого периода, если он есть.
  */
 @Composable
-private fun SpendingPaceCard(pace: SpendingPace, endDate: LocalDate, prevSum: Long, custom: Boolean) {
+private fun SpendingPaceCard(pace: SpendingPace, endDate: LocalDate, prevSum: Long, span: StatsSpan) {
     TratyCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -491,7 +517,12 @@ private fun SpendingPaceCard(pace: SpendingPace, endDate: LocalDate, prevSum: Lo
                     TratyAmountText(amountKopecks = forecast, size = AmountSize.MEDIUM, fontWeight = FontWeight.Bold)
                     val note = if (prevSum > 0) {
                         val diff = forecast - prevSum
-                        val label = if (custom) "прошлых дат" else "прошлого периода"
+                        val label = when (span) {
+                            StatsSpan.PERIOD -> "прошлого периода"
+                            StatsSpan.DAY -> "предыдущего дня"
+                            StatsSpan.WEEK -> "прошлой недели"
+                            StatsSpan.DATES -> "прошлых дат"
+                        }
                         when {
                             diff > 0 -> "на ${formatRub(diff)} больше $label"
                             diff < 0 -> "на ${formatRub(-diff)} меньше $label"
