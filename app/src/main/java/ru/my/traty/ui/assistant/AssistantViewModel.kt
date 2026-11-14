@@ -174,7 +174,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         return c.categories.addSubcategory(categoryId, name)
     }
 
-    fun fun showExpenses(ids: List<Long>) = viewModelScope.launch {
+    fun showExpenses(ids: List<Long>) = viewModelScope.launch {
         if (ids.isEmpty()) return@launch
         sheetRows = c.db.expenses().getByIds(ids).sortedByDescending { it.expense.timestamp }
     }
