@@ -107,18 +107,7 @@ fun HomeScreen(
                 expenseDate == selectedDate
             }
         }
-        if (searchQuery.isBlank()) base
-        else {
-            val q = searchQuery.trim().lowercase()
-            base.filter { e ->
-                e.categoryName.lowercase().contains(q)
-                    || e.subcategoryName?.lowercase()?.contains(q) == true
-                    || e.expense.place?.lowercase()?.contains(q) == true
-                    || e.expense.note?.lowercase()?.contains(q) == true
-                    || e.expense.rawText?.lowercase()?.contains(q) == true
-                    || formatRub(e.expense.amountKopecks).contains(q)
-            }
-        }
+        base.filter { FeedSearch.matches(it, searchQuery) }
     }
 
     // Фильтрация доходов по дате и поиску
@@ -127,15 +116,7 @@ fun HomeScreen(
         else allIncomes.filter { i ->
             Instant.ofEpochMilli(i.timestamp).atZone(zone).toLocalDate() == selectedDate
         }
-        if (searchQuery.isBlank()) base
-        else {
-            val q = searchQuery.trim().lowercase()
-            base.filter { i ->
-                i.source.lowercase().contains(q)
-                    || i.note?.lowercase()?.contains(q) == true
-                    || formatRub(i.amountKopecks).contains(q)
-            }
-        }
+        base.filter { FeedSearch.matches(it, searchQuery) }
     }
 
     // Единая лента: траты + доходы, отсортированная по времени
