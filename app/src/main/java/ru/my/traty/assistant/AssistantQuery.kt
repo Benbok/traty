@@ -21,6 +21,8 @@ data class AssistantQuery(
     val amount: Double? = null,
     /** Сколько позиций показать в топе. */
     val limit: Int? = null,
+    /** amount — не новая сумма, а прибавка (отрицательная — уменьшение): «увеличь лимит на 1000». */
+    val relative: Boolean = false,
 )
 
 object Intents {
@@ -38,9 +40,14 @@ object Intents {
     const val BALANCE = "balance"
     const val SUGGEST_PLAN = "suggest_plan"
     const val SET_PLAN = "set_plan"
+    const val REMOVE_PLAN = "remove_plan"
+    const val CANCEL_SUB = "cancel_subscription"
+    const val PAUSE_SUB = "pause_subscription"
+    const val RESUME_SUB = "resume_subscription"
+    const val EDIT_SUB = "edit_subscription"
     const val UNKNOWN = "unknown"
 
-    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, PLAN, BALANCE, SUGGEST_PLAN, SET_PLAN, UNKNOWN)
+    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, PLAN, BALANCE, SUGGEST_PLAN, SET_PLAN, REMOVE_PLAN, CANCEL_SUB, PAUSE_SUB, RESUME_SUB, EDIT_SUB, UNKNOWN)
 }
 
 object AssistantQueries {
@@ -58,25 +65,58 @@ object AssistantQueries {
 
     fun encode(q: AssistantQuery): String = json.encodeToString(AssistantQuery.serializer(), q)
 
-    private val setPlanRe = Regex("""(постав|установ|задай|задать|сделай|измени|поменяй|обнови)\S*\s+(мне\s+)?(лимит|план|бюджет)""")
+    private val setPlanRe = Regex("""(постав|установ|задай|задать|сделай|измени|поменяй|обнови|увелич|подним|повыс|уменьш|сниз|убав)\S*\s+(мне\s+)?(лимит|план|бюджет)""")
+    private val upRe = Regex("""(увелич|подним|повыс|добавь\s+к)\S*""")
+    private val downRe = Regex("""(уменьш|сниз|убав|урежь)\S*""")
+    private val removePlanRe = Regex("""(убер|убр|удал|сним|снят|отмен|отключ|сбрось)\S*\s+(мне\s+|мой\s+|весь\s+)?(лимит|план|бюджет)""")
     private val suggestPlanRe = Regex("""(предлож|состав|подбер|рассчита|посчита|прикин)\S*.*(план|лимит|бюджет)|^\s*(план|бюджет)\s+(трат|расходов)?\s*(на\s+(месяц|период))?\s*[.!?]*\s*$|какие\s+лимиты""")
     private val amountRe = Regex("""(\d[\d\s\u00A0]*(?:[.,]\d+)?)\s*(тыс\S*|т\.?|к)?(?![\p{L}\d])""")
+    private val subWordRe = Regex("""подписк\S*|регулярн\S*\s+платеж\S*|платеж\S*""")
+    private val cancelSubRe = Regex("""(отмен|удал|убер|убр|отключ|отпис|прекрат|выкин)\S*.*(подписк|платеж)|отпис\S*\s+(меня\s+)?от""")
+    private val pauseSubRe = Regex("""на\s+паузу|приостанов|заморо[зж]|пауз""")
+    private val editSubRe = Regex("""(измени|поменяй|обнови|исправь|перенеси|скорректируй|подправь)\S*.*(подписк|платеж)""")
+    private val resumeSubRe = Regex("""(возобнов|верни|включи|восстанов|продолж)\S*.*(подписк|платеж)|сними\s+с\s+паузы""")
 
     /**
-     * Команды про план модель иногда принимает за вопрос («поставь лимит на кафе 2500» → afford/plan).
-     * Явные формулировки распознаём сами: так кнопка «Добавить в план» появляется всегда.
+     * Команды про план и подписки модель иногда принимает за вопрос («поставь лимит на кафе 2500» → afford/plan).
+     * Явные формулировки распознаём сами: так кнопка подтверждения появляется всегда.
      */
     fun correct(question: String, q: AssistantQuery): AssistantQuery {
         val text = question.lowercase().replace('ё', 'е')
+        val sub = subWordRe.containsMatchIn(text)
         return when {
+            sub && resumeSubRe.containsMatchIn(text) -> q.copy(intent = Intents.RESUME_SUB, place = q.place ?: subNameIn(text))
+            sub && pauseSubRe.containsMatchIn(text) -> q.copy(intent = Intents.PAUSE_SUB, place = q.place ?: subNameIn(text))
+            sub && editSubRe.containsMatchIn(text) && q.intent != Intents.EDIT_SUB ->
+                q.copy(intent = Intents.EDIT_SUB, place = q.place ?: subNameIn(text), amount = q.amount ?: amountIn(text))
+            sub && cancelSubRe.containsMatchIn(text) -> q.copy(intent = Intents.CANCEL_SUB, place = q.place ?: subNameIn(text))
+            removePlanRe.containsMatchIn(text) -> q.copy(intent = Intents.REMOVE_PLAN)
             setPlanRe.containsMatchIn(text) -> {
-                val amount = q.amount?.takeIf { it > 0 } ?: amountIn(text)
-                if (amount == null) q else q.copy(intent = Intents.SET_PLAN, amount = amount)
+                val amount = q.amount?.takeIf { it != 0.0 }?.let { kotlin.math.abs(it) } ?: amountIn(text)
+                val absolute = Regex("""(?:\s|^)до\s+\d""").containsMatchIn(text) || Regex("""(постав|установ|задай|задать)""").containsMatchIn(text)
+                val relative = !absolute && (upRe.containsMatchIn(text) || downRe.containsMatchIn(text))
+                when {
+                    amount == null -> q
+                    relative -> q.copy(intent = Intents.SET_PLAN, amount = if (downRe.containsMatchIn(text)) -amount else amount, relative = true)
+                    else -> q.copy(intent = Intents.SET_PLAN, amount = amount, relative = false)
+                }
             }
             q.intent != Intents.SET_PLAN && suggestPlanRe.containsMatchIn(text) -> q.copy(intent = Intents.SUGGEST_PLAN)
             else -> q
         }
     }
+
+    /** Название подписки из фразы «отмени подписку Яндекс Плюс»: то, что идёт после слова «подписка». */
+    internal fun subNameIn(text: String): String? {
+        val m = subWordRe.find(text) ?: return null
+        val rest = text.substring(m.range.last + 1)
+            .replace(Regex("""\d[\d\s.,]*\S*"""), " ")
+            .split(Regex("""[\s,.!?]+""")).filter { it.isNotEmpty() }
+            .filterNot { it in STOP_WORDS }
+        return rest.joinToString(" ").takeIf { it.isNotBlank() }
+    }
+
+    private val STOP_WORDS = setOf("на", "в", "по", "у", "мою", "мне", "эту", "пожалуйста", "пауза", "паузу", "до", "с", "за", "руб", "рублей", "р", "месяц", "теперь", "сумму", "дату", "списание", "и")
 
     /** Последнее число в тексте, в рублях: «3 000» → 3000, «3 тысячи» / «3к» → 3000. */
     internal fun amountIn(text: String): Double? {

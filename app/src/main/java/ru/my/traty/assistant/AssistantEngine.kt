@@ -72,6 +72,8 @@ data class AssistantData(
     val planProposals: List<PlanProposal> = emptyList(),
     /** Месяц плана (ГГГГММ), в который добавятся предложения. */
     val planMonth: Int? = null,
+    /** Отмена, пауза, возобновление и правка подписок: тоже только по кнопке. */
+    val subscriptionChanges: List<SubscriptionChange> = emptyList(),
 )
 
 /** Предложенная строка плана трат. Сумму считает приложение, ИИ её не меняет. */
@@ -87,6 +89,24 @@ data class PlanProposal(
     val basis: String = "",
     /** Такой подкатегории ещё нет: по кнопке она создаётся в categoryId, и план ставится на неё. */
     val newSubcategory: String? = null,
+    /** Убрать план с этого месяца вместо того, чтобы задать сумму. */
+    val remove: Boolean = false,
+)
+
+enum class SubAction { CANCEL, PAUSE, RESUME, EDIT }
+
+/** Изменение подписки по просьбе пользователя; применяется только по кнопке. */
+data class SubscriptionChange(
+    val id: Long,
+    val title: String,
+    val action: SubAction,
+    val amountKopecks: Long,
+    /** Новая сумма для EDIT; null — не меняется. */
+    val newAmountKopecks: Long? = null,
+    /** Новая дата следующего списания для EDIT; null — не меняется. */
+    val newNextDay: LocalDate? = null,
+    /** Что произойдёт, одной строкой: показывается под названием. */
+    val summary: String,
 )
 
 /** Считает ответ на [AssistantQuery] по данным на телефоне. Чистая логика без Android. */
@@ -105,6 +125,7 @@ object AssistantEngine {
     fun run(q: AssistantQuery, ctx: AssistantContext): AssistantData {
         if (q.intent == Intents.UNKNOWN) return AssistantData(facts = "", direct = NOT_UNDERSTOOD)
         val spending = ctx.expenses.filter { it.expense.source != ExpenseSource.RECONCILE }
+        subscriptionAction(q.intent)?.let { return changeSubscription(q, ctx, it) }
         val period = BillingPeriod.containing(ctx.today, ctx.startDay)
         val (from, to) = range(q.from, q.to, period.startDate, ctx.today)
 
@@ -268,6 +289,8 @@ object AssistantEngine {
             Intents.SUGGEST_PLAN -> suggestPlan(ctx, spending, period, filter.names)
 
             Intents.SET_PLAN -> setPlan(q, ctx, period, filter.names)
+
+            Intents.REMOVE_PLAN -> removePlan(ctx, period, filter.names)
 
             Intents.BALANCE -> {
                 val b = ctx.balance
@@ -495,26 +518,154 @@ object AssistantEngine {
 
     /** «Поставь план на кафе 10 000»: одна строка с суммой пользователя, добавляется по кнопке. */
     private fun setPlan(q: AssistantQuery, ctx: AssistantContext, period: BillingPeriod, names: Set<String>): AssistantData {
-        val amount = ((q.amount ?: 0.0) * 100).roundToLong()
+        val raw = ((q.amount ?: 0.0) * 100).roundToLong()
         val month = PlanMonth.of(period)
         val target = keysFor(ctx, names).firstOrNull()
+        val now = target?.let { t -> BudgetPlans.effective(ctx.budgets, month).firstOrNull { PlanKey(it.categoryId, it.subcategoryId) == t.first } }
+        // «Увеличь лимит на 1000»: прибавка к действующему плану, а не новая сумма
+        val amount = if (q.relative) (now?.amountKopecks ?: 0L) + raw else raw
         val facts = buildString {
             append(header(ctx))
             when {
                 target == null -> appendLine("Не понял, для какой категории поставить план. Нужно назвать категорию из списка.")
+                q.relative && now == null -> appendLine("На «${target.second}» плана сейчас нет, поэтому увеличивать или уменьшать нечего. Попроси назвать сумму плана.")
+                q.relative && amount <= 0 -> appendLine("План «${target.second}» сейчас ${formatRub(now!!.amountKopecks)}, после такого уменьшения он стал бы нулевым. Если план нужен не весь, назови новую сумму, а чтобы убрать план совсем, попроси «убери лимит».")
                 amount <= 0 -> appendLine("Не понял сумму плана для «${target.second}».")
                 else -> {
-                    val now = BudgetPlans.effective(ctx.budgets, month).firstOrNull { PlanKey(it.categoryId, it.subcategoryId) == target.first }
                     appendLine("Готово к добавлению: план «${target.second}» ${formatRub(amount)} на период ${span(period.startDate, period.endDate)} и дальше каждый месяц.")
-                    appendLine(now?.let { "Сейчас план ${formatRub(it.amountKopecks)}, он заменится." } ?: "Сейчас плана нет.")
+                    appendLine(now?.let { "Сейчас план ${formatRub(it.amountKopecks)}, он заменится (${signed(amount - it.amountKopecks)})." } ?: "Сейчас плана нет.")
                     appendLine("План ещё не изменён: пользователь подтверждает кнопкой под ответом.")
                 }
             }
         }
-        if (target == null || amount <= 0) return AssistantData(facts)
-        val now = BudgetPlans.effective(ctx.budgets, month).firstOrNull { PlanKey(it.categoryId, it.subcategoryId) == target.first }
+        if (target == null || amount <= 0 || (q.relative && now == null)) return AssistantData(facts)
         val proposal = PlanProposal(target.first.categoryId, target.first.subcategoryId, target.second, target.third, amount, now?.amountKopecks)
         return AssistantData(facts, formatRub(amount), "новый план «${target.second}»", planProposals = listOf(proposal), planMonth = month)
+    }
+
+    private fun titleOf(ctx: AssistantContext, key: PlanKey): Pair<String, String>? {
+        val c = ctx.categories.firstOrNull { it.category.id == key.categoryId } ?: return null
+        val sub = key.subcategoryId?.let { id -> c.subs.firstOrNull { it.id == id } }
+        if (key.subcategoryId != null && sub == null) return null
+        return (if (sub != null) "${c.category.name} · ${sub.name}" else c.category.name) to c.category.emoji
+    }
+
+    /** «Убери лимит на кафе»: действующий план убирается с текущего месяца, прошлые не меняются. Только по кнопке. */
+    private fun removePlan(ctx: AssistantContext, period: BillingPeriod, names: Set<String>): AssistantData {
+        val month = PlanMonth.of(period)
+        val effective = BudgetPlans.effective(ctx.budgets, month)
+        val byKey = effective.associateBy { PlanKey(it.categoryId, it.subcategoryId) }
+        val existing = effective.mapNotNull { b -> titleOf(ctx, PlanKey(b.categoryId, b.subcategoryId))?.let { (t, _) -> t } }
+        val targets = if (names.isEmpty()) emptyList() else keysFor(ctx, names).filter { it.first in byKey }
+        val facts = buildString {
+            append(header(ctx))
+            when {
+                effective.isEmpty() -> appendLine("План трат на этот период не задан, убирать нечего.")
+                names.isEmpty() -> appendLine("Не понял, какой план убрать. Сейчас есть планы: ${existing.joinToString(", ")}. Попроси назвать категорию.")
+                targets.isEmpty() -> appendLine("Для «${names.joinToString("», «")}» плана нет. Сейчас есть планы: ${existing.joinToString(", ")}.")
+                else -> {
+                    targets.forEach { (key, title, _) ->
+                        appendLine("Предлагается убрать план «$title» (сейчас ${formatRub(byKey.getValue(key).amountKopecks)}) начиная с периода ${span(period.startDate, period.endDate)}.")
+                    }
+                    appendLine("Прошлые периоды не меняются. План ещё не убран: пользователь подтверждает кнопкой под ответом.")
+                }
+            }
+        }
+        if (targets.isEmpty()) return AssistantData(facts)
+        val proposals = targets.map { (key, title, emoji) ->
+            PlanProposal(key.categoryId, key.subcategoryId, title, emoji, 0, byKey.getValue(key).amountKopecks, basis = "убрать из плана", remove = true)
+        }
+        return AssistantData(facts, planProposals = proposals, planMonth = month)
+    }
+
+    private fun subscriptionAction(intent: String): SubAction? = when (intent) {
+        Intents.CANCEL_SUB -> SubAction.CANCEL
+        Intents.PAUSE_SUB -> SubAction.PAUSE
+        Intents.RESUME_SUB -> SubAction.RESUME
+        Intents.EDIT_SUB -> SubAction.EDIT
+        else -> null
+    }
+
+    /**
+     * Отмена, пауза, возобновление и правка подписки. Подписка ищется по названию (из place или categories).
+     * Если подходит больше одной — ничего не предлагаем и просим уточнить: отменять «на всякий случай» нельзя.
+     */
+    private fun changeSubscription(q: AssistantQuery, ctx: AssistantContext, action: SubAction): AssistantData {
+        val visible = ctx.recurring.filter { it.state != RecurringState.DISMISSED }
+        val pool = when (action) {
+            SubAction.CANCEL, SubAction.EDIT -> visible
+            SubAction.PAUSE -> visible.filter { it.state == RecurringState.ACTIVE }
+            SubAction.RESUME -> visible.filter { it.state == RecurringState.PAUSED }
+        }
+        val name = (q.place ?: q.categories.firstOrNull())?.trim()?.lowercase(RU)?.takeIf { it.isNotEmpty() }
+        val list = pool.joinToString(", ") { it.title }
+        val verb = when (action) { SubAction.CANCEL -> "отменить"; SubAction.PAUSE -> "поставить на паузу"; SubAction.RESUME -> "возобновить"; SubAction.EDIT -> "изменить" }
+        fun reply(text: String) = AssistantData(header(ctx) + text)
+        if (pool.isEmpty()) return reply(
+            if (visible.isEmpty()) "Подписок и регулярных платежей в приложении нет."
+            else "Подписок, которые можно $verb, нет."
+        )
+        if (name == null) return reply("Не понял, какую подписку $verb. Сейчас есть: $list. Попроси назвать подписку.")
+        val matches = pool.filter { r -> subMatches(r, name) }
+        val exact = matches.filter { it.title.lowercase(RU) == name }
+        val chosen = when {
+            exact.size == 1 -> exact.first()
+            matches.size == 1 -> matches.first()
+            matches.isEmpty() -> return reply("Подписки «$name» среди возможных нет. Есть: $list.")
+            else -> return reply("Под «$name» подходит несколько подписок: ${matches.joinToString(", ") { it.title }}. Ничего не предлагаю, пока пользователь не уточнит, какую именно.")
+        }
+        val amountText = (if (chosen.amountVaries) "около " else "") + formatRub(chosen.amountKopecks)
+        val line = "«${chosen.title}», $amountText, ${chosen.period().label()}, следующее списание ${date(chosen.nextDate())}"
+        val change: SubscriptionChange
+        val facts = buildString {
+            append(header(ctx))
+            when (action) {
+                SubAction.CANCEL -> {
+                    appendLine("Предлагается отменить подписку $line.")
+                    appendLine("Что сделает приложение: уберёт платёж из «Подписок», перестанет напоминать о списании и учитывать его в итогах. Экономия за год: ${formatRub(chosen.yearlyKopecks)}.")
+                    appendLine("Важно: приложение не отключает подписку в самом сервисе. Отписаться там нужно самому, иначе деньги продолжат списываться.")
+                    change = SubscriptionChange(chosen.id, chosen.title, action, chosen.amountKopecks, summary = "убрать из подписок · экономия ${formatRub(chosen.yearlyKopecks)} в год")
+                }
+                SubAction.PAUSE -> {
+                    appendLine("Предлагается поставить на паузу подписку $line.")
+                    appendLine("На паузе приложение не напоминает о списании и не учитывает платёж в итогах; вернуть можно в любой момент.")
+                    appendLine("Сам сервис приложение не останавливает.")
+                    change = SubscriptionChange(chosen.id, chosen.title, action, chosen.amountKopecks, summary = "пауза: без напоминаний и учёта")
+                }
+                SubAction.RESUME -> {
+                    appendLine("Предлагается снова включить подписку $line.")
+                    change = SubscriptionChange(chosen.id, chosen.title, action, chosen.amountKopecks, summary = "снова учитывать и напоминать")
+                }
+                SubAction.EDIT -> {
+                    val newAmount = ((q.amount ?: 0.0) * 100).roundToLong().takeIf { it > 0 }
+                    val newDay = runCatching { q.from?.let(LocalDate::parse) }.getOrNull()?.takeIf { !it.isBefore(ctx.today) }
+                    if (newAmount == null && newDay == null) {
+                        appendLine("Подписка $line найдена, но не понятно, что в ней менять. Приложение умеет менять сумму и дату следующего списания. Попроси уточнить.")
+                        return AssistantData(toString())
+                    }
+                    val parts = listOfNotNull(
+                        newAmount?.let { "сумма ${formatRub(chosen.amountKopecks)} → ${formatRub(it)}" },
+                        newDay?.let { "следующее списание ${date(chosen.nextDate())} → ${date(it)}" },
+                    )
+                    appendLine("Предлагается изменить подписку «${chosen.title}»: ${parts.joinToString("; ")}.")
+                    change = SubscriptionChange(chosen.id, chosen.title, action, chosen.amountKopecks, newAmount, newDay, summary = parts.joinToString("; "))
+                }
+            }
+            appendLine("Пока ничего не изменено: пользователь подтверждает кнопкой под ответом.")
+        }
+        val headline = when (action) {
+            SubAction.CANCEL -> formatRub(chosen.yearlyKopecks) to "экономия в год"
+            SubAction.EDIT -> change.newAmountKopecks?.let { formatRub(it) to "новая сумма «${chosen.title}»" }
+            else -> null
+        }
+        return AssistantData(facts, headline?.first, headline?.second, subscriptionChanges = listOf(change))
+    }
+
+    private fun subMatches(r: Recurring, name: String): Boolean {
+        val title = r.title.lowercase(RU)
+        val place = r.place?.lowercase(RU).orEmpty()
+        return title.contains(name) || (name.length >= 3 && name.contains(title)) ||
+            (place.isNotEmpty() && (place.contains(name) || (name.length >= 3 && name.contains(place))))
     }
 
     /**

@@ -25,12 +25,15 @@ import ru.my.traty.assistant.AssistantQuery
 import ru.my.traty.assistant.AssistantTurn
 import ru.my.traty.assistant.Intents
 import ru.my.traty.assistant.PlanProposal
+import ru.my.traty.assistant.SubAction
+import ru.my.traty.assistant.SubscriptionChange
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.LlmProvider
 import ru.my.traty.data.selectable
 import ru.my.traty.data.budget.BudgetRepository
 import ru.my.traty.data.budget.PlanKey
+import ru.my.traty.data.recurring.RecurringRepository
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -53,6 +56,10 @@ data class ChatMessage(
     val planMonth: Int? = null,
     /** Сколько строк уже добавлено в план; null — ещё не добавляли. */
     val planApplied: Int? = null,
+    /** Предложенные изменения подписок — выполняются по кнопке. */
+    val subscriptionChanges: List<SubscriptionChange> = emptyList(),
+    /** Сколько изменений подписок уже выполнено; null — ещё нет. */
+    val subscriptionsApplied: Int? = null,
 )
 
 /**
@@ -74,6 +81,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     private val budgets = BudgetRepository(c.db)
+    private val subscriptions = RecurringRepository(c.db)
     private val history = ArrayList<AssistantTurn>()
     private var nextId = 1L
 
@@ -134,6 +142,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     sentFacts = data.facts.takeIf { data.direct == null },
                     planProposals = data.planProposals,
                     planMonth = data.planMonth,
+                    subscriptionChanges = data.subscriptionChanges,
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -154,8 +163,12 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 selected.forEach { p ->
-                    val subId = p.newSubcategory?.let { name -> subcategoryId(p.categoryId, name) } ?: p.subcategoryId
-                    budgets.set(PlanKey(p.categoryId, subId), month, p.amountKopecks, repeats = true)
+                    if (p.remove) {
+                        budgets.removeFrom(PlanKey(p.categoryId, p.subcategoryId), month)
+                    } else {
+                        val subId = p.newSubcategory?.let { name -> subcategoryId(p.categoryId, name) } ?: p.subcategoryId
+                        budgets.set(PlanKey(p.categoryId, subId), month, p.amountKopecks, repeats = true)
+                    }
                 }
                 val i = messages.indexOfFirst { it.id == messageId }
                 if (i >= 0) messages[i] = messages[i].copy(planApplied = selected.size)
@@ -163,6 +176,37 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Exception) {
                 messages += ChatMessage(nextId++, false, "Не удалось добавить в план: ${e.message}", error = true)
+            }
+        }
+    }
+
+    /** Выполняет отмеченные изменения подписок. Платёж читается заново: пока шёл разговор, он мог измениться. */
+    fun applySubscriptions(messageId: Long, selected: List<SubscriptionChange>) {
+        if (selected.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                var done = 0
+                selected.forEach { ch ->
+                    val item = c.db.recurring().getById(ch.id) ?: return@forEach
+                    when (ch.action) {
+                        SubAction.CANCEL -> subscriptions.remove(item)
+                        SubAction.PAUSE -> subscriptions.setPaused(item, true)
+                        SubAction.RESUME -> subscriptions.setPaused(item, false)
+                        SubAction.EDIT -> subscriptions.save(
+                            item.copy(
+                                amountKopecks = ch.newAmountKopecks ?: item.amountKopecks,
+                                nextEpochDay = ch.newNextDay?.toEpochDay() ?: item.nextEpochDay,
+                            )
+                        )
+                    }
+                    done++
+                }
+                val i = messages.indexOfFirst { it.id == messageId }
+                if (i >= 0) messages[i] = messages[i].copy(subscriptionsApplied = done)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                messages += ChatMessage(nextId++, false, "Не удалось изменить подписку: ${e.message}", error = true)
             }
         }
     }
