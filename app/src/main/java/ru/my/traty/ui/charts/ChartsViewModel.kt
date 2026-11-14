@@ -29,7 +29,6 @@ import ru.my.traty.ui.charts.model.ChartSummary
 import ru.my.traty.ui.charts.model.DebitCreditBar
 import java.time.Instant
 import java.time.LocalDate
-import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
@@ -75,27 +74,16 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private val rangeFlow = combine(period, billingPeriod, customRange) { p, bp, custom ->
+    private val rangeFlow = combine(period, billingPeriod, customRange, startDay) { p, bp, custom, d ->
         val now = LocalDate.now()
         when (p) {
             ChartPeriod.CUSTOM -> customChartRange(custom.first, custom.second, zone)
             ChartPeriod.MONTH -> {
                 ChartRange(bp.startMillis(zone), bp.endMillisExclusive(zone), bp.startDate, bp.endDate)
             }
-            ChartPeriod.QUARTER -> {
-                val endMonth = YearMonth.from(now)
-                val startMonth = endMonth.minusMonths(2)
-                ChartRange(startMonth.atDay(1).toStartMillis(), endMonth.plusMonths(1).atDay(1).toStartMillis(), startMonth.atDay(1), endMonth.atEndOfMonth())
-            }
-            ChartPeriod.HALF_YEAR -> {
-                val endMonth = YearMonth.from(now)
-                val startMonth = endMonth.minusMonths(5)
-                ChartRange(startMonth.atDay(1).toStartMillis(), endMonth.plusMonths(1).atDay(1).toStartMillis(), startMonth.atDay(1), endMonth.atEndOfMonth())
-            }
-            ChartPeriod.YEAR -> {
-                val endMonth = YearMonth.from(now)
-                val startMonth = endMonth.minusMonths(11)
-                ChartRange(startMonth.atDay(1).toStartMillis(), endMonth.plusMonths(1).atDay(1).toStartMillis(), startMonth.atDay(1), endMonth.atEndOfMonth())
+            ChartPeriod.QUARTER, ChartPeriod.HALF_YEAR, ChartPeriod.YEAR -> {
+                // Окно из N расчётных периодов, последний из них — текущий (содержит сегодня).
+                billingPeriodsRange(BillingPeriod.containing(now, d), p.billingPeriodCount()!!, d, zone)
             }
             ChartPeriod.ALL -> {
                 val start = LocalDate.of(2020, 1, 1)
@@ -181,8 +169,8 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
             expenseCount = expenses.size,
         )
 
-        val balancePoints = calculateBalancePoints(p, range, expenses, incomes)
-        val debitCreditBars = calculateDebitCreditBars(p, range, expenses, incomes)
+        val balancePoints = calculateBalancePoints(p, startDay, range, expenses, incomes)
+        val debitCreditBars = calculateDebitCreditBars(p, startDay, range, expenses, incomes)
         val categoryShares = calculateCategoryShares(expenses, totalCredit)
 
         return ChartsUiState(
@@ -202,6 +190,7 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun calculateBalancePoints(
         period: ChartPeriod,
+        startDay: Int,
         range: ChartRange,
         expenses: List<ExpenseWithCategory>,
         incomes: List<Income>,
@@ -240,36 +229,27 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
                 curDate = curDate.plusDays(1)
             }
         } else {
-            // Для более длинных периодов группируем по месяцам
-            var curMonth = YearMonth.from(range.startDate)
-            val endMonth = YearMonth.from(range.endDate)
-
-            while (!curMonth.isAfter(endMonth)) {
-                val monthStart = curMonth.atDay(1)
-                val monthEnd = curMonth.atEndOfMonth()
-
-                val monthDebit = incomes.filter {
-                    val d = Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate()
-                    !d.isBefore(monthStart) && !d.isAfter(monthEnd)
+            // Для более длинных периодов группируем по расчётным периодам (при дне начала 1 — по месяцам)
+            for (bucket in billingBuckets(range.startDate, range.endDate, startDay)) {
+                val bucketDebit = incomes.filter {
+                    Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate() in bucket
                 }.sumOf { it.amountKopecks }
 
-                val monthCredit = expenses.filter {
-                    val d = Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate()
-                    !d.isBefore(monthStart) && !d.isAfter(monthEnd)
+                val bucketCredit = expenses.filter {
+                    Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate() in bucket
                 }.sumOf { it.expense.amountKopecks }
 
-                val delta = monthDebit - monthCredit
+                val delta = bucketDebit - bucketCredit
                 runningCumulative += delta
 
                 points.add(
                     BalancePoint(
-                        label = curMonth.month.getDisplayName(TextStyle.SHORT, RU).replaceFirstChar { it.uppercase() },
-                        date = monthEnd,
+                        label = bucketShortLabel(bucket),
+                        date = bucket.endDate,
                         deltaKopecks = delta,
                         cumulativeBalanceKopecks = runningCumulative,
                     ),
                 )
-                curMonth = curMonth.plusMonths(1)
             }
         }
         return points
@@ -277,6 +257,7 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun calculateDebitCreditBars(
         period: ChartPeriod,
+        startDay: Int,
         range: ChartRange,
         expenses: List<ExpenseWithCategory>,
         incomes: List<Income>,
@@ -308,33 +289,24 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
                 curDate = curDate.plusDays(1)
             }
         } else {
-            var curMonth = YearMonth.from(range.startDate)
-            val endMonth = YearMonth.from(range.endDate)
-
-            while (!curMonth.isAfter(endMonth)) {
-                val monthStart = curMonth.atDay(1)
-                val monthEnd = curMonth.atEndOfMonth()
-
-                val monthDebit = incomes.filter {
-                    val d = Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate()
-                    !d.isBefore(monthStart) && !d.isAfter(monthEnd)
+            for (bucket in billingBuckets(range.startDate, range.endDate, startDay)) {
+                val bucketDebit = incomes.filter {
+                    Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate() in bucket
                 }.sumOf { it.amountKopecks }
 
-                val monthCredit = expenses.filter {
-                    val d = Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate()
-                    !d.isBefore(monthStart) && !d.isAfter(monthEnd)
+                val bucketCredit = expenses.filter {
+                    Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate() in bucket
                 }.sumOf { it.expense.amountKopecks }
 
                 bars.add(
                     DebitCreditBar(
-                        label = curMonth.month.getDisplayName(TextStyle.SHORT, RU).replaceFirstChar { it.uppercase() },
-                        fullDateLabel = "${curMonth.month.getDisplayName(TextStyle.FULL_STANDALONE, RU)} ${curMonth.year}",
-                        date = monthStart,
-                        debitKopecks = monthDebit,
-                        creditKopecks = monthCredit,
+                        label = bucketShortLabel(bucket),
+                        fullDateLabel = bucketFullLabel(bucket),
+                        date = bucket.startDate,
+                        debitKopecks = bucketDebit,
+                        creditKopecks = bucketCredit,
                     ),
                 )
-                curMonth = curMonth.plusMonths(1)
             }
         }
         return bars

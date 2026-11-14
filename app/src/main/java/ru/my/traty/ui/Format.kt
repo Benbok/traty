@@ -33,9 +33,14 @@ private val SHORT_MONTHS = listOf("янв", "фев", "мар", "апр", "ма�
  */
 fun formatPeriod(p: BillingPeriod, startDay: Int): String {
     if (startDay == 1) return formatMonth(YearMonth.from(p.startDate))
+    return formatDateSpan(p.startDate, p.endDate)
+}
+
+/** Короткий отрезок дат «10 окт — 9 ноя»; год добавляется, только если отрезок переходит через год. */
+fun formatDateSpan(start: LocalDate, end: LocalDate): String {
     fun short(d: LocalDate) = "${d.dayOfMonth} ${SHORT_MONTHS[d.monthValue - 1]}"
-    val year = if (p.startDate.year != p.endDate.year) " ${p.endDate.year}" else ""
-    return "${short(p.startDate)} — ${short(p.endDate)}$year"
+    val year = if (start.year != end.year) " ${end.year}" else ""
+    return "${short(start)} — ${short(end)}$year"
 }
 
 fun formatDate(d: LocalDate): String =
