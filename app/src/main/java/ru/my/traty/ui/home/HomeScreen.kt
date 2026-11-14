@@ -87,6 +87,7 @@ fun HomeScreen(
     val settings by vm.settings.collectAsStateWithLifecycle()
     val selectedDate by vm.selectedDate.collectAsStateWithLifecycle()
     val plans by vm.plans.collectAsStateWithLifecycle()
+    val observations by vm.observations.collectAsStateWithLifecycle()
     val zone = remember { ZoneId.systemDefault() }
 
     var showDatePicker by remember { mutableStateOf(false) }
@@ -279,6 +280,12 @@ fun HomeScreen(
                     subtitle = "«${p.text}»",
                     onClick = { vm.openParsedPending(p) },
                 )
+            }
+            // Наблюдения показываем только в текущем периоде и на всём периоде, не на выбранном дне
+            if (selectedDate == null && LocalDate.now() in period) {
+                items(observations, key = { "observation-${it.key}" }, contentType = { "observation" }) { o ->
+                    ObservationCard(o, onDismiss = { vm.dismissObservation(o.key) })
+                }
             }
             // Шапка «потрачено / пополнено / баланс»
             if (totalIncome > 0 || totalExpense > 0) {
