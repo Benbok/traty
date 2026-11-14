@@ -101,7 +101,7 @@ fun ConfirmDialog(
                                     }
                                 }
                             }
-                            CategoryPicker(item.category, categories, item.suggestedCategory) { name ->
+                            CategoryPicker(item.category, categories, item.suggestedCategory?.let { ru.my.traty.capture.NewCategory(it.name, it.emoji) }) { name ->
                                 update(i) { d -> d.copy(category = name) }
                             }
                             OutlinedTextField(
@@ -128,13 +128,9 @@ fun ConfirmDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = TratyTheme.shapes.small,
                             )
-                            OutlinedTextField(
-                                value = item.dateText,
-                                onValueChange = { v -> update(i) { d -> d.copy(dateText = v) } },
-                                label = { Text("Дата (ГГГГ-ММ-ДД)") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = TratyTheme.shapes.small,
+                            DateField(
+                                dateText = item.dateText,
+                                onDateTextChange = { v -> update(i) { d -> d.copy(dateText = v) } },
                             )
                         }
                     }
@@ -154,41 +150,3 @@ fun ConfirmDialog(
     )
 }
 
-@Composable
-fun CategoryPicker(
-    selected: String,
-    categoryList: List<CategoryWithSubs>,
-    suggested: NewCategory?,
-    onPick: (String) -> Unit,
-) {
-    var open by remember { mutableStateOf(false) }
-    val categories = categoryList.map { it.category }
-    // Предложение модели показываем, только если такой категории ещё нет в базе
-    val newOne = suggested?.takeIf { s -> categories.none { it.name.lowercase() == s.name.lowercase() } }
-    val isNew = newOne != null && selected == newOne.name
-    val emoji = categories.firstOrNull { it.name == selected }?.emoji ?: newOne?.takeIf { isNew }?.emoji ?: ""
-    Box {
-        OutlinedButton(
-            onClick = { open = true },
-            modifier = Modifier.fillMaxWidth(),
-            shape = TratyTheme.shapes.small,
-        ) {
-            Text("$emoji $selected" + if (isNew) " (новая)" else "")
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            newOne?.let { s ->
-                DropdownMenuItem(
-                    text = { Text("${s.emoji} ${s.name} (новая)") },
-                    onClick = { onPick(s.name); open = false },
-                )
-                HorizontalDivider()
-            }
-            categories.forEach { c ->
-                DropdownMenuItem(
-                    text = { Text("${c.emoji} ${c.name}") },
-                    onClick = { onPick(c.name); open = false },
-                )
-            }
-        }
-    }
-}
