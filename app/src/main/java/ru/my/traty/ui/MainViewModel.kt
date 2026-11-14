@@ -442,6 +442,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteModel() = c.models.delete()
 
+    fun setDailyDigestEnabled(enabled: Boolean) = viewModelScope.launch {
+        c.settings.setDailyDigestEnabled(enabled)
+    }
+
     fun setLabelsEnabled(enabled: Boolean) = viewModelScope.launch {
         c.settings.setLabelsEnabled(enabled)
     }
