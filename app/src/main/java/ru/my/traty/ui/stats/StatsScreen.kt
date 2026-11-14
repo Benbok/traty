@@ -3,6 +3,7 @@ package ru.my.traty.ui.stats
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -50,6 +51,8 @@ import ru.my.traty.data.Places
 import ru.my.traty.data.StoreTotal
 import ru.my.traty.data.CategoryChange
 import ru.my.traty.data.PeriodComparison
+import ru.my.traty.data.RingSlice
+import ru.my.traty.data.RingSlices
 import ru.my.traty.data.period.CumulativeLine
 import ru.my.traty.data.period.CumulativeSpending
 import ru.my.traty.data.period.PaceVsPrevious
@@ -182,6 +185,10 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
 
         if (topChanges.isNotEmpty() && comparable.isNotEmpty()) {
             item { TopChangesCard(changes = topChanges, compareLabel = compareLabel) }
+        }
+
+        if (totals.isNotEmpty()) {
+            item { CategoryRingCard(slices = RingSlices.of(totals), sum = sum) }
         }
 
         if (totals.isNotEmpty()) {
@@ -537,6 +544,71 @@ private fun CumulativeCard(current: CumulativeLine, previous: CumulativeLine) {
 @Composable
 private fun LegendDot(color: Color) {
     Canvas(Modifier.padding(end = 4.dp).size(8.dp)) { drawCircle(color) }
+}
+
+/** Цвета долей кольца: насыщенные, различимые в светлой и тёмной теме; «Остальное» — серое. */
+private val RING_COLORS = listOf(
+    Color(0xFF4F7CF7), Color(0xFFF59E0B), Color(0xFF10B981), Color(0xFFEC4899), Color(0xFF8B5CF6), Color(0xFF06B6D4),
+)
+private val RING_REST = Color(0xFF94A3B8)
+
+/** Кольцевая диаграмма по категориям: крупные категории своими долями, мелкие — «Остальное». */
+@Composable
+private fun CategoryRingCard(slices: List<RingSlice>, sum: Long) {
+    if (slices.isEmpty()) return
+    val colors = slices.mapIndexed { i, sl -> if (sl.categoryId == null) RING_REST else RING_COLORS[i % RING_COLORS.size] }
+    TratyCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
+        backgroundColor = TratyTheme.colors.surfaceContainer,
+    ) {
+        Row(Modifier.padding(TratyTheme.spacing.md), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(120.dp), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.size(120.dp)) {
+                    val stroke = 18.dp.toPx()
+                    val gap = if (slices.size > 1) 1.5f else 0f
+                    var startAngle = -90f
+                    slices.forEachIndexed { i, sl ->
+                        val sweep = 360f * sl.fraction
+                        drawArc(
+                            color = colors[i],
+                            startAngle = startAngle + gap / 2,
+                            sweepAngle = (sweep - gap).coerceAtLeast(0.5f),
+                            useCenter = false,
+                            topLeft = Offset(stroke / 2, stroke / 2),
+                            size = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke),
+                            style = Stroke(width = stroke),
+                        )
+                        startAngle += sweep
+                    }
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Всего", style = TratyTheme.typography.labelSmall, color = TratyTheme.colors.onSurfaceVariant)
+                    Text(formatRub(sum), style = TratyTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.width(TratyTheme.spacing.md))
+            Column(Modifier.weight(1f)) {
+                slices.forEachIndexed { i, sl ->
+                    Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        LegendDot(colors[i])
+                        Text(
+                            text = listOf(sl.emoji, sl.name).filter { it.isNotBlank() }.joinToString(" "),
+                            style = TratyTheme.typography.bodySmall,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "${(sl.fraction * 100).roundToInt()}%",
+                            style = TratyTheme.typography.labelSmall,
+                            color = TratyTheme.colors.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** «Что изменилось»: три категории с самой большой разницей в рублях, рост — красным, падение — зелёным. */
