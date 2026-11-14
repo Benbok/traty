@@ -9,26 +9,37 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
-/** Переключатель режима статистики: расчётный период, день, неделя или произвольные даты. */
+/** Переключатель режима статистики: день или неделя. Повторный клик по выбранному чипу возвращает к расчётному периоду. */
 @Composable
 fun StatsModeChips(
     selected: StatsSpan,
     onSelect: (StatsSpan) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val visibleSpans = remember {
+        StatsSpan.entries.filter { it != StatsSpan.PERIOD && it != StatsSpan.DATES }
+    }
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
         horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
     ) {
-        StatsSpan.entries.forEach { span ->
-            ModeChip(span.title, selected = span == selected, onClick = { onSelect(span) })
+        visibleSpans.forEach { span ->
+            val isSelected = span == selected
+            ModeChip(
+                span.title,
+                selected = isSelected,
+                onClick = {
+                    if (isSelected) onSelect(StatsSpan.PERIOD) else onSelect(span)
+                },
+            )
         }
     }
 }

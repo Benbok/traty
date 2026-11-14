@@ -39,6 +39,7 @@ import ru.my.traty.ui.navigation.TratyNavTab
 import ru.my.traty.ui.reconcile.ReconcileMode
 import ru.my.traty.ui.reconcile.ReconcileScreen
 import ru.my.traty.ui.recurring.RecurringScreen
+import ru.my.traty.ui.settings.AiSettingsScreen
 import ru.my.traty.ui.settings.RulesScreen
 import ru.my.traty.ui.settings.SettingsScreen
 import ru.my.traty.ui.settings.TemplatesScreen
@@ -55,6 +56,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     var showTemplates by rememberSaveable { mutableStateOf(false) }
     var showRules by rememberSaveable { mutableStateOf(false) }
     var showRecurring by rememberSaveable { mutableStateOf(false) }
+    var showAiSettings by rememberSaveable { mutableStateOf(false) }
     // null - экран сверки закрыт
     var reconcileMode by rememberSaveable { mutableStateOf<ReconcileMode?>(null) }
     val snackbar = remember { SnackbarHostState() }
@@ -144,6 +146,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onOpenTemplates = { showTemplates = true },
                         onOpenRules = { showRules = true },
                         onOpenRecurring = { showRecurring = true },
+                        onOpenAi = { showAiSettings = true },
                     )
                 }
             }
@@ -171,6 +174,12 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
         if (showRules) {
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
                 RulesScreen(vm = vm, onBack = { showRules = false })
+            }
+        }
+
+        if (showAiSettings) {
+            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                AiSettingsScreen(vm = vm, onBack = { showAiSettings = false })
             }
         }
 
