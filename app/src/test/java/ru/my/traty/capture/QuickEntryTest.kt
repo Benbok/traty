@@ -72,6 +72,32 @@ class QuickEntryTest {
     }
 
     @Test
+    fun savedPaymentInRegularCategoryAppearsInSubscriptions() = runTest {
+        app.container.categories.seedIfEmpty()
+        val draft = EntryDraft(
+            rows = listOf(
+                EntryRow(
+                    type = EntryType.EXPENSE, amountText = "990", category = "Связь и подписки", subcategory = "",
+                    place = "Клод", note = "подписка", source = "", dateText = LocalDate.now().toString(),
+                ),
+                EntryRow(
+                    type = EntryType.EXPENSE, amountText = "500", category = "Продукты", subcategory = "",
+                    place = "Пятёрочка", note = "", source = "", dateText = LocalDate.now().toString(),
+                ),
+            ),
+            rawText = "подписка Клод девятьсот девяносто и Пятёрочка пятьсот",
+            origin = EntryOrigin.VOICE,
+        )
+        val result = quickEntry(null).save(draft)
+
+        assertEquals(listOf("Клод"), result.recurringAdded)
+        val payments = db.recurring().getAll()
+        assertEquals(listOf("Клод"), payments.map { it.title })
+        assertEquals(99_000L, payments.single().amountKopecks)
+        assertEquals(2, db.expenses().getAllWithCategory().size)
+    }
+
+    @Test
     fun mixedPhraseNeedsConfirm() = runTest {
         seedWithRule("пятёрочка", "Продукты")
         val reply = """{"items":[{"type":"expense","amount":500,"place":"Пятёрочка"},{"type":"income","amount":80000,"source":"Зарплата"}]}"""

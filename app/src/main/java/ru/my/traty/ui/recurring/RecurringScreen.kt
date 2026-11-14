@@ -1,5 +1,9 @@
 package ru.my.traty.ui.recurring
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -38,6 +43,9 @@ import ru.my.traty.data.RecurringState
 import ru.my.traty.data.RecurringWithNames
 import ru.my.traty.data.recurring.PeriodUnit
 import ru.my.traty.data.recurring.RecurringCandidate
+import ru.my.traty.data.recurring.RecurringCharge
+import ru.my.traty.data.recurring.RecurringSchedule
+import ru.my.traty.data.recurring.canNotify
 import ru.my.traty.data.recurring.nextDate
 import ru.my.traty.data.recurring.period
 import ru.my.traty.data.recurring.yearlyKopecks
@@ -49,6 +57,7 @@ import ru.my.traty.ui.designsystem.components.TratyOutlinedButton
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatDateWithWeekday
+import java.time.temporal.ChronoUnit
 import ru.my.traty.ui.formatRub
 import ru.my.traty.ui.home.CategoryPicker
 import ru.my.traty.ui.home.DateField
@@ -61,8 +70,19 @@ fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
     val totals by vm.totals.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
+    val upcoming by vm.upcoming.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    // Android 13+: без разрешения напоминания не покажутся, спрашиваем один раз при добавлении платежа
+    val askNotifications = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !context.canNotify()) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
     // null — диалог закрыт; id == 0 — новый платёж
     var editing by remember { mutableStateOf<Recurring?>(null) }
+    // платёж с меняющейся суммой: перед «Списалось» спрашиваем, сколько списалось на самом деле
+    var paying by remember { mutableStateOf<Recurring?>(null) }
 
     Column(Modifier.fillMaxSize()) {
         TratyHeaderCard(
@@ -89,7 +109,11 @@ fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
         ) {
             item {
                 Spacer(Modifier.height(TratyTheme.spacing.xs))
-                TotalsCard(totals.count, totals.monthlyKopecks, totals.yearlyKopecks)
+                TotalsCard(totals.count, totals.monthlyKopecks, totals.yearlyKopecks, totals.approximate)
+            }
+
+            if (upcoming.isNotEmpty()) {
+                item { UpcomingCard(upcoming, payments.associate { it.recurring.id to it.categoryEmoji }) }
             }
 
             if (suggestions.isNotEmpty()) {
@@ -100,7 +124,10 @@ fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
                     SuggestionCard(
                         candidate = s,
                         emoji = categories.firstOrNull { it.category.id == s.categoryId }?.category?.emoji.orEmpty(),
-                        onAdd = { vm.accept(s) },
+                        onAdd = {
+                            askNotifications()
+                            vm.accept(s)
+                        },
                         onDismiss = { vm.dismiss(s) },
                     )
                 }
@@ -121,6 +148,7 @@ fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
                 RecurringRow(
                     r,
                     onEdit = { editing = r.recurring },
+                    onMarkPaid = { if (r.recurring.amountVaries) paying = r.recurring else vm.markPaid(r.recurring) },
                     onTogglePause = { vm.setPaused(r.recurring, r.recurring.state == RecurringState.ACTIVE) },
                     onDelete = { vm.remove(r.recurring) },
                 )
@@ -129,12 +157,24 @@ fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
         }
     }
 
+    paying?.let { item ->
+        PaidAmountDialog(
+            item = item,
+            onDismiss = { paying = null },
+            onConfirm = { kopecks ->
+                vm.markPaid(item, kopecks)
+                paying = null
+            },
+        )
+    }
+
     editing?.let { initial ->
         RecurringEditDialog(
             initial = initial,
             categories = categories,
             onDismiss = { editing = null },
             onSave = {
+                if (it.remindDaysBefore > 0) askNotifications()
                 vm.save(it)
                 editing = null
             },
@@ -153,17 +193,59 @@ private fun newRecurring(categories: List<CategoryWithSubs>): Recurring = Recurr
 )
 
 @Composable
-private fun TotalsCard(count: Int, monthly: Long, yearly: Long) {
+private fun TotalsCard(count: Int, monthly: Long, yearly: Long, approximate: Boolean) {
+    val sign = if (approximate) "≈ " else ""
     TratyCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(TratyTheme.spacing.lg)) {
             Text("Подписки и платежи в месяц", style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
-            Text(formatRub(monthly), style = TratyTheme.typography.titleMedium)
+            Text(sign + formatRub(monthly), style = TratyTheme.typography.titleMedium)
             Spacer(Modifier.height(TratyTheme.spacing.xs))
             Text(
-                "≈ ${formatRub(yearly)} в год · действующих платежей: $count",
+                "≈ ${formatRub(yearly)} в год · действующих платежей: $count" +
+                    if (approximate) " (часть сумм меняется)" else "",
                 style = TratyTheme.typography.bodySmall,
                 color = TratyTheme.colors.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/** Календарь списаний на 30 дней вперёд: даты по порядку, просроченные — первыми. */
+@Composable
+private fun UpcomingCard(charges: List<RecurringCharge>, emojiById: Map<Long, String>) {
+    val today = LocalDate.now()
+    TratyCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(TratyTheme.spacing.lg)) {
+            Text("Ближайшие списания", style = TratyTheme.typography.titleSmall)
+            Text(
+                "На ${RecurringSchedule.CALENDAR_DAYS} дней вперёд: ${formatRub(charges.sumOf { it.item.amountKopecks })}",
+                style = TratyTheme.typography.bodySmall,
+                color = TratyTheme.colors.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(TratyTheme.spacing.sm))
+            charges.forEach { c ->
+                val days = ChronoUnit.DAYS.between(today, c.date)
+                Row(Modifier.fillMaxWidth().padding(vertical = TratyTheme.spacing.xxs), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${emojiById[c.item.id].orEmpty()} ${c.item.title}",
+                        style = TratyTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(formatRub(c.item.amountKopecks), style = TratyTheme.typography.bodyMedium)
+                        Text(
+                            when {
+                                c.overdue -> "просрочено на ${-days} дн."
+                                days == 0L -> "сегодня"
+                                days == 1L -> "завтра"
+                                else -> formatDateWithWeekday(c.date)
+                            },
+                            style = TratyTheme.typography.bodySmall,
+                            color = if (c.overdue) TratyTheme.colors.expense else TratyTheme.colors.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -191,7 +273,13 @@ private fun SuggestionCard(candidate: RecurringCandidate, emoji: String, onAdd: 
 }
 
 @Composable
-private fun RecurringRow(r: RecurringWithNames, onEdit: () -> Unit, onTogglePause: () -> Unit, onDelete: () -> Unit) {
+private fun RecurringRow(
+    r: RecurringWithNames,
+    onEdit: () -> Unit,
+    onMarkPaid: () -> Unit,
+    onTogglePause: () -> Unit,
+    onDelete: () -> Unit,
+) {
     val item = r.recurring
     val active = item.state == RecurringState.ACTIVE
     TratyCard(Modifier.fillMaxWidth(), onClick = onEdit) {
@@ -200,7 +288,7 @@ private fun RecurringRow(r: RecurringWithNames, onEdit: () -> Unit, onTogglePaus
                 Column(Modifier.weight(1f)) {
                     Text("${r.categoryEmoji} ${item.title}", style = TratyTheme.typography.titleSmall)
                     Text(
-                        "${formatRub(item.amountKopecks)} ${item.period().label()} · " +
+                        "${if (item.amountVaries) "≈ " else ""}${formatRub(item.amountKopecks)} ${item.period().label()} · " +
                             if (active) "следующее ${formatDateWithWeekday(item.nextDate())}" else "на паузе",
                         style = TratyTheme.typography.bodySmall,
                         color = TratyTheme.colors.onSurfaceVariant,
@@ -218,7 +306,10 @@ private fun RecurringRow(r: RecurringWithNames, onEdit: () -> Unit, onTogglePaus
                     tint = TratyTheme.colors.expense,
                 )
             }
-            TratyTextButton(onClick = onTogglePause) { Text(if (active) "Поставить на паузу" else "Возобновить") }
+            Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {
+                if (active) TratyTextButton(onClick = onMarkPaid) { Text("Списалось") }
+                TratyTextButton(onClick = onTogglePause) { Text(if (active) "Пауза" else "Возобновить") }
+            }
         }
     }
 }
@@ -248,6 +339,7 @@ private fun RecurringEditDialog(
     var every by remember { mutableStateOf(initial.periodEvery.toString()) }
     var dateText by remember { mutableStateOf(LocalDate.ofEpochDay(initial.nextEpochDay).toString()) }
     var remind by remember { mutableStateOf(initial.remindDaysBefore) }
+    var varies by remember { mutableStateOf(initial.amountVaries) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -291,6 +383,11 @@ private fun RecurringEditDialog(
                     modifier = Modifier.fillMaxWidth(),
                     shape = TratyTheme.shapes.small,
                 )
+                FilterChip(
+                    selected = varies,
+                    onClick = { varies = !varies },
+                    label = { Text("Сумма меняется (коммуналка)") },
+                )
                 DateField(dateText = dateText, onDateTextChange = { dateText = it })
                 Text("Напомнить", style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
                 Row(
@@ -321,11 +418,43 @@ private fun RecurringEditDialog(
                                 periodEvery = n,
                                 nextEpochDay = date.toEpochDay(),
                                 remindDaysBefore = remind,
+                                amountVaries = varies,
                             )
                         )
                     }
                 },
             ) { Text(if (isNew) "Добавить" else "Сохранить") }
+        },
+        dismissButton = { TratyTextButton(onClick = onDismiss) { Text("Отмена") } },
+    )
+}
+
+@Composable
+private fun PaidAmountDialog(item: Recurring, onDismiss: () -> Unit, onConfirm: (Long) -> Unit) {
+    var amount by remember { mutableStateOf((item.amountKopecks / 100.0).toString().removeSuffix(".0")) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = TratyTheme.shapes.large,
+        containerColor = TratyTheme.colors.surface,
+        title = { Text("Сколько списалось?", style = TratyTheme.typography.titleMedium) },
+        text = {
+            OutlinedTextField(
+                value = amount,
+                onValueChange = { amount = it },
+                label = { Text("${item.title}, ₽") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = TratyTheme.shapes.small,
+            )
+        },
+        confirmButton = {
+            TratyButton(
+                onClick = {
+                    val rub = amount.replace(",", ".").replace(" ", "").toDoubleOrNull()
+                    if (rub != null && rub > 0) onConfirm(Math.round(rub * 100))
+                },
+            ) { Text("Списалось") }
         },
         dismissButton = { TratyTextButton(onClick = onDismiss) { Text("Отмена") } },
     )

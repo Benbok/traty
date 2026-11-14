@@ -16,10 +16,13 @@ import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.Recurring
 import ru.my.traty.data.RecurringWithNames
 import ru.my.traty.data.recurring.RecurringCandidate
+import ru.my.traty.data.recurring.RecurringCharge
 import ru.my.traty.data.recurring.RecurringRepository
+import ru.my.traty.data.recurring.RecurringSchedule
 import ru.my.traty.data.recurring.RecurringSummary
 import ru.my.traty.data.recurring.RecurringTotals
 import ru.my.traty.data.selectable
+import java.time.LocalDate
 
 /** Экран «Подписки»: заведённые платежи, итоги и предложения из истории трат. */
 class RecurringViewModel(app: Application) : AndroidViewModel(app) {
@@ -32,6 +35,11 @@ class RecurringViewModel(app: Application) : AndroidViewModel(app) {
     val totals: StateFlow<RecurringTotals> =
         items.map { list -> RecurringSummary.totals(list.map { it.recurring }) }
             .stateIn(viewModelScope, SharingStarted.Eagerly, RecurringTotals(0, 0, 0))
+
+    /** Списания на месяц вперёд. */
+    val upcoming: StateFlow<List<RecurringCharge>> =
+        items.map { list -> RecurringSchedule.upcoming(list.map { it.recurring }, LocalDate.now()) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val categories: StateFlow<List<CategoryWithSubs>> =
         c.db.categories().observeActiveWithSubs().map { it.selectable() }
@@ -54,6 +62,10 @@ class RecurringViewModel(app: Application) : AndroidViewModel(app) {
     fun save(item: Recurring) = viewModelScope.launch { repo.save(item) }
 
     fun setPaused(item: Recurring, paused: Boolean) = viewModelScope.launch { repo.setPaused(item, paused) }
+
+    /** «Списалось»: трата создаётся, платёж переезжает на следующий период. */
+    fun markPaid(item: Recurring, amountKopecks: Long? = null) =
+        viewModelScope.launch { repo.markPaid(item.id, amountKopecks = amountKopecks) }
 
     fun remove(item: Recurring) = viewModelScope.launch { repo.remove(item) }
 }

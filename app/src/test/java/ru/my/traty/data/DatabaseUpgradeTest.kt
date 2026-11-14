@@ -166,7 +166,7 @@ class DatabaseUpgradeTest {
     }
 
     @Test
-    fun migrationChainReachesV8WithRecurringTable() = runTest {
+    fun migrationChainReachesV9WithRecurringTable() = runTest {
         createV3Database()
         val db = AppDatabase.build(context, dbName)
         try {
@@ -181,6 +181,7 @@ class DatabaseUpgradeTest {
             val saved = db.recurring().getById(id)!!
             assertEquals(RecurringState.ACTIVE, saved.state)
             assertEquals(1, saved.periodEvery)
+            assertEquals(false, saved.amountVaries)
             assertEquals(39_900L, saved.amountKopecks)
             // Отклонённое предложение хранится, но в списке не показывается.
             db.recurring().insert(

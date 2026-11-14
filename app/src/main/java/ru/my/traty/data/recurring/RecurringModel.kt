@@ -12,7 +12,13 @@ fun Recurring.nextDate(): LocalDate = LocalDate.ofEpochDay(nextEpochDay)
 val Recurring.yearlyKopecks: Long get() = period().yearlyKopecks(amountKopecks)
 
 /** Итоги по действующим платежам; платежи на паузе и отклонённые предложения не считаются. */
-data class RecurringTotals(val count: Int, val monthlyKopecks: Long, val yearlyKopecks: Long)
+/** [approximate] — среди платежей есть с меняющейся суммой, итог приблизительный. */
+data class RecurringTotals(
+    val count: Int,
+    val monthlyKopecks: Long,
+    val yearlyKopecks: Long,
+    val approximate: Boolean = false,
+)
 
 object RecurringSummary {
     fun totals(items: List<Recurring>): RecurringTotals {
@@ -21,6 +27,7 @@ object RecurringSummary {
             count = active.size,
             monthlyKopecks = active.sumOf { it.period().monthlyKopecks(it.amountKopecks) },
             yearlyKopecks = active.sumOf { it.yearlyKopecks },
+            approximate = active.any { it.amountVaries },
         )
     }
 }
