@@ -5,6 +5,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -334,6 +337,33 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(TratyTheme.spacing.md))
                 TratyOutlinedButton(onClick = onOpenRecurring) { Text("Открыть подписки") }
+            }
+        }
+
+        // Секция: Метки на тратах
+        val labelsOn = saved.labelsEnabled
+        TratyCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = TratyTheme.colors.surface,
+        ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .toggleable(value = labelsOn, role = Role.Switch, onValueChange = { vm.setLabelsEnabled(it) })
+                    .padding(TratyTheme.spacing.lg),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Метки на тратах", style = TratyTheme.typography.titleMedium)
+                    Spacer(Modifier.height(TratyTheme.spacing.xs))
+                    Text(
+                        "🔺 крупная, 🔁 частая, 🆕 новое место, ⚡ импульсивная, 📅 регулярная. " +
+                            "Какие категории считать импульсивными, выбирается в настройках категории.",
+                        style = TratyTheme.typography.bodySmall,
+                        color = TratyTheme.colors.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = labelsOn, onCheckedChange = null)
             }
         }
 

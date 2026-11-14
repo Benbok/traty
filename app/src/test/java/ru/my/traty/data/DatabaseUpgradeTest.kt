@@ -166,6 +166,21 @@ class DatabaseUpgradeTest {
     }
 
     @Test
+    fun migrationChainReachesV10AndFlagsImpulsiveCategoriesByName() = runTest {
+        createV3Database(extraCategory = "Кафе и рестораны")
+        val db = AppDatabase.build(context, dbName)
+        try {
+            val all = db.categories().getAllWithSubs().map { it.category }
+            // Категория, импульсивная по названию, получает флажок при переходе на v10.
+            val cafe = all.single { it.name == "Кафе и рестораны" }
+            assertEquals(true, cafe.isImpulsive)
+            assertEquals(false, all.single { it.name == "Продукты" }.isImpulsive)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun migrationChainReachesV9WithRecurringTable() = runTest {
         createV3Database()
         val db = AppDatabase.build(context, dbName)

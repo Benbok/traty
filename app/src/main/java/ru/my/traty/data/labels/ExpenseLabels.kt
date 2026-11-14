@@ -1,5 +1,6 @@
 package ru.my.traty.data.labels
 
+import ru.my.traty.data.DefaultCategories
 import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Places
@@ -49,25 +50,26 @@ object ExpenseLabeler {
     const val NIGHT_FROM_HOUR = 22
     const val NIGHT_TO_HOUR = 4
 
-    /** Категории, где вероятны импульсивные траты. Пока по названию; позже станет настройкой категории. */
-    val IMPULSIVE_CATEGORIES = listOf("Кафе и рестораны", "Доставка еды", "Развлечения", "Одежда и обувь")
 
     private const val DAY_MS = 24L * 60 * 60 * 1000
     private val RU: Locale = Locale.forLanguageTag("ru")
 
     /**
      * @param subscriptionExpenseIds траты, похожие на подписку (см. [subscriptionExpenseIds]).
+     * @param impulsiveCategories названия категорий с флажком «импульсивная»: ⚡ ставится только в них.
      * @return id траты → метки; у трат без меток записи нет.
      */
     fun label(
         expenses: List<ExpenseWithCategory>,
         subscriptionExpenseIds: Set<Long> = emptySet(),
         zone: ZoneId = ZoneId.systemDefault(),
+        impulsiveCategories: Collection<String> = DefaultCategories.IMPULSIVE,
     ): Map<Long, List<ExpenseLabelHit>> {
         val rows = expenses
             .filter { it.expense.source != ExpenseSource.RECONCILE }
             .sortedWith(compareBy({ it.expense.timestamp }, { it.expense.id }))
         if (rows.isEmpty()) return emptyMap()
+        val impulsiveNames = impulsiveCategories.mapTo(HashSet()) { it.lowercase(RU) }
         val firstTs = rows.first().expense.timestamp
 
         // Группы для сравнения: подкатегория (если есть) и категория целиком
@@ -112,7 +114,7 @@ object ExpenseLabeler {
                 }
             }
 
-            if (isImpulsiveCategory(r.categoryName)) {
+            if (impulsiveNames.contains(r.categoryName.lowercase(RU))) {
                 val hour = Instant.ofEpochMilli(e.timestamp).atZone(zone).hour
                 val night = hour >= NIGHT_FROM_HOUR || hour < NIGHT_TO_HOUR
                 val small = smallPerDay[Triple(e.categoryId, e.subcategoryId, dayOf(e.timestamp, zone))] ?: 0
@@ -218,8 +220,7 @@ object ExpenseLabeler {
         return if (s.size % 2 == 1) s[s.size / 2] else (s[s.size / 2 - 1] + s[s.size / 2]) / 2
     }
 
-    private fun isImpulsiveCategory(name: String) = IMPULSIVE_CATEGORIES.any { it.equals(name, ignoreCase = true) }
-
+    
     private fun groupName(r: ExpenseWithCategory) = r.subcategoryName?.let { "${r.categoryName} → $it" } ?: r.categoryName
 
     private fun dayOf(ts: Long, zone: ZoneId) = Instant.ofEpochMilli(ts).atZone(zone).toLocalDate().toEpochDay()

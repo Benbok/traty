@@ -81,7 +81,7 @@ class CategoryRepository(private val db: AppDatabase) {
         )
     }
 
-    suspend fun updateCategory(id: Long, name: String, emoji: String, color: Int?) = db.withTransaction {
+    suspend fun updateCategory(id: Long, name: String, emoji: String, color: Int?, isImpulsive: Boolean? = null) = db.withTransaction {
         val all = dao.getAllWithSubs()
         val cur = find(all, id)
         val n = if (isSystem(cur)) {
@@ -90,7 +90,14 @@ class CategoryRepository(private val db: AppDatabase) {
         } else {
             validateName(name, all, exceptId = id)
         }
-        dao.update(cur.copy(name = n, emoji = emoji.trim().ifEmpty { cur.emoji }, color = color))
+        dao.update(
+            cur.copy(
+                name = n,
+                emoji = emoji.trim().ifEmpty { cur.emoji },
+                color = color,
+                isImpulsive = isImpulsive ?: cur.isImpulsive,
+            )
+        )
     }
 
     suspend fun setArchived(id: Long, archived: Boolean) = db.withTransaction {

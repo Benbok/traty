@@ -81,9 +81,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             c.db.expenses().observeAllWithCategory(),
             c.db.recurring().observeAll(),
             c.db.categories().observeActiveWithSubs(),
-        ) { expenses, recurring, cats ->
+            c.settings.flow.map { it.labelsEnabled }.distinctUntilChanged(),
+        ) { expenses, recurring, cats, enabled ->
+            if (!enabled) return@combine emptyMap()
             val candidates = RecurringRepository.suggest(expenses, recurring, cats)
-            ExpenseLabeler.label(expenses, ExpenseLabeler.subscriptionExpenseIds(expenses, recurring, candidates), zone)
+            ExpenseLabeler.label(
+                expenses,
+                ExpenseLabeler.subscriptionExpenseIds(expenses, recurring, candidates),
+                zone,
+                impulsiveCategories = cats.filter { it.category.isImpulsive }.map { it.category.name },
+            )
         }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
@@ -422,6 +429,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun downloadModel() = c.downloadModel()
 
     fun deleteModel() = c.models.delete()
+
+    fun setLabelsEnabled(enabled: Boolean) = viewModelScope.launch {
+        c.settings.setLabelsEnabled(enabled)
+    }
 
     fun setVoiceEngine(engine: VoiceEngine) = viewModelScope.launch {
         c.settings.setVoiceEngine(engine)
