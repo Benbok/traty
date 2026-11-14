@@ -2,6 +2,7 @@ package ru.my.traty
 
 import android.app.Application
 import android.content.Context
+import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,6 +15,7 @@ import ru.my.traty.data.AppSettings
 import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.ReconciliationRepository
 import ru.my.traty.data.SettingsRepository
+import ru.my.traty.widget.TratyWidget
 
 open class TratyApp : Application() {
     lateinit var container: AppContainer
@@ -23,9 +25,22 @@ open class TratyApp : Application() {
         super.onCreate()
         container = createContainer()
         if (seedOnStart) container.seedIfEmpty()
+        if (updateWidgetOnChanges) {
+            appScope.launch {
+                container.quickEntry.changes.collect {
+                    // Виджет не должен ронять приложение, если его нет на рабочем столе
+                    runCatching { TratyWidget().updateAll(this@TratyApp) }
+                }
+            }
+        }
     }
 
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     protected open val seedOnStart: Boolean get() = true
+
+    /** Тесты выключают: Glance в Robolectric не нужен. */
+    protected open val updateWidgetOnChanges: Boolean get() = true
 
     /** Тестовый шов: тесты подменяют контейнер (например, БД в памяти). */
     protected open fun createContainer(): AppContainer = AppContainer(this)
