@@ -1,7 +1,12 @@
 package ru.my.traty.ui.stats
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,6 +60,9 @@ import ru.my.traty.data.PeriodComparison
 import ru.my.traty.data.RingSlice
 import ru.my.traty.data.RingSlices
 import ru.my.traty.data.period.CumulativeLine
+import ru.my.traty.data.period.HeatCalendar
+import ru.my.traty.data.period.HeatDay
+import ru.my.traty.data.period.HeatMonth
 import ru.my.traty.data.period.CumulativeSpending
 import ru.my.traty.data.period.PaceVsPrevious
 import ru.my.traty.data.period.SpendingPace
@@ -78,6 +86,7 @@ import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatDateSpan
 import ru.my.traty.ui.formatRub
 import ru.my.traty.ui.formatRubSigned
+import ru.my.traty.ui.formatDateWithWeekday
 import ru.my.traty.ui.formatTime
 import java.time.Instant
 import java.time.LocalDate
@@ -111,6 +120,8 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
     var modes by remember { mutableStateOf(emptyMap<Long, BreakdownMode>()) }
     // Раскрытые подкатегории / магазины внутри категорий: «категория/способ/ключ»
     var expandedGroups by remember { mutableStateOf(emptySet<String>()) }
+    // День, нажатый в тепловом календаре: под календарём видны его траты
+    var heatSelected by remember { mutableStateOf<LocalDate?>(null) }
 
     // Режим «Даты» (range != null) не влияет на период ленты трат: он живёт только на этом экране
     val custom = range != null
@@ -149,6 +160,17 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
         val prevPeriod = period.previous(settings.periodStartDay)
         CumulativeSpending.line(period.startDate, period.endDate, today, spends(periodExpenses)) to
             CumulativeSpending.line(prevPeriod.startDate, prevPeriod.endDate, today, spends(prevExpenses))
+    }
+
+    // Тепловой календарь по дням текущего отрезка (расчётный период или «Даты» до 62 дней)
+    val heatStart = range?.first ?: period.startDate
+    val heatEnd = range?.second ?: period.endDate
+    val heat = remember(expenses, heatStart, heatEnd) {
+        val zone = ZoneId.systemDefault()
+        HeatCalendar.build(
+            heatStart, heatEnd,
+            expenses.map { Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate() to it.expense.amountKopecks },
+        )
     }
 
     val deltaDescription = if (prevSum > 0) {
@@ -203,6 +225,23 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
 
         if (!custom && cumulative.first.points.isNotEmpty() && cumulative.second.last > 0) {
             item(key = "cumulative", contentType = "cumulative") { CumulativeCard(current = cumulative.first, previous = cumulative.second) }
+        }
+
+        if (sum > 0 && heat != null) {
+            item {
+                val selected = heatSelected?.takeIf { it in heatStart..heatEnd }
+                val zone = ZoneId.systemDefault()
+                val dayExpenses = remember(expenses, selected) {
+                    if (selected == null) emptyList()
+                    else expenses.filter { Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate() == selected }
+                }
+                HeatCalendarCard(
+                    month = heat,
+                    selected = selected,
+                    dayExpenses = dayExpenses,
+                    onDay = { d -> heatSelected = if (heatSelected == d) null else d },
+                )
+            }
         }
 
         if (topChanges.isNotEmpty() && comparable.isNotEmpty()) {
@@ -634,6 +673,101 @@ private fun CategoryRingCard(slices: List<RingSlice>, sum: Long) {
     }
 }
 
+private val WEEKDAYS = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
+
+/**
+ * Тепловой календарь: чем больше потрачено за день, тем насыщеннее клетка (4 уровня от самого дорогого дня).
+ * Нажатие на день показывает его траты под календарём, повторное — скрывает.
+ */
+@Composable
+private fun HeatCalendarCard(
+    month: HeatMonth,
+    selected: LocalDate?,
+    dayExpenses: List<ExpenseWithCategory>,
+    onDay: (LocalDate) -> Unit,
+) {
+    val today = LocalDate.now()
+    val base = TratyTheme.colors.expense
+    val empty = TratyTheme.colors.surfaceContainerHigh
+    TratyCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
+        backgroundColor = TratyTheme.colors.surfaceContainer,
+    ) {
+        Column(Modifier.padding(TratyTheme.spacing.md)) {
+            Text("Календарь трат", style = TratyTheme.typography.titleSmall)
+            Spacer(Modifier.height(TratyTheme.spacing.xs))
+            Row(Modifier.fillMaxWidth()) {
+                WEEKDAYS.forEach {
+                    Text(
+                        text = it,
+                        style = TratyTheme.typography.labelSmall,
+                        color = TratyTheme.colors.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
+            }
+            val cells: List<HeatDay?> = List(month.leadingBlanks) { null } + month.days
+            cells.chunked(7).forEach { week ->
+                Row(Modifier.fillMaxWidth()) {
+                    (0 until 7).forEach { col ->
+                        val day = week.getOrNull(col)
+                        Box(Modifier.weight(1f).padding(2.dp).aspectRatio(1f)) {
+                            if (day != null) {
+                                val color = if (day.level == 0) empty else base.copy(alpha = 0.18f + 0.82f * day.level / HeatCalendar.LEVELS)
+                                val isSel = day.date == selected
+                                Box(
+                                    Modifier
+                                        .fillMaxSize()
+                                        .clip(TratyTheme.shapes.extraSmall)
+                                        .background(color)
+                                        .then(
+                                            if (isSel || day.date == today) {
+                                                Modifier.border(
+                                                    BorderStroke(if (isSel) 2.dp else 1.dp, TratyTheme.colors.onSurface),
+                                                    TratyTheme.shapes.extraSmall,
+                                                )
+                                            } else Modifier
+                                        )
+                                        .clickable { onDay(day.date) },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = day.date.dayOfMonth.toString(),
+                                        style = TratyTheme.typography.labelSmall,
+                                        color = if (day.level >= 3) Color.White else TratyTheme.colors.onSurface,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (selected != null) {
+                Spacer(Modifier.height(TratyTheme.spacing.sm))
+                val total = dayExpenses.sumOf { it.expense.amountKopecks }
+                Text(
+                    text = "${formatDateWithWeekday(selected)} · ${formatRub(total)}",
+                    style = TratyTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (dayExpenses.isEmpty()) {
+                    Text("В этот день трат нет", style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
+                } else {
+                    dayExpenses.sortedByDescending { it.expense.amountKopecks }.forEach { e ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(e.categoryEmoji, modifier = Modifier.padding(end = TratyTheme.spacing.xs))
+                            BreakdownExpenseRow(e, showPlace = true, modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /** «Что изменилось»: три категории с самой большой разницей в рублях, рост — красным, падение — зелёным. */
 @Composable
 private fun TopChangesCard(changes: List<CategoryChange>, compareLabel: String) {
@@ -765,11 +899,11 @@ private fun ExpenseList(list: List<ExpenseWithCategory>, mode: BreakdownMode) {
 }
 
 @Composable
-private fun BreakdownExpenseRow(e: ExpenseWithCategory, showPlace: Boolean) {
+private fun BreakdownExpenseRow(e: ExpenseWithCategory, showPlace: Boolean, modifier: Modifier = Modifier) {
     val title = CategoryBreakdowns.title(e).ifEmpty { "Без описания" }
     val place = Places.normalize(e.expense.place)?.takeIf { showPlace && it != title }
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        modifier.fillMaxWidth().padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
