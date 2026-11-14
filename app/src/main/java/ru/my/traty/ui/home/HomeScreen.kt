@@ -59,6 +59,7 @@ import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyMonthPicker
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
+import ru.my.traty.ui.budget.PlanSummaryCard
 import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
@@ -72,7 +73,12 @@ import java.time.ZoneId
  * фильтрацию по дню и быстрый ввод трат текстом/голосом.
  */
 @Composable
-fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: ReconcilePromptViewModel = viewModel()) {
+fun HomeScreen(
+    vm: MainViewModel,
+    onOpenReconcile: () -> Unit,
+    prompt: ReconcilePromptViewModel = viewModel(),
+    onOpenBudget: () -> Unit = {},
+) {
     val showReconcileCard by prompt.showCard.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { prompt.refresh() }
     val expenses by vm.expenses.collectAsStateWithLifecycle()
@@ -80,6 +86,7 @@ fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: Reconcile
     val period by vm.period.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val selectedDate by vm.selectedDate.collectAsStateWithLifecycle()
+    val plans by vm.plans.collectAsStateWithLifecycle()
     val zone = remember { ZoneId.systemDefault() }
 
     var showDatePicker by remember { mutableStateOf(false) }
@@ -303,6 +310,18 @@ fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: Reconcile
                             }
                         }
                     }
+                }
+            }
+            // План трат — за весь период, поэтому при фильтре по дню или поиске не показываем
+            if (plans.isNotEmpty() && selectedDate == null && searchQuery.isBlank()) {
+                item(key = "plan", contentType = "plan") {
+                    PlanSummaryCard(
+                        items = plans,
+                        period = period,
+                        onOpen = onOpenBudget,
+                        compact = true,
+                        modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
+                    )
                 }
             }
             if (feed.isEmpty()) {

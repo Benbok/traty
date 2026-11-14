@@ -181,6 +181,29 @@ class DatabaseUpgradeTest {
     }
 
     @Test
+    fun migrationChainReachesV11WithBudgetsAndRepositoryWorks() = runTest {
+        createV3Database()
+        val db = AppDatabase.build(context, dbName)
+        try {
+            val categoryId = db.categories().getAllWithSubs().first().category.id
+            val repo = ru.my.traty.data.budget.BudgetRepository(db)
+            val key = ru.my.traty.data.budget.PlanKey(categoryId)
+            repo.set(key, 202611, 5_000_00, repeats = true)
+            repo.set(key, 202611, 6_000_00, repeats = true)
+            assertEquals(1, db.budgets().getAll().size)
+            assertEquals(6_000_00L, db.budgets().getAll().single().amountKopecks)
+            repo.removeFrom(key, 202612)
+            val rows = db.budgets().getAll()
+            assertEquals(1, ru.my.traty.data.budget.BudgetPlans.effective(rows, 202611).size)
+            assertTrue(ru.my.traty.data.budget.BudgetPlans.effective(rows, 202612).isEmpty())
+            // Данные прежних версий на месте.
+            assertEquals(1, db.expenses().getAllWithCategory().size)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun migrationChainReachesV9WithRecurringTable() = runTest {
         createV3Database()
         val db = AppDatabase.build(context, dbName)

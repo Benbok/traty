@@ -95,6 +95,10 @@ import ru.my.traty.ui.formatRub
 import ru.my.traty.ui.formatRubSigned
 import ru.my.traty.ui.formatDateWithWeekday
 import ru.my.traty.ui.formatTime
+import ru.my.traty.data.budget.PlanStatus
+import ru.my.traty.ui.budget.PlanSummaryCard
+import ru.my.traty.ui.budget.planColor
+import ru.my.traty.ui.budget.planLineText
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -104,7 +108,7 @@ import kotlin.math.roundToInt
  * Экран статистики по категориям трат и комментария ИИ.
  */
 @Composable
-fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
+fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel(), onOpenBudget: () -> Unit = {}) {
     val period by vm.period.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val periodTotals by vm.totals.collectAsStateWithLifecycle()
@@ -119,6 +123,11 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
     val periodExpenses by vm.expenses.collectAsStateWithLifecycle()
     val customExpenses by rangeVm.expenses.collectAsStateWithLifecycle()
     val prevExpenses by vm.prevExpenses.collectAsStateWithLifecycle()
+    val plans by vm.plans.collectAsStateWithLifecycle()
+    // План категории целиком — для строки «План … · осталось …» под категорией
+    val categoryPlans = remember(plans) {
+        plans.filter { it.progress.plan.subcategoryId == null }.associateBy { it.progress.plan.categoryId }
+    }
     var showRangePicker by remember { mutableStateOf(false) }
     var byStores by rememberSaveable { mutableStateOf(false) }
     // Раскрытые категории: под ними видно, из чего состоит категория
@@ -245,6 +254,27 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
         // За один день «средняя в день» и «прогноз» равны итогу — карточка ничего не добавляет
         if (sum > 0 && pace != null && spanOf(range) != StatsSpan.DAY) {
             item(key = "pace", contentType = "pace") { SpendingPaceCard(pace = pace, endDate = paceEnd, prevSum = prevSum, span = spanOf(range)) }
+        }
+
+        // План трат задаётся на расчётный период; в режимах День / Неделя / Даты объясняем, где его смотреть
+        if (plans.isNotEmpty()) {
+            item(key = "plan", contentType = "plan") {
+                if (!custom) {
+                    PlanSummaryCard(
+                        items = plans,
+                        period = period,
+                        onOpen = onOpenBudget,
+                        modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
+                    )
+                } else {
+                    Text(
+                        "План трат считается по расчётному периоду: он виден в режиме «Период».",
+                        style = TratyTheme.typography.bodySmall,
+                        color = TratyTheme.colors.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
+                    )
+                }
+            }
         }
 
         if (!custom && cumulative.first.points.isNotEmpty() && cumulative.second.last > 0) {
@@ -382,6 +412,17 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
                             color = TratyTheme.colors.info,
                         )
                     }
+                }
+
+                val plan = if (custom) null else categoryPlans[t.categoryId]
+                if (plan != null) {
+                    Text(
+                        text = planLineText(plan.progress),
+                        style = TratyTheme.typography.labelSmall,
+                        color = if (plan.progress.status == PlanStatus.OK) TratyTheme.colors.onSurfaceVariant
+                        else planColor(plan.progress.status),
+                        modifier = Modifier.padding(top = TratyTheme.spacing.xxs),
+                    )
                 }
 
                 if (isExpanded && breakdown != null) {

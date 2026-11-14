@@ -60,6 +60,7 @@ fun SettingsScreen(
     onOpenTemplates: () -> Unit = {},
     onOpenRules: () -> Unit = {},
     onOpenRecurring: () -> Unit = {},
+    onOpenBudget: () -> Unit = {},
     onOpenAi: () -> Unit = {},
 ) {
     val saved by vm.settings.collectAsStateWithLifecycle()
@@ -266,6 +267,24 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(TratyTheme.spacing.md))
                 TratyOutlinedButton(onClick = onOpenRecurring) { Text("Открыть подписки") }
+            }
+        }
+
+        // Секция: План трат (этап 8)
+        TratyCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = TratyTheme.colors.surface,
+        ) {
+            Column(Modifier.padding(TratyTheme.spacing.lg)) {
+                Text("План трат", style = TratyTheme.typography.titleMedium)
+                Spacer(Modifier.height(TratyTheme.spacing.xs))
+                Text(
+                    "Сколько хотите тратить на категорию или подкатегорию в месяц. Остаток и перерасход видны в Статистике.",
+                    style = TratyTheme.typography.bodySmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(TratyTheme.spacing.md))
+                TratyOutlinedButton(onClick = onOpenBudget) { Text("Открыть план") }
             }
         }
 
