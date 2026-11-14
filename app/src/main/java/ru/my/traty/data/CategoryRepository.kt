@@ -123,12 +123,14 @@ class CategoryRepository(private val db: AppDatabase) {
             val same = into.subs.firstOrNull { sameName(it.name, sub.name) }
             if (same != null) {
                 db.expenses().reassignSubcategory(sub.id, same.id)
+                db.recurring().reassignSubcategory(sub.id, same.id)
                 dao.deleteSub(sub)
             } else {
                 dao.updateSub(sub.copy(categoryId = intoId, sortOrder = nextOrder++))
             }
         }
         db.expenses().reassignCategory(fromId, intoId)
+        db.recurring().reassignCategory(fromId, intoId)
         dao.delete(from.category)
         moved
     }
