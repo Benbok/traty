@@ -37,6 +37,7 @@ import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.capture.EntryConfirmSheet
 import ru.my.traty.ui.home.EditExpenseScreen
 import ru.my.traty.ui.home.HomeScreen
+import ru.my.traty.ui.navigation.TratyNavLabel
 import ru.my.traty.ui.navigation.TratyNavTab
 import ru.my.traty.ui.reconcile.ReconcileMode
 import ru.my.traty.ui.reconcile.ReconcileScreen
@@ -110,12 +111,20 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                     containerColor = TratyTheme.colors.surface,
                     tonalElevation = 2.dp,
                 ) {
+                    val navTitles = remember { TratyNavTab.entries.map { it.title } }
                     TratyNavTab.entries.forEach { t ->
                         NavigationBarItem(
                             selected = tab == t,
                             onClick = { tab = t },
                             icon = { Icon(t.icon, contentDescription = null) },
-                            label = { Text(t.title, style = TratyTheme.typography.labelMedium) },
+                            label = {
+                                TratyNavLabel(
+                                    text = t.title,
+                                    allTitles = navTitles,
+                                    style = TratyTheme.typography.labelMedium,
+                                )
+                            },
+                            alwaysShowLabel = true,
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = TratyTheme.colors.primary,
                                 selectedTextColor = TratyTheme.colors.primary,
