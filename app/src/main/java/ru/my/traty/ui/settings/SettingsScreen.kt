@@ -63,6 +63,7 @@ fun SettingsScreen(
     onRedoReconcile: () -> Unit,
     onOpenTemplates: () -> Unit = {},
     onOpenRules: () -> Unit = {},
+    onOpenRecurring: () -> Unit = {},
 ) {
     val saved by vm.settings.collectAsStateWithLifecycle()
     var s by remember(saved) { mutableStateOf<AppSettings>(saved) }
@@ -315,6 +316,24 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(TratyTheme.spacing.md))
                 TratyOutlinedButton(onClick = onOpenTemplates) { Text("Управление шаблонами") }
+            }
+        }
+
+        // Секция: Подписки
+        TratyCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = TratyTheme.colors.surface,
+        ) {
+            Column(Modifier.padding(TratyTheme.spacing.lg)) {
+                Text("Подписки и регулярные платежи", style = TratyTheme.typography.titleMedium)
+                Spacer(Modifier.height(TratyTheme.spacing.xs))
+                Text(
+                    "Сколько уходит на подписки в месяц и в год, и какие повторяющиеся траты нашло приложение.",
+                    style = TratyTheme.typography.bodySmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(TratyTheme.spacing.md))
+                TratyOutlinedButton(onClick = onOpenRecurring) { Text("Открыть подписки") }
             }
         }
 

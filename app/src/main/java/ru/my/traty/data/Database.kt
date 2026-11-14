@@ -530,6 +530,9 @@ interface RecurringDao {
     @Query("SELECT * FROM recurring")
     suspend fun getAll(): List<Recurring>
 
+    @Query("SELECT * FROM recurring")
+    fun observeAll(): Flow<List<Recurring>>
+
     @Query("SELECT * FROM recurring WHERE id = :id")
     suspend fun getById(id: Long): Recurring?
 
