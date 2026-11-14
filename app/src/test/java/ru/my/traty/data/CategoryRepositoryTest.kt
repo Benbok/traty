@@ -121,6 +121,19 @@ class CategoryRepositoryTest {
     }
 
     @Test
+    fun impulsiveFlagIsSeededAndEditable() = runTest {
+        val flagged = db.categories().getAllWithSubs().filter { it.category.isImpulsive }.map { it.category.name }.toSet()
+        assertEquals(DefaultCategories.IMPULSIVE.toSet(), flagged)
+        val hobby = cat("Хобби").category
+        assertEquals(false, hobby.isImpulsive)
+        repo.updateCategory(hobby.id, hobby.name, hobby.emoji, null, isImpulsive = true)
+        assertEquals(true, db.categories().getAllWithSubs().single { it.category.id == hobby.id }.category.isImpulsive)
+        // без явного значения флажок сохраняется
+        repo.updateCategory(hobby.id, hobby.name, hobby.emoji, null)
+        assertEquals(true, db.categories().getAllWithSubs().single { it.category.id == hobby.id }.category.isImpulsive)
+    }
+
+    @Test
     fun renameOtherIsForbidden() = runTest {
         val other = cat(DefaultCategories.OTHER).category
         assertCategoryError { repo.updateCategory(other.id, "Разное", other.emoji, null) }

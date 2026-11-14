@@ -81,9 +81,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             c.db.expenses().observeAllWithCategory(),
             c.db.recurring().observeAll(),
             c.db.categories().observeActiveWithSubs(),
-        ) { expenses, recurring, cats ->
+            c.settings.flow.map { it.labelsEnabled }.distinctUntilChanged(),
+        ) { expenses, recurring, cats, enabled ->
+            if (!enabled) return@combine emptyMap()
             val candidates = RecurringRepository.suggest(expenses, recurring, cats)
-            ExpenseLabeler.label(expenses, ExpenseLabeler.subscriptionExpenseIds(expenses, recurring, candidates), zone)
+            ExpenseLabeler.label(
+                expenses,
+                ExpenseLabeler.subscriptionExpenseIds(expenses, recurring, candidates),
+                zone,
+                impulsiveCategories = cats.filter { it.category.isImpulsive }.map { it.category.name },
+            )
         }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
@@ -148,6 +155,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             to.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Все строки планов трат (этап 8). Пусто — план ещё ни разу не задавали. */
+    val budgetRows: StateFlow<List<ru.my.traty.data.budget.Budget>> =
+        c.db.budgets().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Планы показанного расчётного периода с прогрессом — для Статистики и Трат. */
+    val plans: StateFlow<List<ru.my.traty.ui.budget.PlanItem>> =
+        combine(budgetRows, _period, expenses, categories) { rows, p, list, cats ->
+            ru.my.traty.ui.budget.planItems(rows, p, list, cats, zone)
+        }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Фразы без сети (ждут разбора) и разобранные в фоне (ждут проверки). */
     val pending: StateFlow<List<PendingPhrase>> =
@@ -422,6 +441,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun downloadModel() = c.downloadModel()
 
     fun deleteModel() = c.models.delete()
+
+    fun setLabelsEnabled(enabled: Boolean) = viewModelScope.launch {
+        c.settings.setLabelsEnabled(enabled)
+    }
 
     fun setVoiceEngine(engine: VoiceEngine) = viewModelScope.launch {
         c.settings.setVoiceEngine(engine)

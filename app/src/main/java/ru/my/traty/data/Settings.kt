@@ -1,6 +1,7 @@
 package ru.my.traty.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -45,6 +46,8 @@ data class AppSettings(
     val calculatorLines: List<String> = emptyList(),
     /** Чем распознаётся речь. GigaAM работает, только когда модель скачана; иначе — системное. */
     val voiceEngine: VoiceEngine = VoiceEngine.GIGAAM,
+    /** Показывать метки 🔺 🔁 🆕 ⚡ 📅 на тратах. */
+    val labelsEnabled: Boolean = true,
 )
 
 internal fun encodeLines(lines: List<String>): String =
@@ -72,6 +75,7 @@ class SettingsRepository(private val context: Context) {
         val reconcileSnooze = longPreferencesKey("reconcile_snooze_until")
         val calculatorLines = stringPreferencesKey("calculator_lines")
         val voiceEngine = stringPreferencesKey("voice_engine")
+        val labelsEnabled = booleanPreferencesKey("labels_enabled")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -89,6 +93,7 @@ class SettingsRepository(private val context: Context) {
             reconcileSnoozeUntilEpochDay = (p[K.reconcileSnooze] ?: 0L).coerceAtLeast(0L),
             calculatorLines = decodeLines(p[K.calculatorLines]),
             voiceEngine = p[K.voiceEngine]?.let { runCatching { VoiceEngine.valueOf(it) }.getOrNull() } ?: d.voiceEngine,
+            labelsEnabled = p[K.labelsEnabled] ?: d.labelsEnabled,
         )
     }
 
@@ -123,6 +128,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setVoiceEngine(engine: VoiceEngine) {
         context.dataStore.edit { p -> p[K.voiceEngine] = engine.name }
+    }
+
+    suspend fun setLabelsEnabled(enabled: Boolean) {
+        context.dataStore.edit { p -> p[K.labelsEnabled] = enabled }
     }
 
     suspend fun setThemeMode(mode: ThemeMode) {

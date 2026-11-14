@@ -120,6 +120,18 @@ class ExpenseLabelerTest {
     }
 
     @Test
+    fun impulsiveFlagComesFromTheListOfCategories() {
+        val groceries = (0..2).map { exp(7, 23, kopecks = 20_000, cat = 3, sub = null, catName = "Продукты", subName = null) }
+        val cafe = exp(8, 23, cat = 2, sub = null, catName = "Кафе и рестораны", subName = null)
+        val custom = ExpenseLabeler.label(groceries + cafe, emptySet(), zone, impulsiveCategories = listOf("продукты"))
+        assertTrue(groceries.all { labelsOf(custom, it).contains(ExpenseLabel.IMPULSIVE) })
+        // «Кафе» флажок снят — ⚡ нет, даже ночью
+        assertTrue(labelsOf(custom, cafe).isEmpty())
+        // совсем без импульсивных категорий метки ⚡ не бывает
+        assertTrue(ExpenseLabeler.label(groceries + cafe, emptySet(), zone, impulsiveCategories = emptyList()).isEmpty())
+    }
+
+    @Test
     fun threeSmallPurchasesPerDayAreImpulsive() {
         fun cafe(day: Int, hour: Int) = exp(day, hour, kopecks = 20_000, cat = 2, sub = null, catName = "Кафе и рестораны", subName = null)
         val three = listOf(cafe(1, 9), cafe(1, 12), cafe(1, 16))

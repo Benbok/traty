@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -46,6 +48,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
@@ -247,6 +250,7 @@ private fun EditCategoryDialog(
     var name by remember(c.id) { mutableStateOf(c.name) }
     var emoji by remember(c.id) { mutableStateOf(c.emoji) }
     var color by remember(c.id) { mutableStateOf(c.color) }
+    var impulsive by remember(c.id) { mutableStateOf(c.isImpulsive) }
     var newSub by remember(c.id) { mutableStateOf("") }
     var merging by remember(c.id) { mutableStateOf(false) }
 
@@ -267,6 +271,23 @@ private fun EditCategoryDialog(
 
                 Text("Цвет", style = TratyTheme.typography.labelMedium, color = TratyTheme.colors.onSurfaceVariant)
                 ColorRow(selected = color, onPick = { color = it })
+
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .toggleable(value = impulsive, role = Role.Switch, onValueChange = { impulsive = it }),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Импульсивные траты ⚡", style = TratyTheme.typography.bodyMedium)
+                        Text(
+                            "Ночные покупки и серии мелких покупок за день получат метку ⚡",
+                            style = TratyTheme.typography.bodySmall,
+                            color = TratyTheme.colors.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = impulsive, onCheckedChange = null)
+                }
 
                 HorizontalDivider(color = TratyTheme.colors.borderSubtle)
                 Text("Подкатегории", style = TratyTheme.typography.labelMedium, color = TratyTheme.colors.onSurfaceVariant)
@@ -298,7 +319,7 @@ private fun EditCategoryDialog(
             }
         },
         confirmButton = {
-            TratyButton(onClick = { vm.update(c.id, name, emoji, color, onDismiss) }) { Text("Сохранить") }
+            TratyButton(onClick = { vm.update(c.id, name, emoji, color, impulsive, onDismiss) }) { Text("Сохранить") }
         },
         dismissButton = { TratyTextButton(onClick = onDismiss) { Text("Закрыть") } },
     )

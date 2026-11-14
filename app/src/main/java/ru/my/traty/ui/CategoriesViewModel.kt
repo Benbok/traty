@@ -36,8 +36,8 @@ class CategoriesViewModel(app: Application) : AndroidViewModel(app) {
 
     fun add(name: String, emoji: String, onDone: () -> Unit) = run(onDone) { repo.addCategory(name, emoji); null }
 
-    fun update(id: Long, name: String, emoji: String, color: Int?, onDone: () -> Unit) =
-        run(onDone) { repo.updateCategory(id, name, emoji, color); "Сохранено" }
+    fun update(id: Long, name: String, emoji: String, color: Int?, isImpulsive: Boolean, onDone: () -> Unit) =
+        run(onDone) { repo.updateCategory(id, name, emoji, color, isImpulsive); "Сохранено" }
 
     fun setArchived(id: Long, archived: Boolean, onDone: () -> Unit) =
         run(onDone) { repo.setArchived(id, archived); if (archived) "Категория в архиве" else "Категория возвращена" }
