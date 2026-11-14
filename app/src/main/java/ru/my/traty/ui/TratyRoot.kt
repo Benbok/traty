@@ -29,6 +29,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
+import ru.my.traty.ui.budget.BudgetScreen
 import ru.my.traty.ui.charts.ChartsScreen
 import ru.my.traty.ui.designsystem.components.TratySnackbar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
@@ -55,6 +56,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     var showTemplates by rememberSaveable { mutableStateOf(false) }
     var showRules by rememberSaveable { mutableStateOf(false) }
     var showRecurring by rememberSaveable { mutableStateOf(false) }
+    var showBudget by rememberSaveable { mutableStateOf(false) }
     // null - экран сверки закрыт
     var reconcileMode by rememberSaveable { mutableStateOf<ReconcileMode?>(null) }
     val snackbar = remember { SnackbarHostState() }
@@ -144,6 +146,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onOpenTemplates = { showTemplates = true },
                         onOpenRules = { showRules = true },
                         onOpenRecurring = { showRecurring = true },
+                        onOpenBudget = { showBudget = true },
                     )
                 }
             }
@@ -165,6 +168,12 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
         if (showRecurring) {
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
                 RecurringScreen(onBack = { showRecurring = false })
+            }
+        }
+
+        if (showBudget) {
+            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                BudgetScreen(onBack = { showBudget = false })
             }
         }
 

@@ -20,6 +20,7 @@ import androidx.room.Update
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
+import ru.my.traty.data.budget.Budget
 
 /** Категория трат. «Прочее» существует всегда и в списках идёт последней. */
 @Entity(tableName = "categories", indices = [Index(value = ["name"], unique = true)])
@@ -586,9 +587,28 @@ interface PendingPhraseDao {
     fun observeAll(): Flow<List<PendingPhrase>>
 }
 
+/** Планы трат по категориям (этап 8). Логика выбора действующего плана — [ru.my.traty.data.budget.BudgetPlans]. */
+@Dao
+interface BudgetDao {
+    @Insert
+    suspend fun insert(item: Budget): Long
+
+    @Update
+    suspend fun update(item: Budget)
+
+    @Delete
+    suspend fun deleteAll(items: List<Budget>)
+
+    @Query("SELECT * FROM budgets ORDER BY month, id")
+    fun observeAll(): Flow<List<Budget>>
+
+    @Query("SELECT * FROM budgets ORDER BY month, id")
+    suspend fun getAll(): List<Budget>
+}
+
 @Database(
-    entities = [Expense::class, Category::class, Subcategory::class, Income::class, Reconciliation::class, Template::class, Rule::class, PendingPhrase::class, Recurring::class],
-    version = 10,
+    entities = [Expense::class, Category::class, Subcategory::class, Income::class, Reconciliation::class, Template::class, Rule::class, PendingPhrase::class, Recurring::class, Budget::class],
+    version = 11,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -600,6 +620,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun rules(): RuleDao
     abstract fun pendingPhrases(): PendingPhraseDao
     abstract fun recurring(): RecurringDao
+    abstract fun budgets(): BudgetDao
 
     companion object {
         val MIGRATION_2_3 = object : Migration(2, 3) {
@@ -742,9 +763,31 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `budgets` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `categoryId` INTEGER NOT NULL,
+                        `subcategoryId` INTEGER,
+                        `month` INTEGER NOT NULL,
+                        `amountKopecks` INTEGER NOT NULL,
+                        `repeats` INTEGER NOT NULL,
+                        FOREIGN KEY(`categoryId`) REFERENCES `categories`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`subcategoryId`) REFERENCES `subcategories`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_budgets_categoryId` ON `budgets` (`categoryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_budgets_subcategoryId` ON `budgets` (`subcategoryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_budgets_month` ON `budgets` (`month`)")
+            }
+        }
+
         fun build(context: Context, name: String = "traty.db"): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, name)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                 // Решение владельца: в v1 реальных данных нет — базу v1 пересоздаём.
                 // Для версий 2+ — только Migration(n, n+1).
                 .fallbackToDestructiveMigrationFrom(true, 1)
