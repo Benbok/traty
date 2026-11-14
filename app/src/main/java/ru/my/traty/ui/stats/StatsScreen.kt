@@ -1,7 +1,9 @@
 package ru.my.traty.ui.stats
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,6 +33,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,6 +52,11 @@ import ru.my.traty.data.Places
 import ru.my.traty.data.StoreTotal
 import ru.my.traty.data.CategoryChange
 import ru.my.traty.data.PeriodComparison
+import ru.my.traty.data.RingSlice
+import ru.my.traty.data.RingSlices
+import ru.my.traty.data.period.CumulativeLine
+import ru.my.traty.data.period.CumulativeSpending
+import ru.my.traty.data.period.PaceVsPrevious
 import ru.my.traty.data.period.SpendingPace
 import ru.my.traty.data.period.SpendingPaces
 import ru.my.traty.ui.MainViewModel
@@ -66,7 +79,9 @@ import ru.my.traty.ui.formatDateSpan
 import ru.my.traty.ui.formatRub
 import ru.my.traty.ui.formatRubSigned
 import ru.my.traty.ui.formatTime
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.math.roundToInt
 
 /**
@@ -87,6 +102,7 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
     val customPlaces by rangeVm.placeTotals.collectAsStateWithLifecycle()
     val periodExpenses by vm.expenses.collectAsStateWithLifecycle()
     val customExpenses by rangeVm.expenses.collectAsStateWithLifecycle()
+    val prevExpenses by vm.prevExpenses.collectAsStateWithLifecycle()
     var showRangePicker by remember { mutableStateOf(false) }
     var byStores by rememberSaveable { mutableStateOf(false) }
     // Раскрытые категории: под ними видно, из чего состоит категория
@@ -121,6 +137,18 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
     val pace = remember(sum, period, range) {
         val today = LocalDate.now()
         range?.let { SpendingPaces.of(it.first, it.second, today, sum) } ?: SpendingPaces.of(period, today, sum)
+    }
+
+    // Линия накопленных трат: текущий расчётный период против прошлого (в режиме «Даты» не показываем)
+    val cumulative = remember(periodExpenses, prevExpenses, period, settings.periodStartDay) {
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now()
+        fun spends(list: List<ExpenseWithCategory>) = list.map {
+            Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate() to it.expense.amountKopecks
+        }
+        val prevPeriod = period.previous(settings.periodStartDay)
+        CumulativeSpending.line(period.startDate, period.endDate, today, spends(periodExpenses)) to
+            CumulativeSpending.line(prevPeriod.startDate, prevPeriod.endDate, today, spends(prevExpenses))
     }
 
     val deltaDescription = if (prevSum > 0) {
@@ -171,8 +199,16 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel()) {
             item { SpendingPaceCard(pace = pace, endDate = paceEnd, prevSum = prevSum, custom = custom) }
         }
 
+        if (!custom && cumulative.first.points.isNotEmpty() && cumulative.second.last > 0) {
+            item { CumulativeCard(current = cumulative.first, previous = cumulative.second) }
+        }
+
         if (topChanges.isNotEmpty() && comparable.isNotEmpty()) {
             item { TopChangesCard(changes = topChanges, compareLabel = compareLabel) }
+        }
+
+        if (totals.isNotEmpty()) {
+            item { CategoryRingCard(slices = RingSlices.of(totals), sum = sum) }
         }
 
         if (totals.isNotEmpty()) {
@@ -445,6 +481,155 @@ internal fun days(n: Int): String {
         else -> "дней"
     }
     return "$n $word"
+}
+
+/**
+ * Накопленные траты по дням: сплошная линия — этот период (до сегодня), пунктир — прошлый целиком.
+ * Подпись сверху — обгоняю или отстаю от прошлого периода на этот же день.
+ */
+@Composable
+private fun CumulativeCard(current: CumulativeLine, previous: CumulativeLine) {
+    val vs: PaceVsPrevious? = CumulativeSpending.vsPrevious(current, previous)
+    val curColor = TratyTheme.colors.primary
+    val prevColor = TratyTheme.colors.onSurfaceVariant.copy(alpha = 0.6f)
+    val gridColor = TratyTheme.colors.surfaceContainerHigh
+    TratyCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
+        backgroundColor = TratyTheme.colors.surfaceContainer,
+    ) {
+        Column(Modifier.padding(TratyTheme.spacing.md)) {
+            Text("Накопленные траты", style = TratyTheme.typography.titleSmall)
+            if (vs != null) {
+                val text = when {
+                    vs.diff > 0 -> "Обгоняю прошлый период на ${formatRub(vs.diff)} к ${vs.day}-му дню"
+                    vs.diff < 0 -> "Отстаю от прошлого периода на ${formatRub(-vs.diff)} к ${vs.day}-му дню"
+                    else -> "Иду вровень с прошлым периодом"
+                }
+                Text(
+                    text = text,
+                    style = TratyTheme.typography.bodySmall,
+                    color = if (vs.diff > 0) TratyTheme.colors.expense else TratyTheme.colors.income,
+                )
+            }
+            Spacer(Modifier.height(TratyTheme.spacing.sm))
+            val days = maxOf(current.daysTotal, previous.daysTotal)
+            val maxY = maxOf(current.last, previous.last).coerceAtLeast(1)
+            Canvas(
+                Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+            ) {
+                val w = size.width
+                val h = size.height
+                fun x(i: Int) = if (days <= 1) 0f else w * i / (days - 1)
+                fun y(v: Long) = h - h * (v.toFloat() / maxY)
+                for (k in 0..2) {
+                    val gy = h * k / 2
+                    drawLine(gridColor, Offset(0f, gy), Offset(w, gy), strokeWidth = 1f)
+                }
+                fun path(points: List<Long>) = Path().apply {
+                    points.forEachIndexed { i, v -> if (i == 0) moveTo(x(i), y(v)) else lineTo(x(i), y(v)) }
+                }
+                drawPath(
+                    path(previous.points),
+                    prevColor,
+                    style = Stroke(width = 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))),
+                )
+                drawPath(path(current.points), curColor, style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round))
+                current.points.lastOrNull()?.let {
+                    drawCircle(curColor, radius = 4.dp.toPx(), center = Offset(x(current.points.lastIndex), y(it)))
+                }
+            }
+            Spacer(Modifier.height(TratyTheme.spacing.xs))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LegendDot(curColor)
+                Text(
+                    "Сейчас: ${formatRub(current.last)}",
+                    style = TratyTheme.typography.labelSmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                LegendDot(prevColor)
+                Text(
+                    "Прошлый: ${formatRub(previous.last)}",
+                    style = TratyTheme.typography.labelSmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegendDot(color: Color) {
+    Canvas(Modifier.padding(end = 4.dp).size(8.dp)) { drawCircle(color) }
+}
+
+/** Цвета долей кольца: насыщенные, различимые в светлой и тёмной теме; «Остальное» — серое. */
+private val RING_COLORS = listOf(
+    Color(0xFF4F7CF7), Color(0xFFF59E0B), Color(0xFF10B981), Color(0xFFEC4899), Color(0xFF8B5CF6), Color(0xFF06B6D4),
+)
+private val RING_REST = Color(0xFF94A3B8)
+
+/** Кольцевая диаграмма по категориям: крупные категории своими долями, мелкие — «Остальное». */
+@Composable
+private fun CategoryRingCard(slices: List<RingSlice>, sum: Long) {
+    if (slices.isEmpty()) return
+    val colors = slices.mapIndexed { i, sl -> if (sl.categoryId == null) RING_REST else RING_COLORS[i % RING_COLORS.size] }
+    TratyCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
+        backgroundColor = TratyTheme.colors.surfaceContainer,
+    ) {
+        Row(Modifier.padding(TratyTheme.spacing.md), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(120.dp), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.size(120.dp)) {
+                    val stroke = 18.dp.toPx()
+                    val gap = if (slices.size > 1) 1.5f else 0f
+                    var startAngle = -90f
+                    slices.forEachIndexed { i, sl ->
+                        val sweep = 360f * sl.fraction
+                        drawArc(
+                            color = colors[i],
+                            startAngle = startAngle + gap / 2,
+                            sweepAngle = (sweep - gap).coerceAtLeast(0.5f),
+                            useCenter = false,
+                            topLeft = Offset(stroke / 2, stroke / 2),
+                            size = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke),
+                            style = Stroke(width = stroke),
+                        )
+                        startAngle += sweep
+                    }
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Всего", style = TratyTheme.typography.labelSmall, color = TratyTheme.colors.onSurfaceVariant)
+                    Text(formatRub(sum), style = TratyTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.width(TratyTheme.spacing.md))
+            Column(Modifier.weight(1f)) {
+                slices.forEachIndexed { i, sl ->
+                    Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        LegendDot(colors[i])
+                        Text(
+                            text = listOf(sl.emoji, sl.name).filter { it.isNotBlank() }.joinToString(" "),
+                            style = TratyTheme.typography.bodySmall,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "${(sl.fraction * 100).roundToInt()}%",
+                            style = TratyTheme.typography.labelSmall,
+                            color = TratyTheme.colors.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** «Что изменилось»: три категории с самой большой разницей в рублях, рост — красным, падение — зелёным. */
