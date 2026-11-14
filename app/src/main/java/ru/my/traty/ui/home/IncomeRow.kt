@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -48,7 +49,7 @@ fun IncomeRow(
                 style = TratyTheme.typography.titleSmall,
                 color = TratyTheme.colors.income,
             )
-            val sub = listOfNotNull(formatTime(income.timestamp), income.note).joinToString(" · ")
+            val sub = remember(income) { listOfNotNull(formatTime(income.timestamp), income.note).joinToString(" · ") }
             Text(
                 text = sub,
                 style = TratyTheme.typography.bodySmall,

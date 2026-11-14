@@ -26,7 +26,7 @@ ai-sage/GigaAM-v3; модель детектора пауз `silero_vad.onnx` л
 
 **Сборка:** библиотека sherpa-onnx (AAR 2.0.1, 47 МБ) скачивается Gradle-задачей `downloadSherpaAar` в `app/build`
 с проверкой SHA-256 — нужен интернет при первой сборке. Нативные библиотеки только arm64-v8a (эмулятор не подходит).
-Тесты: `./gradlew :app:testDebugUnitTest`. Установка на телефон: `./gradlew :app:installDebug`.
+Тесты: `./gradlew :app:testDebugUnitTest`. Установка на телефон: `./gradlew :app:installRelease` (debug-сборка медленнее, см. раздел 5).
 
 **Известные мелочи (отложено после ревью):**
 - у фразы без суммы из очереди дата по умолчанию — день разбора, а не день произнесения;
@@ -93,6 +93,15 @@ Device Manager → Create Device → Pixel → образ с Google Play (x86_64
 .\gradlew.bat assembleDebug      # собрать APK → app\build\outputs\apk\debug\app-debug.apk
 .\gradlew.bat installDebug       # собрать и установить на подключённый телефон
 ```
+
+Для ежедневного пользования ставьте **release**-сборку: `.\gradlew.bat installRelease`
+(подписана тем же ключом, ставится поверх debug без потери данных). Debug-сборка заметно медленнее:
+в ней Compose работает без оптимизаций, и длинный список трат при первой прокрутке подтормаживает.
+Release подхватывает готовые профили библиотек (baseline profiles) и прокручивается плавно.
+
+Проверить плавность списка: открыть «Траты», выполнить `adb shell dumpsys gfxinfo ru.my.traty reset`,
+прокрутить список до конца и обратно, затем `adb shell dumpsys gfxinfo ru.my.traty` и посмотреть
+строку `Janky frames` (доля «рваных» кадров) и `90th/99th percentile`.
 
 `adb` лежит в `%LOCALAPPDATA%\Android\Sdk\platform-tools` — добавьте эту папку в PATH,
 чтобы смотреть логи: `adb logcat -s System.err AndroidRuntime`.
