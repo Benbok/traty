@@ -6,7 +6,6 @@ import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -43,7 +42,7 @@ open class TratyApp : Application() {
             appScope.launch {
                 container.db.pendingPhrases().observeAll()
                     .map { list -> list.any { it.status == PendingStatus.WAITING } }
-                    .distinctUntilChanged()
+                    // Без distinctUntilChanged: каждое изменение очереди снова ставит разбор (KEEP не трогает активный, но заменяет упавший)
                     .filter { it }
                     .collect { runCatching { PendingParseWork.enqueue(this@TratyApp) } }
             }

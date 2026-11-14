@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import ru.my.traty.ui.charts.ChartsScreen
 import ru.my.traty.ui.designsystem.components.TratySnackbar
@@ -74,6 +75,9 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                     duration = SnackbarDuration.Short,
                 )
             }
+        } catch (e: CancellationException) {
+            // Сообщение сменилось — старый эффект не должен стирать состояние нового (lastSaved, message)
+            throw e
         } catch (_: Exception) {
             null
         }

@@ -22,7 +22,9 @@ object RuleMatcher {
             val text = listOfNotNull(e.place, e.note).joinToString(" ").lowercase()
             val rule = rules.firstOrNull { it.pattern.isNotBlank() && text.contains(it.pattern) }
                 ?: return@map RuledEntry(e, null)
-            val catName = categories.firstOrNull { it.category.id == rule.categoryId }?.category?.name ?: e.category
+            // Правило на архивную/удалённую категорию не считается совпадением: иначе трата автосохранилась бы в категорию от ИИ
+            val catName = categories.firstOrNull { it.category.id == rule.categoryId }?.category?.name
+                ?: return@map RuledEntry(e, null)
             val subName = rule.subcategoryId?.let { sid -> categories.flatMap { it.subs }.firstOrNull { it.id == sid }?.name }
             RuledEntry(e.copy(category = catName, subcategory = subName ?: e.subcategory), rule)
         }

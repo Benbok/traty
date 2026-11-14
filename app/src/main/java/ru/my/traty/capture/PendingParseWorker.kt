@@ -19,9 +19,16 @@ class PendingParseWorker(context: Context, params: WorkerParameters) : Coroutine
         val container = (applicationContext as TratyApp).container
         container.quickEntry.processPending()
         val left = container.db.pendingPhrases().getByStatus(PendingStatus.WAITING)
-        return if (left.isEmpty()) Result.success() else Result.retry()
+        return when {
+            left.isEmpty() -> Result.success()
+            // Не крутимся вечно, если сервер ИИ недоступен при работающем интернете: повтор будет при следующем изменении очереди или запуске
+            runAttemptCount >= MAX_ATTEMPTS -> Result.failure()
+            else -> Result.retry()
+        }
     }
 }
+
+private const val MAX_ATTEMPTS = 8
 
 object PendingParseWork {
     private const val NAME = "pending-parse"

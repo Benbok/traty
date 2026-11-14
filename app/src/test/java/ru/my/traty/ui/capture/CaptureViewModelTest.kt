@@ -88,6 +88,25 @@ class CaptureViewModelTest {
     }
 
     @Test
+    fun autoStartIsGrantedOnlyOnce() {
+        assertTrue(vm.consumeAutoStart())
+        assertFalse(vm.consumeAutoStart())
+    }
+
+    @Test
+    fun doubleTapOnSaveDoesNotDuplicate() = runTest {
+        app.container.categories.seedIfEmpty()
+        TestTratyApp.llm = CannedLlm { """{"items":[{"type":"expense","amount":250,"category":"Кафе и рестораны"}]}""" }
+        vm.onSpokenText("кофе 250").join()
+        val draft = (vm.ui.value as CaptureUi.Confirm).draft
+        val first = vm.save(draft)
+        val second = vm.save(draft)
+        first.join()
+        second.join()
+        assertEquals(1, app.container.db.expenses().getAllWithCategory().size)
+    }
+
+    @Test
     fun finishRequestsClose() {
         vm.finish()
         assertTrue(vm.finishRequested.value)

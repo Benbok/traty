@@ -47,6 +47,14 @@ class RuleMatcherTest {
     }
 
     @Test
+    fun ruleForMissingOrArchivedCategoryDoesNotCountAsMatch() {
+        val orphanRules = listOf(Rule(id = 9, pattern = "магнит", categoryId = 777))
+        val r = RuleMatcher.apply(listOf(ParsedEntry(amount = 100.0, category = "Прочее", place = "Магнит")), orphanRules, cats).single()
+        assertFalse(r.ruleMatched)
+        assertEquals("Прочее", r.entry.category)
+    }
+
+    @Test
     fun subcategoryFromRuleWins() {
         val r = RuleMatcher.apply(listOf(ParsedEntry(amount = 500.0, place = "пятёрочка", subcategory = "Рынок")), rules, cats).single()
         assertEquals("Супермаркет", r.entry.subcategory)

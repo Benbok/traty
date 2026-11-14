@@ -240,14 +240,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Сохранение черновика с экрана подтверждения: траты и пополнения одним списком. */
-    fun saveEntry(d: EntryDraft): Job = viewModelScope.launch {
-        val result = c.quickEntry.save(d)
-        if (result.saved.count == 0) { message = "Нет корректных сумм — нечего сохранять"; return@launch }
-        confirmPendingId?.let { c.db.pendingPhrases().delete(it) }
-        dismissConfirm()
-        ruleOffer = result.ruleOffer
-        message = "Сохранено: ${result.saved.count}" +
-            if (result.newCategories.isNotEmpty()) ". Новые категории: ${result.newCategories.joinToString()}" else ""
+    private var savingEntry = false
+
+    /** Двойной тап на «Сохранить» не должен создать дубли: пока идёт сохранение, повторные вызовы игнорируются. */
+    fun saveEntry(d: EntryDraft): Job {
+        if (savingEntry) return Job().also { it.complete() }
+        savingEntry = true
+        return viewModelScope.launch {
+            try {
+                val result = c.quickEntry.save(d)
+                if (result.saved.count == 0) { message = "Нет корректных сумм — нечего сохранять"; return@launch }
+                confirmPendingId?.let { c.db.pendingPhrases().delete(it) }
+                dismissConfirm()
+                ruleOffer = result.ruleOffer
+                message = "Сохранено: ${result.saved.count}" +
+                    if (result.newCategories.isNotEmpty()) ". Новые категории: ${result.newCategories.joinToString()}" else ""
+            } finally {
+                savingEntry = false
+            }
+        }
     }
 
     fun delete(e: Expense) = viewModelScope.launch {

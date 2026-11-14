@@ -116,6 +116,17 @@ class MainViewModelEntryTest {
     }
 
     @Test
+    fun doubleTapOnSaveDoesNotDuplicate() = runTest {
+        app.container.categories.seedIfEmpty()
+        val draft = EntryDraft(listOf(EntryRow.empty().copy(amountText = "250")), "x", EntryOrigin.VOICE)
+        val first = vm.saveEntry(draft)
+        val second = vm.saveEntry(draft)
+        first.join()
+        second.join()
+        assertEquals(1, app.container.db.expenses().getAllWithCategory().size)
+    }
+
+    @Test
     fun parsedPendingOpensConfirmAndIsDeletedAfterSave() = runTest {
         app.container.categories.seedIfEmpty()
         val draft = EntryDraft(listOf(EntryRow.empty().copy(amountText = "300")), "кофе", EntryOrigin.VOICE)

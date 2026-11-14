@@ -76,9 +76,11 @@ private fun CaptureScreen(vm: CaptureViewModel, onFinish: () -> Unit) {
     }
     fun hasMic() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
-    // Запись начинается сразу при открытии панели
+    // Запись начинается сразу при первом открытии панели, а не при повороте/пересоздании (иначе поверх диалога подтверждения запустится скрытая запись)
     LaunchedEffect(Unit) {
-        if (hasMic()) recorder.toggle() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        if (vm.consumeAutoStart()) {
+            if (hasMic()) recorder.toggle() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
     }
     // Таймер закрытия живёт здесь: смена состояния (например, «Изменить») отменяет его сама
     LaunchedEffect(ui) {

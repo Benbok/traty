@@ -83,13 +83,33 @@ class CaptureViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun save(draft: EntryDraft): Job = viewModelScope.launch {
-        val result = c.quickEntry.save(draft)
-        if (result.saved.count == 0) {
-            _error.value = "Нет корректных сумм — нечего сохранять"
-            return@launch
+    private var saving = false
+
+    /** Двойной тап на «Сохранить» не должен создать дубли: пока идёт сохранение, повторные вызовы игнорируются. */
+    fun save(draft: EntryDraft): Job {
+        if (saving) return doneJob()
+        saving = true
+        return viewModelScope.launch {
+            try {
+                val result = c.quickEntry.save(draft)
+                if (result.saved.count == 0) {
+                    _error.value = "Нет корректных сумм — нечего сохранять"
+                } else {
+                    _finish.value = true
+                }
+            } finally {
+                saving = false
+            }
         }
-        _finish.value = true
+    }
+
+    private var autoStarted = false
+
+    /** true один раз за жизнь панели: запись стартует при открытии, а не при каждом пересоздании (поворот экрана). */
+    fun consumeAutoStart(): Boolean {
+        if (autoStarted) return false
+        autoStarted = true
+        return true
     }
 
     fun reportError(message: String) {
