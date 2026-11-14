@@ -17,16 +17,21 @@ import kotlinx.coroutines.withContext
 import ru.my.traty.TratyApp
 import ru.my.traty.ai.clientFor
 import ru.my.traty.assistant.AssistantContext
+import ru.my.traty.assistant.Balance
 import ru.my.traty.assistant.AssistantEngine
 import ru.my.traty.assistant.AssistantPrompts
 import ru.my.traty.assistant.AssistantQueries
 import ru.my.traty.assistant.AssistantQuery
 import ru.my.traty.assistant.AssistantTurn
 import ru.my.traty.assistant.Intents
+import ru.my.traty.assistant.PlanProposal
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.LlmProvider
 import ru.my.traty.data.selectable
+import ru.my.traty.data.budget.BudgetRepository
+import ru.my.traty.data.budget.PlanKey
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -43,6 +48,11 @@ data class ChatMessage(
     /** Что именно ушло в ИИ на втором шаге — показывается по кнопке «Что отправлено». */
     val sentFacts: String? = null,
     val error: Boolean = false,
+    /** Предложенные строки «Плана трат» — добавляются по кнопке. */
+    val planProposals: List<PlanProposal> = emptyList(),
+    val planMonth: Int? = null,
+    /** Сколько строк уже добавлено в план; null — ещё не добавляли. */
+    val planApplied: Int? = null,
 )
 
 /**
@@ -63,6 +73,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     var sheetRows by mutableStateOf<List<ExpenseWithCategory>?>(null)
         private set
 
+    private val budgets = BudgetRepository(c.db)
     private val history = ArrayList<AssistantTurn>()
     private var nextId = 1L
 
@@ -93,6 +104,11 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 history += AssistantTurn(question, AssistantQueries.encode(query))
                 while (history.size > AssistantPrompts.HISTORY) history.removeAt(0)
 
+                val expectation = c.reconciliations.expectation()
+                val balance = expectation?.let {
+                    Balance(it.expectedKopecks, Instant.ofEpochMilli(it.sinceMillis).atZone(zone).toLocalDate())
+                }
+                val budgets = c.db.budgets().getAll()
                 val data = withContext(Dispatchers.Default) {
                     val ctx = AssistantContext(
                         expenses = c.db.expenses().getAllWithCategory(),
@@ -101,6 +117,9 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                         today = today,
                         startDay = s.periodStartDay,
                         zone = zone,
+                        budgets = budgets,
+                        categories = categories,
+                        balance = balance,
                     )
                     AssistantEngine.run(query, ctx)
                 }
@@ -113,6 +132,8 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     caption = data.caption,
                     expenseIds = data.expenseIds,
                     sentFacts = data.facts.takeIf { data.direct == null },
+                    planProposals = data.planProposals,
+                    planMonth = data.planMonth,
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -120,6 +141,27 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 messages += ChatMessage(nextId++, false, "Не получилось ответить: ${e.message ?: "ошибка сети"}", error = true)
             } finally {
                 busy = false
+            }
+        }
+    }
+
+    /** Добавляет отмеченные строки предложения в «План трат» (повторяются и в следующих месяцах). */
+    fun applyPlan(messageId: Long, selected: List<PlanProposal>) {
+        val index = messages.indexOfFirst { it.id == messageId }
+        val m = messages.getOrNull(index) ?: return
+        val month = m.planMonth ?: return
+        if (selected.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                selected.forEach { p ->
+                    budgets.set(PlanKey(p.categoryId, p.subcategoryId), month, p.amountKopecks, repeats = true)
+                }
+                val i = messages.indexOfFirst { it.id == messageId }
+                if (i >= 0) messages[i] = messages[i].copy(planApplied = selected.size)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                messages += ChatMessage(nextId++, false, "Не удалось добавить в план: ${e.message}", error = true)
             }
         }
     }

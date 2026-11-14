@@ -34,9 +34,13 @@ object Intents {
     const val INCOME = "income"
     const val AFFORD = "afford"
     const val ADVICE = "advice"
+    const val PLAN = "plan"
+    const val BALANCE = "balance"
+    const val SUGGEST_PLAN = "suggest_plan"
+    const val SET_PLAN = "set_plan"
     const val UNKNOWN = "unknown"
 
-    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, UNKNOWN)
+    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, PLAN, BALANCE, SUGGEST_PLAN, SET_PLAN, UNKNOWN)
 }
 
 object AssistantQueries {
