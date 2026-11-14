@@ -78,11 +78,20 @@ class RecurringRepository(private val db: AppDatabase) {
      * Работает на DAO без своей транзакции, поэтому безопасно вызывать внутри чужой.
      * @return название нового платежа или null, если ничего не создано.
      */
-    suspend fun onExpenseSaved(expense: Expense, categoryName: String, zone: ZoneId = ZoneId.systemDefault()): String? {
+    suspend fun onExpenseSaved(
+        expense: Expense,
+        categoryName: String,
+        zone: ZoneId = ZoneId.systemDefault(),
+        subcategoryName: String? = null,
+    ): String? {
         val saysSubscription = listOfNotNull(expense.note, expense.place).any { it.contains("подписк", ignoreCase = true) }
         if (!saysSubscription && AUTO_ADD_CATEGORIES.none { it.equals(categoryName, ignoreCase = true) }) return null
         if (expense.source == ExpenseSource.RECURRING || expense.source == ExpenseSource.RECONCILE) return null
-        val key = RecurringDetector.keyOf(expense.categoryId, expense.place, expense.note) ?: return null
+        // Фраза «мобильная связь 1200» приходит без места и заметки: тогда платёж называем по подкатегории, а без неё — по категории
+        val label = expense.note?.trim()?.takeIf { it.isNotEmpty() }
+            ?: subcategoryName?.trim()?.takeIf { it.isNotEmpty() }
+            ?: categoryName.trim().takeIf { it.isNotEmpty() }
+        val key = RecurringDetector.keyOf(expense.categoryId, expense.place, label) ?: return null
         val day = Instant.ofEpochMilli(expense.timestamp).atZone(zone).toLocalDate()
 
         val existing = dao.getAll().firstOrNull { it.detectKey == key }
@@ -99,9 +108,7 @@ class RecurringRepository(private val db: AppDatabase) {
             return null
         }
 
-        val title = Places.normalize(expense.place)
-            ?: expense.note?.trim()?.takeIf { it.isNotEmpty() }?.replaceFirstChar { it.uppercaseChar() }
-            ?: return null
+        val title = Places.normalize(expense.place) ?: label?.replaceFirstChar { it.uppercaseChar() } ?: return null
         dao.insert(
             Recurring(
                 title = title,
