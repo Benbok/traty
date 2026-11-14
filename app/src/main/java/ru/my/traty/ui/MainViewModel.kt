@@ -13,6 +13,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -48,7 +50,10 @@ import ru.my.traty.data.Template
 import ru.my.traty.data.TemplateWithCategory
 import ru.my.traty.ui.home.EditFields
 import ru.my.traty.data.selectable
+import ru.my.traty.data.labels.ExpenseLabelHit
+import ru.my.traty.data.labels.ExpenseLabeler
 import ru.my.traty.data.period.BillingPeriod
+import ru.my.traty.data.recurring.RecurringRepository
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.roundToLong
@@ -66,6 +71,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Активные (не архивные) категории — для выбора и для промпта. */
     val categories: StateFlow<List<CategoryWithSubs>> =
         c.db.categories().observeActiveWithSubs().map { it.selectable() }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /**
+     * Метки на тратах (🔺 🔁 🆕 ⚡ 📅): считаются по всей истории, не только по показанному периоду.
+     * Живёт, только пока экран на него подписан, поэтому фоновых расчётов без UI нет.
+     */
+    val labels: StateFlow<Map<Long, List<ExpenseLabelHit>>> =
+        combine(
+            c.db.expenses().observeAllWithCategory(),
+            c.db.recurring().observeAll(),
+            c.db.categories().observeActiveWithSubs(),
+        ) { expenses, recurring, cats ->
+            val candidates = RecurringRepository.suggest(expenses, recurring, cats)
+            ExpenseLabeler.label(expenses, ExpenseLabeler.subscriptionExpenseIds(expenses, recurring, candidates), zone)
+        }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /** Шаблоны быстрых трат — чипсы над строкой ввода. */
     val templates: StateFlow<List<TemplateWithCategory>> =

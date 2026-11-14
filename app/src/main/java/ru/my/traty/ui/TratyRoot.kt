@@ -59,6 +59,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     var reconcileMode by rememberSaveable { mutableStateOf<ReconcileMode?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val categories by vm.categories.collectAsStateWithLifecycle()
+    val labels by vm.labels.collectAsStateWithLifecycle()
 
     LaunchedEffect(vm.message) {
         val msg = vm.message ?: return@LaunchedEffect
@@ -194,6 +195,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
         EditExpenseDialog(
             item = item,
             categories = categories,
+            labels = labels[item.expense.id].orEmpty(),
             onDismiss = { vm.editing = null },
             onSave = { fields -> vm.updateExpense(item, fields) },
             onDelete = {

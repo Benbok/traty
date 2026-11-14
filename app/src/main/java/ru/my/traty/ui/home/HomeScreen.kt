@@ -130,6 +130,7 @@ fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: Reconcile
     }
 
     // Единая лента: траты + доходы, отсортированная по времени
+    val labels by vm.labels.collectAsStateWithLifecycle()
     val feed = remember(displayedExpenses, displayedIncomes) {
         buildFeed(displayedExpenses, displayedIncomes)
     }
@@ -337,6 +338,7 @@ fun HomeScreen(vm: MainViewModel, onOpenReconcile: () -> Unit, prompt: Reconcile
                     is FeedItem.ExpenseItem -> {
                         SwipeableExpenseRow(
                             item = item.data,
+                            labels = labels[item.data.expense.id].orEmpty(),
                             onClick = { vm.editing = item.data },
                             onDelete = { expenseToDelete = item.data },
                             modifier = Modifier.animateItem(),

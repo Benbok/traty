@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.my.traty.data.ExpenseWithCategory
+import ru.my.traty.data.labels.ExpenseLabelHit
 import ru.my.traty.ui.designsystem.components.AmountSize
 import ru.my.traty.ui.designsystem.components.TratyAmountText
 import ru.my.traty.ui.designsystem.components.TratyCategoryBadge
@@ -29,6 +30,7 @@ fun ExpenseRow(
     row: ExpenseWithCategory,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    labels: List<ExpenseLabelHit> = emptyList(),
 ) {
     val e = row.expense
     Row(
@@ -46,11 +48,18 @@ fun ExpenseRow(
         Spacer(Modifier.width(TratyTheme.spacing.md))
         Column(Modifier.weight(1f)) {
             val title = remember(row) { listOfNotNull(row.subcategoryName ?: row.categoryName, e.place).joinToString(" · ") }
-            Text(
-                text = title,
-                style = TratyTheme.typography.titleSmall,
-                color = TratyTheme.colors.onSurface,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = title,
+                    style = TratyTheme.typography.titleSmall,
+                    color = TratyTheme.colors.onSurface,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (labels.isNotEmpty()) {
+                    Spacer(Modifier.width(TratyTheme.spacing.xs))
+                    ExpenseLabelBadges(labels)
+                }
+            }
             val sub = remember(row) { listOfNotNull(formatTime(e.timestamp), e.note).joinToString(" · ") }
             Text(
                 text = sub,
