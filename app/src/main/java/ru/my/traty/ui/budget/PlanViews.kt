@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -14,7 +15,9 @@ import androidx.compose.ui.graphics.Color
 import ru.my.traty.data.budget.PlanProgress
 import ru.my.traty.data.budget.PlanStatus
 import ru.my.traty.data.period.BillingPeriod
+import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyProgressBar
+import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatRub
 import java.time.LocalDate
@@ -66,3 +69,65 @@ fun PlanProgressRow(item: PlanItem, period: BillingPeriod, modifier: Modifier = 
         )
     }
 }
+
+/**
+ * Карточка плана периода для Статистики и Трат.
+ * [compact] (Траты): итог и только категории, где план под угрозой, не больше трёх; иначе — все планы.
+ */
+@Composable
+fun PlanSummaryCard(
+    items: List<PlanItem>,
+    period: BillingPeriod,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    today: LocalDate = LocalDate.now(),
+) {
+    val totals = planTotals(items)
+    val shown = if (compact) items.filter { it.progress.status != PlanStatus.OK }.take(3) else items
+    val over = items.count { it.progress.status == PlanStatus.OVER }
+    TratyCard(modifier.fillMaxWidth(), onClick = onOpen) {
+        Column(Modifier.padding(TratyTheme.spacing.lg)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("План трат", style = TratyTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text(
+                    "${formatRub(totals.spent)} из ${formatRub(totals.planned)}",
+                    style = TratyTheme.typography.bodyMedium,
+                    color = if (totals.spent > totals.planned) TratyTheme.colors.expense else TratyTheme.colors.onSurface,
+                )
+            }
+            Text(
+                when {
+                    totals.spent > totals.planned -> "Перерасход ${formatRub(totals.spent - totals.planned)}"
+                    over > 0 -> "Осталось ${formatRub(totals.planned - totals.spent)}, но в $over ${categoriesWord(over)} перерасход"
+                    else -> "Осталось ${formatRub(totals.planned - totals.spent)}"
+                },
+                style = TratyTheme.typography.bodySmall,
+                color = TratyTheme.colors.onSurfaceVariant,
+            )
+            if (shown.isEmpty() && compact) {
+                Spacer(Modifier.height(TratyTheme.spacing.xs))
+                Text(
+                    "Все категории идут по плану",
+                    style = TratyTheme.typography.bodySmall,
+                    color = TratyTheme.colors.income,
+                )
+            }
+            shown.forEach { item ->
+                Spacer(Modifier.height(TratyTheme.spacing.md))
+                PlanProgressRow(item, period, today = today)
+            }
+            if (compact && items.size > shown.size) {
+                TratyTextButton(onClick = onOpen) { Text("Весь план") }
+            }
+        }
+    }
+}
+
+/** «в 1 категории», «в 2 категориях». */
+internal fun categoriesWord(n: Int): String = if (n % 10 == 1 && n % 100 != 11) "категории" else "категориях"
+
+/** Строка под категорией в Статистике: «План 5 000 ₽ · осталось 1 200 ₽». */
+fun planLineText(p: PlanProgress): String =
+    if (p.remaining >= 0) "План ${formatRub(p.planned)} · осталось ${formatRub(p.remaining)}"
+    else "План ${formatRub(p.planned)} · перерасход ${formatRub(-p.remaining)}"

@@ -156,6 +156,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** Все строки планов трат (этап 8). Пусто — план ещё ни разу не задавали. */
+    val budgetRows: StateFlow<List<ru.my.traty.data.budget.Budget>> =
+        c.db.budgets().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Планы показанного расчётного периода с прогрессом — для Статистики и Трат. */
+    val plans: StateFlow<List<ru.my.traty.ui.budget.PlanItem>> =
+        combine(budgetRows, _period, expenses, categories) { rows, p, list, cats ->
+            ru.my.traty.ui.budget.planItems(rows, p, list, cats, zone)
+        }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     /** Фразы без сети (ждут разбора) и разобранные в фоне (ждут проверки). */
     val pending: StateFlow<List<PendingPhrase>> =
         c.db.pendingPhrases().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())

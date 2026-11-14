@@ -135,9 +135,13 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                     .fillMaxSize(),
             ) {
                 when (tab) {
-                    TratyNavTab.HOME -> HomeScreen(vm, onOpenReconcile = { reconcileMode = ReconcileMode.NORMAL })
+                    TratyNavTab.HOME -> HomeScreen(
+                        vm,
+                        onOpenReconcile = { reconcileMode = ReconcileMode.NORMAL },
+                        onOpenBudget = { showBudget = true },
+                    )
                     TratyNavTab.CHARTS -> ChartsScreen()
-                    TratyNavTab.STATS -> StatsScreen(vm)
+                    TratyNavTab.STATS -> StatsScreen(vm, onOpenBudget = { showBudget = true })
                     TratyNavTab.SETTINGS -> SettingsScreen(
                         vm,
                         onOpenCategories = { showCategories = true },

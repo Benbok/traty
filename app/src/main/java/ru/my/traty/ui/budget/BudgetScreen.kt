@@ -1,14 +1,21 @@
 package ru.my.traty.ui.budget
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -38,8 +45,6 @@ import ru.my.traty.data.budget.PlanMonth
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyEmptyState
-import ru.my.traty.ui.designsystem.components.TratyHeaderCard
-import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyMonthPicker
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
@@ -54,6 +59,7 @@ import kotlin.math.roundToLong
 private data class PlanEdit(val key: PlanKey?, val amountKopecks: Long, val repeats: Boolean)
 
 /** Настройки → «План трат»: лимиты по категориям и подкатегориям на расчётный месяц. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
     val period by vm.period.collectAsStateWithLifecycle()
@@ -63,54 +69,77 @@ fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
     val totals = remember(plans) { planTotals(plans) }
     var editing by remember { mutableStateOf<PlanEdit?>(null) }
 
-    Column(Modifier.fillMaxSize()) {
-        TratyHeaderCard(
-            title = "План трат",
-            subtitle = "Сколько хотите тратить по категориям",
-            onBack = onBack,
-            actions = {
-                TratyIconButton(
-                    icon = Icons.Filled.Add,
-                    contentDescription = "Добавить план",
-                    onClick = { editing = PlanEdit(key = null, amountKopecks = 0, repeats = true) },
-                    containerColor = TratyTheme.colors.primaryContainer,
-                    tint = TratyTheme.colors.primary,
-                    modifier = Modifier.size(40.dp),
-                )
-            },
-        )
-
-        TratyMonthPicker(
-            periodLabel = formatPeriod(period, startDay),
-            totalKopecks = totals.planned,
-            onPrev = { vm.shift(-1) },
-            onNext = { vm.shift(1) },
-            deltaText = when {
-                plans.isEmpty() -> "Плана на этот период нет"
-                totals.spent > totals.planned -> "Потрачено ${formatRub(totals.spent)} · перерасход ${formatRub(totals.spent - totals.planned)}"
-                else -> "Потрачено ${formatRub(totals.spent)} · осталось ${formatRub(totals.planned - totals.spent)}"
-            },
-        )
-
+    Scaffold(
+        containerColor = TratyTheme.colors.background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text("План трат", style = TratyTheme.typography.titleMedium)
+                        Text(
+                            "Сколько хотите тратить по категориям",
+                            style = TratyTheme.typography.bodySmall,
+                            color = TratyTheme.colors.onSurfaceVariant,
+                        )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = TratyTheme.colors.background,
+                    titleContentColor = TratyTheme.colors.onSurface,
+                    navigationIconContentColor = TratyTheme.colors.onSurface,
+                ),
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { editing = PlanEdit(key = null, amountKopecks = 0, repeats = true) },
+                containerColor = TratyTheme.colors.primary,
+                contentColor = TratyTheme.colors.onPrimary,
+            ) { Icon(Icons.Filled.Add, contentDescription = "Добавить план") }
+        },
+    ) { pad ->
         LazyColumn(
             Modifier
                 .fillMaxSize()
-                .padding(horizontal = TratyTheme.spacing.lg),
+                .consumeWindowInsets(pad),
+            contentPadding = PaddingValues(
+                top = pad.calculateTopPadding(),
+                // Запас снизу, чтобы последняя карточка не пряталась под кнопкой «+»
+                bottom = pad.calculateBottomPadding() + 88.dp,
+            ),
             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
         ) {
+            item {
+                TratyMonthPicker(
+                    periodLabel = formatPeriod(period, startDay),
+                    totalKopecks = totals.planned,
+                    onPrev = { vm.shift(-1) },
+                    onNext = { vm.shift(1) },
+                    deltaText = when {
+                        plans.isEmpty() -> "Плана на этот период нет"
+                        totals.spent > totals.planned -> "Потрачено ${formatRub(totals.spent)} · перерасход ${formatRub(totals.spent - totals.planned)}"
+                        else -> "Потрачено ${formatRub(totals.spent)} · осталось ${formatRub(totals.planned - totals.spent)}"
+                    },
+                )
+            }
             if (plans.isEmpty()) {
                 item {
                     TratyEmptyState(
                         icon = Icons.Filled.Flag,
                         title = "Плана пока нет",
-                        description = "Нажмите «+», выберите категорию и сумму на месяц. План будет виден в Статистике, " +
+                        description = "Нажмите «+», выберите категорию и сумму на месяц. План будет виден в Статистике и в Тратах, " +
                             "а «можно тратить в день» подскажет, сколько осталось до конца периода.",
                     )
                 }
             }
             items(plans, key = { "${it.key.categoryId}/${it.key.subcategoryId}" }) { item ->
                 TratyCard(
-                    Modifier.fillMaxWidth(),
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = TratyTheme.spacing.lg),
                     onClick = {
                         val own = vm.ownRow(item.key)
                         editing = PlanEdit(item.key, item.progress.planned, own?.repeats ?: item.progress.plan.repeats)
@@ -132,10 +161,10 @@ fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
                         "Месяц плана — ваш расчётный период: ${formatDateSpan(period.startDate, period.endDate)}.",
                         style = TratyTheme.typography.bodySmall,
                         color = TratyTheme.colors.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg),
                     )
                 }
             }
-            item { Spacer(Modifier.height(TratyTheme.spacing.xxl)) }
         }
     }
 
