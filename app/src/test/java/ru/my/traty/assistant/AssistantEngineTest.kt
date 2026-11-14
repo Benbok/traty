@@ -292,11 +292,14 @@ class AssistantEngineTest {
     @Test
     fun suggestPlanFromPreviousPeriods() {
         val d = run(AssistantQuery(intent = Intents.SUGGEST_PLAN), ctx(budgets = listOf(cafePlan)))
-        // октябрь: продукты 3000 → 2700, кафе 900 → 800 (−10 %, до 100 ₽); транспорта в октябре не было
-        assertEquals(listOf("Продукты", "Кафе и рестораны"), d.planProposals.map { it.title })
+        // октябрь: продукты 3000 → 2700, кафе 900 → 800 (−10 %, до 100 ₽);
+        // транспорта в октябре не было — по текущему периоду: одна поездка 1200 ₽, темп не размножаем
+        assertEquals(listOf("Продукты", "Транспорт", "Кафе и рестораны"), d.planProposals.map { it.title })
         assertEquals(270_000L, d.planProposals[0].amountKopecks)
-        assertEquals(80_000L, d.planProposals[1].amountKopecks)
-        assertEquals(300_000L, d.planProposals[1].currentKopecks)
+        assertEquals(120_000L, d.planProposals[1].amountKopecks)
+        assertEquals("по тратам этого периода", d.planProposals[1].basis)
+        assertEquals(80_000L, d.planProposals[2].amountKopecks)
+        assertEquals(300_000L, d.planProposals[2].currentKopecks)
         assertEquals(202611, d.planMonth)
     }
 
@@ -320,5 +323,43 @@ class AssistantEngineTest {
         val d = run(AssistantQuery(intent = Intents.SET_PLAN, categories = listOf("Продукты")))
         assertTrue(d.planProposals.isEmpty())
         assertTrue("сумму" in d.facts)
+    }
+
+    @Test
+    fun setPlanFindsCategoryByShortName() {
+        val p = run(AssistantQuery(intent = Intents.SET_PLAN, categories = listOf("кафе"), amount = 2500.0)).planProposals.single()
+        assertEquals(2L to null, p.categoryId to p.subcategoryId)
+        assertEquals(null, p.newSubcategory)
+    }
+
+    @Test
+    fun setPlanOnMissingSubcategoryProposesToCreateIt() {
+        val d = run(AssistantQuery(intent = Intents.SET_PLAN, categories = listOf("метро"), amount = 1500.0))
+        val p = d.planProposals.single()
+        assertEquals(3L, p.categoryId)
+        assertEquals("Метро", p.newSubcategory)
+        assertEquals(150_000L, p.amountKopecks)
+        assertTrue("Подкатегории «Метро» пока нет" in d.facts)
+    }
+
+    @Test
+    fun setPlanOnUnrelatedNameAsksForCategory() {
+        val d = run(AssistantQuery(intent = Intents.SET_PLAN, categories = listOf("Хобби"), amount = 1500.0))
+        assertTrue(d.planProposals.isEmpty())
+        assertTrue("уточнить" in d.facts)
+    }
+
+    @Test
+    fun commandsAboutPlanAreRecognizedWithoutModel() {
+        val afford = AssistantQuery(intent = Intents.AFFORD, categories = listOf("Кафе и рестораны"))
+        val fixed = AssistantQueries.correct("Поставь лимит на кафе 2500", afford)
+        assertEquals(Intents.SET_PLAN, fixed.intent)
+        assertEquals(2500.0, fixed.amount!!, 0.0)
+        assertEquals(3000.0, AssistantQueries.correct("Поставь лимит на такси 3 000.", AssistantQuery(intent = Intents.PLAN)).amount!!, 0.0)
+        assertEquals(8000.0, AssistantQueries.correct("установи план на кафе 8 тысяч", AssistantQuery()).amount!!, 0.0)
+        assertEquals(Intents.SUGGEST_PLAN, AssistantQueries.correct("План трат на месяц", AssistantQuery(intent = Intents.ADVICE)).intent)
+        assertEquals(Intents.SUGGEST_PLAN, AssistantQueries.correct("Предложи план трат на месяц", AssistantQuery(intent = Intents.ADVICE)).intent)
+        assertEquals(Intents.PLAN, AssistantQueries.correct("Как я иду по плану трат?", AssistantQuery(intent = Intents.PLAN)).intent)
+        assertEquals(Intents.AFFORD, AssistantQueries.correct("Могу ли я сходить в кафе за 2500?", afford).intent)
     }
 }

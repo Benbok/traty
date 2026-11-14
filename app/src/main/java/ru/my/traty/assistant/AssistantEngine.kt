@@ -83,6 +83,10 @@ data class PlanProposal(
     val amountKopecks: Long,
     /** Действующий сейчас план по этой строке; null — плана нет. */
     val currentKopecks: Long?,
+    /** Из чего получилась сумма — показывается под строкой. */
+    val basis: String = "",
+    /** Такой подкатегории ещё нет: по кнопке она создаётся в categoryId, и план ставится на неё. */
+    val newSubcategory: String? = null,
 )
 
 /** Считает ответ на [AssistantQuery] по данным на телефоне. Чистая логика без Android. */
@@ -105,6 +109,9 @@ object AssistantEngine {
         val (from, to) = range(q.from, q.to, period.startDate, ctx.today)
 
         val filter = Filter.of(q, spending, ctx.categories)
+        if (q.intent == Intents.SET_PLAN && filter.names.isEmpty() && filter.unknownNames.isNotEmpty()) {
+            return setPlanNewSub(q, ctx, period, spending, filter.unknownNames.first())
+        }
         if (filter.unknownNames.isNotEmpty() && filter.names.isEmpty()) {
             val known = spending.map { it.categoryName }.distinct().sorted().joinToString(", ")
             return AssistantData(
@@ -287,7 +294,12 @@ object AssistantEngine {
                 val facts = buildString {
                     append(header(ctx))
                     appendLine("Текущий период: ${span(period.startDate, ctx.today)}, потрачено ${formatRub(sum)}.")
-                    appendLine("За тот же срок прошлого периода (${span(wFrom, wTo)}): ${formatRub(prev.sumOf { it.expense.amountKopecks })}.")
+                    val firstDay = spending.minOfOrNull { day(it.expense.timestamp, ctx.zone) }
+                    if (firstDay != null && firstDay.isAfter(wFrom)) {
+                        appendLine("Записи начинаются с ${date(firstDay)}, прошлого периода для сравнения ещё нет — сравнение не приводи.")
+                    } else {
+                        appendLine("За тот же срок прошлого периода (${span(wFrom, wTo)}): ${formatRub(prev.sumOf { it.expense.amountKopecks })}.")
+                    }
                     appendLine("Категории сейчас:")
                     byCategory(cur).take(8).forEach { (name, s) -> appendLine("- $name: ${formatRub(s)} (${share(s, sum)})") }
                     val changes = PeriodComparison.changes(totals(cur), totals(prev)).filter { it.diff > 0 }.take(3)
@@ -429,21 +441,26 @@ object AssistantEngine {
         val month = PlanMonth.of(period)
         val current = BudgetPlans.effective(ctx.budgets, month).associateBy { PlanKey(it.categoryId, it.subcategoryId) }
         val keys = keysFor(ctx, names)
+        val inPeriod = items.filter { it.date in period && !it.date.isAfter(ctx.today) }
         val proposals = keys.mapNotNull { (key, title, emoji) ->
-            val hint = BudgetPlans.hint(items, key, period, ctx.startDay) ?: return@mapNotNull null
-            PlanProposal(key.categoryId, key.subcategoryId, title, emoji, hint, current[key]?.amountKopecks)
+            BudgetPlans.hint(items, key, period, ctx.startDay)?.let {
+                return@mapNotNull PlanProposal(key.categoryId, key.subcategoryId, title, emoji, it, current[key]?.amountKopecks, "в среднем за прошлые месяцы −10%")
+            }
+            // Прошлых периодов ещё нет — оцениваем по текущему
+            val (amount, basis) = fromCurrentPeriod(inPeriod.filter { key.matches(it) }, period, ctx.today) ?: return@mapNotNull null
+            PlanProposal(key.categoryId, key.subcategoryId, title, emoji, amount, current[key]?.amountKopecks, basis)
         }.sortedByDescending { it.amountKopecks }.take(MAX_PROPOSALS)
 
         val facts = buildString {
             append(header(ctx))
             appendLine("Предложение плана трат на период ${span(period.startDate, period.endDate)}.")
-            appendLine("Как посчитано: средняя трата категории за последние ${BudgetPlans.HINT_PERIODS} расчётных периода (если история короче — за сколько есть) минус 10 %, округлено до 100 ₽.")
+            appendLine("Как посчитано: где есть прошлые периоды — средняя трата категории за последние ${BudgetPlans.HINT_PERIODS} периода минус 10 %; где истории ещё нет — по тратам текущего периода (по темпу до конца периода, а если почти всё — одна крупная покупка, то по уже потраченному). Округлено до 100 ₽.")
             if (proposals.isEmpty()) {
-                appendLine("Предложить нечего: в прошлых периодах трат${if (names.isNotEmpty()) " в этих категориях" else ""} не было.")
+                appendLine("Предложить пока нечего: трат${if (names.isNotEmpty()) " в этих категориях" else ""} мало для оценки (нужна хотя бы неделя записей в текущем периоде).")
             } else {
                 proposals.forEach { p ->
                     val now = p.currentKopecks?.let { "сейчас план ${formatRub(it)}" } ?: "плана сейчас нет"
-                    appendLine("- ${p.title}: ${formatRub(p.amountKopecks)} ($now)")
+                    appendLine("- ${p.title}: ${formatRub(p.amountKopecks)} (${p.basis}; $now)")
                 }
                 appendLine("Всего: ${formatRub(proposals.sumOf { it.amountKopecks })}. Пользователь может отметить нужные строки и добавить их в план кнопкой под ответом.")
             }
@@ -456,6 +473,25 @@ object AssistantEngine {
             planMonth = month,
         )
     }
+
+    /**
+     * Оценка плана категории по текущему периоду, когда прошлых ещё нет. Нужна хотя бы неделя записей.
+     * Если больше половины — одна покупка (заправка, ТО, аренда), темп её размножил бы, поэтому берём потраченное.
+     */
+    private fun fromCurrentPeriod(items: List<PlanSpend>, period: BillingPeriod, today: LocalDate): Pair<Long, String>? {
+        val spent = items.sumOf { it.amountKopecks }
+        if (spent <= 0) return null
+        val pace = SpendingPaces.of(period, today, spent) ?: return null
+        if (pace.daysPassed < PlanProgresses.MIN_DAYS_FOR_FORECAST) return null
+        val biggest = items.maxOf { it.amountKopecks }
+        val (raw, basis) = if (biggest * 2 >= spent || pace.forecast == null) spent to "по тратам этого периода"
+        else pace.forecast!! to "по темпу этого периода"
+        return roundUp100(raw) to basis
+    }
+
+    private fun roundUp100(kopecks: Long) = ((kopecks + 9_999) / 10_000 * 10_000).coerceAtLeast(10_000)
+
+    private fun PlanKey.matches(s: PlanSpend) = s.categoryId == categoryId && (subcategoryId == null || s.subcategoryId == subcategoryId)
 
     /** «Поставь план на кафе 10 000»: одна строка с суммой пользователя, добавляется по кнопке. */
     private fun setPlan(q: AssistantQuery, ctx: AssistantContext, period: BillingPeriod, names: Set<String>): AssistantData {
@@ -480,6 +516,62 @@ object AssistantEngine {
         val proposal = PlanProposal(target.first.categoryId, target.first.subcategoryId, target.second, target.third, amount, now?.amountKopecks)
         return AssistantData(facts, formatRub(amount), "новый план «${target.second}»", planProposals = listOf(proposal), planMonth = month)
     }
+
+    /**
+     * «Лимит на такси», а подкатегории «Такси» нет: ищем, куда она относится (по местам и заметкам трат,
+     * затем по словарю), и предлагаем создать её там вместе с планом.
+     */
+    private fun setPlanNewSub(q: AssistantQuery, ctx: AssistantContext, period: BillingPeriod, spending: List<ExpenseWithCategory>, name: String): AssistantData {
+        val amount = ((q.amount ?: 0.0) * 100).roundToLong()
+        val month = PlanMonth.of(period)
+        val subName = name.trim().replaceFirstChar { it.titlecase(RU) }
+        val parent = parentFor(name, ctx, spending)
+        val facts = buildString {
+            append(header(ctx))
+            when {
+                parent == null -> appendLine("Категории или подкатегории «$subName» нет, и непонятно, к какой категории она относится. Есть категории: ${ctx.categories.joinToString(", ") { it.category.name }}. Попроси уточнить категорию.")
+                amount <= 0 -> appendLine("Не понял сумму плана для «$subName».")
+                else -> {
+                    appendLine("Подкатегории «$subName» пока нет. Предлагается создать её в категории «${parent.category.name}» и поставить на неё план ${formatRub(amount)} на период ${span(period.startDate, period.endDate)} и дальше каждый месяц.")
+                    appendLine("Прошлые траты на «$subName» записаны просто в «${parent.category.name}», в новую подкатегорию попадут только новые траты.")
+                    appendLine("Пока ничего не создано и план не изменён: пользователь подтверждает кнопкой под ответом.")
+                }
+            }
+        }
+        if (parent == null || amount <= 0) return AssistantData(facts)
+        val proposal = PlanProposal(
+            parent.category.id, null, "${parent.category.name} · $subName", parent.category.emoji, amount, null,
+            basis = "новая подкатегория", newSubcategory = subName,
+        )
+        return AssistantData(facts, formatRub(amount), "новая подкатегория «$subName»", planProposals = listOf(proposal), planMonth = month)
+    }
+
+    /** Куда отнести неизвестное название: где оно чаще встречается в местах и заметках, иначе по словарю. */
+    internal fun parentFor(name: String, ctx: AssistantContext, spending: List<ExpenseWithCategory>): CategoryWithSubs? {
+        val n = name.trim().lowercase(RU)
+        if (n.length < 3) return null
+        val byId = ctx.categories.associateBy { it.category.id }
+        spending.filter { r ->
+            r.expense.place?.lowercase(RU)?.contains(n) == true || r.expense.note?.lowercase(RU)?.contains(n) == true
+        }.groupingBy { it.expense.categoryId }.eachCount().maxByOrNull { it.value }?.let { byId[it.key] }?.let { return it }
+        val hints = PARENT_HINTS.entries.firstOrNull { (keys, _) -> keys.any { n.startsWith(it) } }?.value ?: return null
+        return hints.firstNotNullOfOrNull { h -> ctx.categories.firstOrNull { it.category.name.lowercase(RU).contains(h) } }
+    }
+
+    /** Начала слов → подсказки, как может называться категория-родитель. */
+    private val PARENT_HINTS: Map<List<String>, List<String>> = mapOf(
+        listOf("такси", "метро", "автобус", "электрич", "поезд", "трамва", "каршер", "самокат", "проезд") to listOf("транспорт", "проезд", "авто"),
+        listOf("бензин", "топлив", "заправ", "парков", "мойк", "шиномонт") to listOf("авто", "машин", "транспорт"),
+        listOf("кофе", "ресторан", "фастфуд", "бар", "обед", "доставк", "пицц", "суши", "шаурм") to listOf("кафе", "ресторан", "еда"),
+        listOf("овощ", "фрукт", "мяс", "молоч", "хлеб", "супермаркет", "магазин") to listOf("продукт", "еда"),
+        listOf("аптек", "лекарств", "врач", "стоматолог", "анализ", "витамин") to listOf("здоров", "медиц", "аптек"),
+        listOf("кино", "театр", "концерт", "игр", "развлеч") to listOf("развлеч", "досуг", "отдых"),
+        listOf("одежд", "обув", "куртк") to listOf("одежд", "покупк"),
+        listOf("фитнес", "спортзал", "бассейн", "трениров") to listOf("спорт", "здоров"),
+        listOf("интернет", "телефон", "мобильн", "связь") to listOf("связь", "интернет", "коммун"),
+        listOf("свет", "газ", "вод", "квартплат", "жкх", "аренд") to listOf("коммун", "жиль", "дом", "квартир"),
+        listOf("подарк", "цвет") to listOf("подар"),
+    )
 
     /** Ключи плана для названных категорий (подкатегорий); без названий — все категории. */
     private fun keysFor(ctx: AssistantContext, names: Set<String>): List<Triple<PlanKey, String, String>> {
@@ -532,6 +624,15 @@ object AssistantEngine {
 
     // --- Отбор трат ---
 
+    /** «кафе» → «кафе и рестораны», «ресторан» → «кафе и рестораны»: модель не всегда пишет название точно. */
+    internal fun closest(n: String, known: Collection<String>): String? {
+        if (n.length < 4) return null
+        known.filter { it.contains(n) }.minByOrNull { it.length }?.let { return it }
+        val stem = n.take(maxOf(4, n.length - 2))
+        return known.filter { k -> k.split(' ', ',', '-').any { w -> w.length >= 4 && (w.startsWith(stem) || n.startsWith(w.take(maxOf(4, w.length - 2)))) } }
+            .minByOrNull { it.length }
+    }
+
     private class Filter(val names: Set<String>, val unknownNames: List<String>, val place: String?) {
         val isEmpty get() = names.isEmpty() && place == null
 
@@ -561,8 +662,14 @@ object AssistantEngine {
                 categories.forEach { c -> known += c.category.name.lowercase(RU); c.subs.forEach { known += it.name.lowercase(RU) } }
                 val asked = q.categories.map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase(RU) }
                 val place = q.place?.trim()?.lowercase(RU)?.takeIf { it.isNotEmpty() }
-                val (found, missing) = asked.partition { it.lowercase(RU) in known }
-                return Filter(found.map { it.lowercase(RU) }.toSet(), missing, place)
+                val found = HashSet<String>()
+                val missing = ArrayList<String>()
+                for (a in asked) {
+                    val n = a.lowercase(RU)
+                    val hit = if (n in known) n else closest(n, known)
+                    if (hit != null) found += hit else missing += a
+                }
+                return Filter(found, missing, place)
             }
         }
     }

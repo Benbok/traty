@@ -100,7 +100,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     user = AssistantPrompts.queryUser(question, history),
                     jsonMode = true,
                 )
-                val query = AssistantQueries.decode(rawQuery) ?: AssistantQuery(intent = Intents.UNKNOWN)
+                val query = AssistantQueries.correct(question, AssistantQueries.decode(rawQuery) ?: AssistantQuery(intent = Intents.UNKNOWN))
                 history += AssistantTurn(question, AssistantQueries.encode(query))
                 while (history.size > AssistantPrompts.HISTORY) history.removeAt(0)
 
@@ -154,7 +154,8 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 selected.forEach { p ->
-                    budgets.set(PlanKey(p.categoryId, p.subcategoryId), month, p.amountKopecks, repeats = true)
+                    val subId = p.newSubcategory?.let { name -> subcategoryId(p.categoryId, name) } ?: p.subcategoryId
+                    budgets.set(PlanKey(p.categoryId, subId), month, p.amountKopecks, repeats = true)
                 }
                 val i = messages.indexOfFirst { it.id == messageId }
                 if (i >= 0) messages[i] = messages[i].copy(planApplied = selected.size)
@@ -166,7 +167,14 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun showExpenses(ids: List<Long>) = viewModelScope.launch {
+    /** Подкатегория из предложения ИИ: создаём, а если её уже успели завести — берём существующую. */
+    private suspend fun subcategoryId(categoryId: Long, name: String): Long {
+        c.db.categories().getActiveWithSubs().firstOrNull { it.category.id == categoryId }
+            ?.subs?.firstOrNull { it.name.equals(name, ignoreCase = true) }?.let { return it.id }
+        return c.categories.addSubcategory(categoryId, name)
+    }
+
+    fun fun showExpenses(ids: List<Long>) = viewModelScope.launch {
         if (ids.isEmpty()) return@launch
         sheetRows = c.db.expenses().getByIds(ids).sortedByDescending { it.expense.timestamp }
     }

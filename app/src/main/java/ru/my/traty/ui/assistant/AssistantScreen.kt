@@ -309,7 +309,8 @@ private fun PlanProposals(m: ChatMessage, onApply: (List<PlanProposal>) -> Unit,
                 Column(Modifier.weight(1f)) {
                     Text("${p.emoji} ${p.title}", style = TratyTheme.typography.bodyMedium, color = TratyTheme.colors.onSurface)
                     Text(
-                        p.currentKopecks?.let { "сейчас ${formatRub(it)}" } ?: "плана нет",
+                        listOf(p.basis, p.currentKopecks?.let { "сейчас ${formatRub(it)}" } ?: "плана нет")
+                            .filter { it.isNotEmpty() }.joinToString(" · "),
                         style = TratyTheme.typography.labelSmall,
                         color = TratyTheme.colors.onSurfaceVariant,
                     )
