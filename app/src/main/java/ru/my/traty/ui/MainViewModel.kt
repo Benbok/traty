@@ -442,6 +442,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteModel() = c.models.delete()
 
+    /** Флажок «импульсивная» у категории из экрана траты: меняет метку ⚡ у всех трат категории. */
+    fun setCategoryImpulsive(categoryId: Long, impulsive: Boolean) = viewModelScope.launch {
+        val cat = c.db.categories().getAllWithSubs().firstOrNull { it.category.id == categoryId }?.category ?: return@launch
+        runCatching { c.categories.updateCategory(cat.id, cat.name, cat.emoji, cat.color, impulsive) }
+            .onFailure { message = it.message ?: "Не удалось изменить категорию" }
+    }
+
     fun setLabelsEnabled(enabled: Boolean) = viewModelScope.launch {
         c.settings.setLabelsEnabled(enabled)
     }
