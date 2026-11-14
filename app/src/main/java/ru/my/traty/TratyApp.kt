@@ -6,13 +6,18 @@ import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import ru.my.traty.ai.LlmClient
 import ru.my.traty.ai.clientFor
+import ru.my.traty.capture.PendingParseWork
 import ru.my.traty.capture.QuickEntry
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.CategoryRepository
+import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.ReconciliationRepository
 import ru.my.traty.data.SettingsRepository
 import ru.my.traty.widget.TratyWidget
@@ -33,11 +38,24 @@ open class TratyApp : Application() {
                 }
             }
         }
+        if (parsePendingOnStart) {
+            // Есть фразы без разбора (в т. ч. оставшиеся с прошлого запуска) — поставить фоновый разбор
+            appScope.launch {
+                container.db.pendingPhrases().observeAll()
+                    .map { list -> list.any { it.status == PendingStatus.WAITING } }
+                    .distinctUntilChanged()
+                    .filter { it }
+                    .collect { runCatching { PendingParseWork.enqueue(this@TratyApp) } }
+            }
+        }
     }
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     protected open val seedOnStart: Boolean get() = true
+
+    /** Тесты выключают: WorkManager в Robolectric не нужен. */
+    protected open val parsePendingOnStart: Boolean get() = true
 
     /** Тесты выключают: Glance в Robolectric не нужен. */
     protected open val updateWidgetOnChanges: Boolean get() = true

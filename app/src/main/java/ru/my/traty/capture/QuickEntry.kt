@@ -18,11 +18,14 @@ import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.Expense
 import ru.my.traty.data.Income
 import ru.my.traty.data.PendingPhrase
+import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.SettingsRepository
 import ru.my.traty.data.entryTimestamp
 import ru.my.traty.data.normalizeName
 import ru.my.traty.data.sameName
 import ru.my.traty.data.selectable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.io.IOException
 import java.time.Instant
 import java.time.LocalDate
@@ -64,7 +67,35 @@ class QuickEntry(
         EntryDraft(listOf(EntryRow.empty()), rawText, origin)
 
     /** [spokenAt] — время, когда фраза произнесена: от него считаются «сегодня» и «вчера». */
-    suspend fun process(text: String, origin: EntryOrigin, spokenAt: Long = System.currentTimeMillis()): EntryOutcome {
+    suspend fun process(text: String, origin: EntryOrigin, spokenAt: Long = System.currentTimeMillis()): EntryOutcome =
+        processOrNull(text, origin, spokenAt, allowQueue = true)!!
+
+    /**
+     * Разбирает фразы из очереди (после появления сети). Автосохраняет уверенные, остальные помечает PARSED
+     * с черновиком для проверки. На первой же сетевой ошибке останавливается: остальные ждут дальше.
+     * Возвращает, сколько фраз обработано.
+     */
+    suspend fun processPending(): Int {
+        var done = 0
+        for (p in db.pendingPhrases().getByStatus(PendingStatus.WAITING)) {
+            when (val outcome = processOrNull(p.text, EntryOrigin.VOICE, p.createdAt, allowQueue = false) ?: break) {
+                is EntryOutcome.AutoSaved -> db.pendingPhrases().delete(p.id)
+                is EntryOutcome.NeedsConfirm -> db.pendingPhrases().update(
+                    p.copy(
+                        status = PendingStatus.PARSED,
+                        resultJson = Json.encodeToString(outcome.draft),
+                        error = outcome.notice,
+                    )
+                )
+                is EntryOutcome.Queued -> break
+            }
+            done++
+        }
+        return done
+    }
+
+    /** null — сетевая ошибка при выключенной постановке в очередь ([allowQueue] = false). */
+    private suspend fun processOrNull(text: String, origin: EntryOrigin, spokenAt: Long, allowQueue: Boolean): EntryOutcome? {
         val spokenDay = Instant.ofEpochMilli(spokenAt).atZone(zone).toLocalDate()
         val cats = db.categories().getActiveWithSubs().selectable()
         val rules = db.rules().getAll()
@@ -85,6 +116,7 @@ class QuickEntry(
                 notice = fallbackNotice(client, e)
                 OfflineEntryParser.parse(text, cats)
             } catch (e: IOException) {
+                if (!allowQueue) return null
                 val id = db.pendingPhrases().insert(PendingPhrase(text = text, createdAt = spokenAt))
                 return EntryOutcome.Queued(id)
             } catch (e: Exception) {

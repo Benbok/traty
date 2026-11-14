@@ -9,6 +9,7 @@ class TestTratyApp : TratyApp() {
     // Фоновый seed на Dispatchers.IO переживает тест и роняет соседей (UncaughtExceptionsBeforeTest).
     override val seedOnStart: Boolean get() = false
     override val updateWidgetOnChanges: Boolean get() = false
+    override val parsePendingOnStart: Boolean get() = false
 
     override fun createContainer(): AppContainer = AppContainer(
         this,
