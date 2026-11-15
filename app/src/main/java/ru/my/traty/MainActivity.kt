@@ -5,15 +5,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import ru.my.traty.data.ThemeMode
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.TratyRoot
 import ru.my.traty.ui.designsystem.theme.TratyTheme
+import ru.my.traty.ui.designsystem.theme.isDark
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -21,11 +20,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val vm: MainViewModel = viewModel()
             val settings by vm.settings.collectAsStateWithLifecycle()
-            val isDark = when (settings.themeMode) {
-                ThemeMode.SYSTEM -> isSystemInDarkTheme()
-                ThemeMode.LIGHT -> false
-                ThemeMode.DARK -> true
-            }
+            val isDark = settings.themeMode.isDark()
 
             DisposableEffect(isDark) {
                 enableEdgeToEdge(
@@ -43,7 +38,7 @@ class MainActivity : ComponentActivity() {
                 onDispose {}
             }
 
-            TratyTheme(darkTheme = isDark) {
+            TratyTheme(darkTheme = isDark, dynamicColor = settings.dynamicColor) {
                 TratyRoot(vm)
             }
         }

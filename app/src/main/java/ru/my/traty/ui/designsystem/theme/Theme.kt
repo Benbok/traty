@@ -2,6 +2,7 @@ package ru.my.traty.ui.designsystem.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -50,51 +51,30 @@ object TratyTheme {
         get() = LocalTratyShapes.current
 }
 
+/**
+ * Тема приложения. [dynamicColor] включает цвета из обоев на Android 12+;
+ * на более старых телефонах остаётся палитра Traty.
+ */
 @Composable
 fun TratyTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val tratyColors = if (darkTheme) DarkTratyColors else LightTratyColors
+    val baseColors = if (darkTheme) DarkTratyColors else LightTratyColors
     val tratyTypography = TratyTypography()
     val tratySpacing = TratySpacing()
     val tratyShapes = TratyShapes()
 
     val context = LocalContext.current
-    val m3ColorScheme = when {
-        (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) -> {
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> darkColorScheme(
-            primary = tratyColors.primary,
-            onPrimary = tratyColors.onPrimary,
-            primaryContainer = tratyColors.primaryContainer,
-            onPrimaryContainer = tratyColors.onPrimaryContainer,
-            background = tratyColors.background,
-            onBackground = tratyColors.onBackground,
-            surface = tratyColors.surface,
-            onSurface = tratyColors.onSurface,
-            surfaceVariant = tratyColors.surfaceVariant,
-            onSurfaceVariant = tratyColors.onSurfaceVariant,
-            outline = tratyColors.border,
-            error = tratyColors.expense,
-        )
-        else -> lightColorScheme(
-            primary = tratyColors.primary,
-            onPrimary = tratyColors.onPrimary,
-            primaryContainer = tratyColors.primaryContainer,
-            onPrimaryContainer = tratyColors.onPrimaryContainer,
-            background = tratyColors.background,
-            onBackground = tratyColors.onBackground,
-            surface = tratyColors.surface,
-            onSurface = tratyColors.onSurface,
-            surfaceVariant = tratyColors.surfaceVariant,
-            onSurfaceVariant = tratyColors.onSurfaceVariant,
-            outline = tratyColors.border,
-            error = tratyColors.expense,
-        )
+    val systemScheme = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    } else {
+        null
     }
+    // Экраны берут цвета из TratyTheme.colors, поэтому цвета обоев переносятся и туда
+    val tratyColors = systemScheme?.let { baseColors.withSystemColors(it) } ?: baseColors
+    val m3ColorScheme = systemScheme?.copy(error = tratyColors.expense) ?: tratyColorScheme(tratyColors, darkTheme)
 
     CompositionLocalProvider(
         LocalTratyColors provides tratyColors,
@@ -107,4 +87,22 @@ fun TratyTheme(
             content = content,
         )
     }
+}
+
+private fun tratyColorScheme(c: TratyColors, darkTheme: Boolean): ColorScheme {
+    val base = if (darkTheme) darkColorScheme() else lightColorScheme()
+    return base.copy(
+        primary = c.primary,
+        onPrimary = c.onPrimary,
+        primaryContainer = c.primaryContainer,
+        onPrimaryContainer = c.onPrimaryContainer,
+        background = c.background,
+        onBackground = c.onBackground,
+        surface = c.surface,
+        onSurface = c.onSurface,
+        surfaceVariant = c.surfaceVariant,
+        onSurfaceVariant = c.onSurfaceVariant,
+        outline = c.border,
+        error = c.expense,
+    )
 }
