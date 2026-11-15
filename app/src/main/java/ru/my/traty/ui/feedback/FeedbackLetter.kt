@@ -2,11 +2,8 @@ package ru.my.traty.ui.feedback
 
 import java.net.URLEncoder
 
-/**
- * Адрес, на который приходят сообщения о проблемах.
- * Пока пустой: почта откроется с незаполненным получателем. Подставить адрес перед раздачей сборки.
- */
-const val FEEDBACK_EMAIL = ""
+/** Адрес, на который приходят сообщения о проблемах. */
+const val FEEDBACK_EMAIL = "arty.kostromin@yandex.ru"
 
 const val FEEDBACK_SUBJECT = "Найденные проблемы"
 
