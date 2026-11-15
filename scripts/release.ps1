@@ -24,10 +24,11 @@ function Fail([string]$msg) { Write-Host "RELEASE BLOCKED: $msg" -ForegroundColo
 function Step([string]$msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 
 # Run git without PowerShell turning stderr output into errors.
+# Note: PowerShell is case-insensitive, so this function must call git.exe (not 'git'), or it would call itself.
 function Git {
     $old = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    $out = & git @args 2>&1 | ForEach-Object { "$_" }
+    $out = & git.exe @args 2>&1 | ForEach-Object { "$_" }
     $code = $LASTEXITCODE
     $ErrorActionPreference = $old
     [pscustomobject]@{ Out = ($out -join "`n").Trim(); Code = $code }
@@ -37,14 +38,15 @@ Step 'Fetching origin (with tags)'
 $r = Git fetch origin --tags --prune --force
 if ($r.Code -ne 0) { Fail "git fetch failed: $($r.Out)" }
 
-$lastTag = (Git describe --tags --abbrev=0 --match 'v[0-9]*').Out
-if (-not $lastTag) { $lastTag = '' }
+# No tags yet (first release): git describe fails, so there is no last tag.
+$described = Git describe --tags --abbrev=0 --match 'v[0-9]*'
+$lastTag = if ($described.Code -eq 0) { $described.Out } else { '' }
 
 if ($Suggest) {
     Write-Host "LAST_TAG=$lastTag"
     $range = if ($lastTag) { "$lastTag..HEAD" } else { 'HEAD' }
     Write-Host "COMMITS_SINCE_LAST_TAG:"
-    (Git log $range --no-merges --pretty=format:'%h %s').Out
+    (Git log $range --no-merges --max-count=80 --pretty=format:'%h %s').Out
     exit 0
 }
 
