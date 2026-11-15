@@ -105,6 +105,7 @@ class SettingsRepository(
         val dismissedObservations = stringSetPreferencesKey("dismissed_observations")
         val homePlanExpanded = booleanPreferencesKey("home_plan_expanded")
         val budgetAlerts = booleanPreferencesKey("budget_alerts")
+        val onboardingSeen = booleanPreferencesKey("onboarding_seen")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -187,6 +188,13 @@ class SettingsRepository(
 
     suspend fun setDailyDigestEnabled(enabled: Boolean) {
         context.dataStore.edit { p -> p[K.dailyDigest] = enabled }
+    }
+
+    /** Знакомство с приложением уже показано или пропущено. Отдельно от [flow]: не трогает Keystore. */
+    val onboardingSeen: Flow<Boolean> = context.dataStore.data.map { p -> p[K.onboardingSeen] ?: false }
+
+    suspend fun setOnboardingSeen(seen: Boolean) {
+        context.dataStore.edit { p -> p[K.onboardingSeen] = seen }
     }
 
     suspend fun setHomePlanExpanded(expanded: Boolean) {

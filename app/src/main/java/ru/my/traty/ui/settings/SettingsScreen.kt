@@ -57,6 +57,7 @@ fun SettingsScreen(
     onOpenRecurring: () -> Unit = {},
     onOpenBudget: () -> Unit = {},
     onOpenAi: () -> Unit = {},
+    onOpenOnboarding: () -> Unit = {},
 ) {
     val saved by vm.settings.collectAsStateWithLifecycle()
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
@@ -84,6 +85,8 @@ fun SettingsScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md),
         ) {
+        OnboardingSettingsCard(onOpen = onOpenOnboarding)
+
         ThemeSettingsCard()
 
         // Секция: День начала расчётного периода
