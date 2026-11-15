@@ -144,6 +144,9 @@ fun HomeScreen(
     val feed = remember(displayedExpenses, displayedIncomes) {
         buildFeed(displayedExpenses, displayedIncomes)
     }
+    // Заголовки дней нужны в общей ленте; внутри одного выбранного дня они только повторяли бы дату
+    val dayHeaders = remember(feed, selectedDate) { if (selectedDate == null) feed.dayHeaders(zone) else emptyMap() }
+    val today = remember { LocalDate.now(zone) }
     val totalExpense = remember(displayedExpenses) { displayedExpenses.sumOf { it.expense.amountKopecks } }
     val totalIncome = remember(displayedIncomes) { displayedIncomes.sumOf { it.amountKopecks } }
 
@@ -310,6 +313,7 @@ fun HomeScreen(
             // contentType: при прокрутке LazyColumn переиспользует уже собранные строки того же типа
             // (трата ↔ трата), а не строит каждую с нуля — это и убирает рывки на длинном списке.
             items(feed, key = { it.id }, contentType = { it.contentType }) { item ->
+                dayHeaders[item.id]?.let { FeedDayHeader(it, today) }
                 when (item) {
                     is FeedItem.ExpenseItem -> {
                         SwipeableExpenseRow(
