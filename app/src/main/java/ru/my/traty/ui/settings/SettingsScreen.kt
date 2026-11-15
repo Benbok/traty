@@ -59,6 +59,7 @@ fun SettingsScreen(
     onOpenBudget: () -> Unit = {},
     onOpenAi: () -> Unit = {},
     onOpenOnboarding: () -> Unit = {},
+    onOpenHelp: () -> Unit = {},
     onOpenFeedback: () -> Unit = {},
 ) {
     val saved by vm.settings.collectAsStateWithLifecycle()
@@ -87,7 +88,7 @@ fun SettingsScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md),
         ) {
-        OnboardingSettingsCard(onOpen = onOpenOnboarding)
+        OnboardingSettingsCard(onOpenHelp = onOpenHelp, onOpen = onOpenOnboarding)
 
         ThemeSettingsCard()
 
