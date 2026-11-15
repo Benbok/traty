@@ -57,8 +57,13 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.TRATY_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.TRATY_KEY_ALIAS }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
-            echo "::error::Не заданы секреты TRATY_KEYSTORE_BASE64, TRATY_KEYSTORE_PASSWORD, TRATY_KEY_ALIAS (Settings → Secrets and variables → Actions). Без них APK подписался бы чужим ключом и не обновил бы установленное приложение."
+          # Значения не печатаем, только имена тех, каких не хватает
+          missing=""
+          if [ -z "$KEYSTORE_BASE64" ]; then missing="$missing TRATY_KEYSTORE_BASE64"; fi
+          if [ -z "$KEYSTORE_PASSWORD" ]; then missing="$missing TRATY_KEYSTORE_PASSWORD"; fi
+          if [ -z "$KEY_ALIAS" ]; then missing="$missing TRATY_KEY_ALIAS"; fi
+          if [ -n "$missing" ]; then
+            echo "::error::Не заданы секреты (или они пустые):$missing. Нужны в Settings → Secrets and variables → Actions → Repository secrets. Без них APK подписался бы чужим ключом и не обновил бы установленное приложение."
             exit 1
           fi
 
@@ -81,14 +86,15 @@ jobs:
       - name: Переименовать APK
         run: cp app/build/outputs/apk/release/app-release.apk "traty-${VERSION}.apk"
 
-      # Если тег аннотированный и в его сообщении есть текст — это описание релиза
-      # (его кладёт scripts/release.ps1). Иначе (ручной запуск, лёгкий тег) — автоописание из коммитов.
+      # Если тег v<версия> уже есть, аннотированный и в его сообщении есть текст — это описание релиза
+      # (его кладёт scripts/release.ps1; работает и при пуше тега, и при повторном запуске кнопкой).
+      # Иначе (тега нет, лёгкий тег) — автоописание из коммитов.
       - name: Описание релиза
-        if: github.event_name == 'push'
         run: |
-          git fetch --force origin "+refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}" || true
-          if [ "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}" 2>/dev/null)" = "tag" ]; then
-            git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(contents)' > "$RUNNER_TEMP/release-notes.md"
+          TAG="v${VERSION}"
+          git fetch --force origin "+refs/tags/${TAG}:refs/tags/${TAG}" || true
+          if [ "$(git cat-file -t "refs/tags/${TAG}" 2>/dev/null)" = "tag" ]; then
+            git for-each-ref "refs/tags/${TAG}" --format='%(contents)' > "$RUNNER_TEMP/release-notes.md"
             if [ -s "$RUNNER_TEMP/release-notes.md" ] && grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md"; then
               echo "NOTES_FILE=$RUNNER_TEMP/release-notes.md" >> "$GITHUB_ENV"
             fi
