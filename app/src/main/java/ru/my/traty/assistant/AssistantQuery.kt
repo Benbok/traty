@@ -49,9 +49,10 @@ object Intents {
     const val EDIT_SUB = "edit_subscription"
     const val TREND = "trend"
     const val LIST = "list"
+    const val DEBTS = "debts"
     const val UNKNOWN = "unknown"
 
-    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, PLAN, BALANCE, SUGGEST_PLAN, SET_PLAN, REMOVE_PLAN, CANCEL_SUB, PAUSE_SUB, RESUME_SUB, EDIT_SUB, TREND, LIST, UNKNOWN)
+    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, PLAN, BALANCE, SUGGEST_PLAN, SET_PLAN, REMOVE_PLAN, CANCEL_SUB, PAUSE_SUB, RESUME_SUB, EDIT_SUB, TREND, LIST, DEBTS, UNKNOWN)
 }
 
 object AssistantQueries {
@@ -79,6 +80,8 @@ object AssistantQueries {
     private val cancelSubRe = Regex("""(отмен|удал|убер|убр|отключ|отпис|прекрат|выкин)\S*.*(подписк|платеж)|отпис\S*\s+(меня\s+)?от""")
     private val pauseSubRe = Regex("""на\s+паузу|приостанов|заморо[зж]|пауз""")
     private val editSubRe = Regex("""(измени|поменяй|обнови|исправь|перенеси|скорректируй|подправь)\S*.*(подписк|платеж)""")
+    private val debtRe = Regex("""(?<![\p{L}])(долг\S*|должен\S*|должна|кредит\S*|рассрочк\S*|частями|долями|переплат\S*)""")
+    private val spentRe = Regex("""потрат|ушло|трачу|расход""")
     private val resumeSubRe = Regex("""(возобнов|верни|включи|восстанов|продолж)\S*.*(подписк|платеж)|сними\s+с\s+паузы""")
 
     /**
@@ -88,6 +91,12 @@ object AssistantQueries {
     fun correct(question: String, q: AssistantQuery): AssistantQuery {
         val text = question.lowercase().replace('ё', 'е')
         val sub = subWordRe.containsMatchIn(text)
+        // «сколько я должен», «когда платёж по рассрочке» модель иногда принимает за total или subscriptions
+        // «сколько я потратил на кредит» и вопрос про категорию «Долги и кредиты» остаются тратами
+        val aboutSpending = q.categories.isNotEmpty() || spentRe.containsMatchIn(text)
+        if (debtRe.containsMatchIn(text) && !aboutSpending && q.intent in setOf(Intents.TOTAL, Intents.SUBSCRIPTIONS, Intents.LIST, Intents.UNKNOWN, Intents.BALANCE)) {
+            return q.copy(intent = Intents.DEBTS)
+        }
         return when {
             sub && resumeSubRe.containsMatchIn(text) -> q.copy(intent = Intents.RESUME_SUB, place = q.place ?: subNameIn(text))
             sub && pauseSubRe.containsMatchIn(text) -> q.copy(intent = Intents.PAUSE_SUB, place = q.place ?: subNameIn(text))

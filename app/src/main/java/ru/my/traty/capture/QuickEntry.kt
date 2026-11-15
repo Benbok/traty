@@ -25,6 +25,7 @@ import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.Recurring
 import ru.my.traty.data.SettingsRepository
 import ru.my.traty.data.debt.Debt
+import ru.my.traty.data.debt.DebtPaymentRemoval
 import ru.my.traty.data.debt.DebtRepository
 import ru.my.traty.data.recurring.RecurringRepository
 import ru.my.traty.data.entryTimestamp
@@ -83,6 +84,7 @@ class QuickEntry(
     /** Предложения «добавить в Подписки», ждущие ответа пользователя. */
     val recurringOffers = RecurringOffers(recurring)
     private val debts = DebtRepository(db)
+    private val debtRemoval = DebtPaymentRemoval(db)
 
     /** Вопросы «Доплата за покупку?» и «Покупка частями?», ждущие ответа пользователя. */
     val purchaseOffers = PurchaseOfferQueue(debts, zone)
@@ -212,9 +214,11 @@ class QuickEntry(
         var ruleOffer: RuleOffer? = null
         db.withTransaction {
             val knownPlaces = db.expenses().distinctPlaces().toMutableList()
+            debtRemoval.dropOrphans(zone)
             val openDebts = debts.getActive()
             draft.replaces?.let { old ->
-                old.expenseIds.forEach { db.expenses().deleteById(it) }
+                // Через удаление с учётом покупок: старая трата-аванс не оставит «пустую» покупку
+                db.expenses().getByIds(old.expenseIds).forEach { debtRemoval.delete(it.expense, zone) }
                 old.incomeIds.forEach { db.incomes().deleteById(it) }
             }
             for (row in valid) {

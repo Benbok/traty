@@ -45,6 +45,8 @@ class AssistantContext(
     val categories: List<CategoryWithSubs> = emptyList(),
     /** null — сверок не было, остаток на счёте неизвестен. */
     val balance: Balance? = null,
+    /** Покупки частями, рассрочки и кредиты ([AssistantDebts]). */
+    val debts: List<DebtWithPaid> = emptyList(),
 )
 
 /** План одной категории (подкатегории) с прогрессом. */
@@ -111,13 +113,14 @@ object AssistantEngine {
 
     private val RU: Locale = Locale.forLanguageTag("ru")
 
-    const val NOT_UNDERSTOOD = "Я отвечаю на вопросы о ваших тратах, доходах и подписках. " +
+    const val NOT_UNDERSTOOD = "Я отвечаю на вопросы о ваших тратах, доходах, подписках и покупках частями. " +
         "Например: «Сколько я потратил на кафе в этом месяце?» или «Могу ли я потратить 10 000 ₽ до конца месяца?»"
 
     fun run(q: AssistantQuery, ctx: AssistantContext): AssistantData {
         if (q.intent == Intents.UNKNOWN) return AssistantData(facts = "", direct = NOT_UNDERSTOOD)
         val spending = ctx.expenses.filter { it.expense.source != ExpenseSource.RECONCILE }
         subscriptionAction(q.intent)?.let { return changeSubscription(q, ctx, it) }
+        if (q.intent == Intents.DEBTS) return AssistantDebts.answer(q, ctx)
         val period = BillingPeriod.containing(ctx.today, ctx.startDay)
         val (asked, to) = range(q.from, q.to, AssistantTrends.defaultFrom(q, ctx.today) ?: period.startDate, ctx.today)
         // «за всё время» — с первой записи, а не с условной даты

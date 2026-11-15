@@ -89,6 +89,10 @@ class DebtRepository(private val db: AppDatabase) {
 
     suspend fun getActive(): List<Debt> = dao.getActive()
 
+    /** Открытые покупки вместе с платежами: для ответов ИИ-ассистента. */
+    suspend fun activeWithPayments(zone: ZoneId = ZoneId.systemDefault()): List<Pair<Debt, List<PaidPart>>> =
+        dao.getActive().map { it to paidParts(it.id, zone) }
+
     fun observeAll() = dao.observeAll()
 
     fun observeDebt(id: Long) = dao.observeById(id)

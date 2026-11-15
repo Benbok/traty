@@ -23,15 +23,19 @@ fun expenseLabelsFlow(c: AppContainer, zone: ZoneId): Flow<Map<Long, List<Expens
         c.budgets.observeTotals(),
         c.settings.flow.map { it.periodStartDay }.distinctUntilChanged(),
     ) { rows, totals, startDay -> Triple(rows, totals, startDay) }
+    // Платежи по покупкам частями не предлагаются подписками
+    val expenses = combine(c.db.expenses().observeAllWithCategory(), c.debts.observePayments()) { list, payments ->
+        list to payments.map { it.expenseId }.toSet()
+    }
     return combine(
-        c.db.expenses().observeAllWithCategory(),
+        expenses,
         c.db.recurring().observeAll(),
         c.db.categories().observeActiveWithSubs(),
         c.settings.flow.map { it.labelsEnabled }.distinctUntilChanged(),
         plans,
-    ) { expenses, recurring, cats, enabled, (rows, totals, startDay) ->
+    ) { (expenses, debtExpenseIds), recurring, cats, enabled, (rows, totals, startDay) ->
         if (!enabled) return@combine emptyMap()
-        val candidates = RecurringRepository.suggest(expenses, recurring, cats)
+        val candidates = RecurringRepository.suggest(expenses, recurring, cats, debtExpenseIds = debtExpenseIds)
         val overPlan = PlanOverruns.find(
             expenses.map {
                 val e = it.expense
