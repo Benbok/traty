@@ -64,6 +64,8 @@ data class AppSettings(
     val dismissedObservations: Set<String> = emptySet(),
     /** Карточка «План трат» на Тратах: показаны ли категории. По умолчанию свёрнуто — только общий итог. */
     val homePlanExpanded: Boolean = false,
+    /** Уведомлять, когда план категории или общий лимит выбран на 80 % и на 100 %. */
+    val budgetAlertsEnabled: Boolean = true,
 )
 
 internal fun encodeLines(lines: List<String>): String =
@@ -102,6 +104,7 @@ class SettingsRepository(
         val dailyDigest = booleanPreferencesKey("daily_digest")
         val dismissedObservations = stringSetPreferencesKey("dismissed_observations")
         val homePlanExpanded = booleanPreferencesKey("home_plan_expanded")
+        val budgetAlerts = booleanPreferencesKey("budget_alerts")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -125,6 +128,7 @@ class SettingsRepository(
             dailyDigestEnabled = p[K.dailyDigest] ?: d.dailyDigestEnabled,
             dismissedObservations = p[K.dismissedObservations] ?: d.dismissedObservations,
             homePlanExpanded = p[K.homePlanExpanded] ?: d.homePlanExpanded,
+            budgetAlertsEnabled = p[K.budgetAlerts] ?: d.budgetAlertsEnabled,
         )
     }
         // Расшифровка ключей обращается к Keystore — не на главном потоке
@@ -187,6 +191,10 @@ class SettingsRepository(
 
     suspend fun setHomePlanExpanded(expanded: Boolean) {
         context.dataStore.edit { p -> p[K.homePlanExpanded] = expanded }
+    }
+
+    suspend fun setBudgetAlertsEnabled(enabled: Boolean) {
+        context.dataStore.edit { p -> p[K.budgetAlerts] = enabled }
     }
 
     suspend fun setLabelsEnabled(enabled: Boolean) {

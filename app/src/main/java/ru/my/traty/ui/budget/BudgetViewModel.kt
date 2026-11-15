@@ -20,7 +20,8 @@ import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.budget.Budget
 import ru.my.traty.data.budget.BudgetPlans
-import ru.my.traty.data.budget.BudgetRepository
+import ru.my.traty.data.budget.MonthBudget
+import ru.my.traty.data.budget.TotalProgress
 import ru.my.traty.data.budget.PlanKey
 import ru.my.traty.data.budget.PlanMonth
 import ru.my.traty.data.budget.PlanProgress
@@ -88,7 +89,7 @@ fun planTotals(items: List<PlanItem>): PlanTotals {
 @OptIn(ExperimentalCoroutinesApi::class)
 class BudgetViewModel(app: Application) : AndroidViewModel(app) {
     private val c = (app as TratyApp).container
-    private val repo = BudgetRepository(c.db)
+    private val repo = c.budgets
     private val zone: ZoneId = ZoneId.systemDefault()
 
     val startDay: StateFlow<Int> = c.settings.flow.map { it.periodStartDay }.distinctUntilChanged()
@@ -116,6 +117,18 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
         combine(rows, period, periodExpenses, categories) { r, p, e, cats -> planItems(r, p, e, cats, zone) }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val totalRows: StateFlow<List<MonthBudget>> =
+        repo.observeTotals().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Общий лимит месяца на все категории; null — не задан. */
+    val total: StateFlow<TotalProgress?> =
+        combine(totalRows, period, periodExpenses) { r, p, e -> totalProgress(r, p, e) }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val alertsEnabled: StateFlow<Boolean> = c.settings.flow.map { it.budgetAlertsEnabled }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     /** Вся история трат — для подсказки суммы плана. */
     private val history: StateFlow<List<PlanSpend>> =
@@ -147,5 +160,25 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
     fun remove(key: PlanKey) {
         val m = PlanMonth.of(period.value)
         viewModelScope.launch { repo.removeFrom(key, m) }
+    }
+
+    /** Повторяется ли общий лимит, заданный именно на этот месяц (для диалога правки). */
+    fun ownTotalRepeats(): Boolean? {
+        val m = PlanMonth.of(period.value)
+        return totalRows.value.filter { it.month == m }.maxByOrNull { it.id }?.repeats
+    }
+
+    fun saveTotal(amountKopecks: Long, repeats: Boolean) {
+        val m = PlanMonth.of(period.value)
+        viewModelScope.launch { repo.setTotal(m, amountKopecks, repeats) }
+    }
+
+    fun removeTotal() {
+        val m = PlanMonth.of(period.value)
+        viewModelScope.launch { repo.removeTotalFrom(m) }
+    }
+
+    fun setAlertsEnabled(enabled: Boolean) {
+        viewModelScope.launch { c.settings.setBudgetAlertsEnabled(enabled) }
     }
 }

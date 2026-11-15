@@ -204,6 +204,25 @@ class DatabaseUpgradeTest {
     }
 
     @Test
+    fun migrationChainReachesV12WithMonthLimit() = runTest {
+        createV3Database()
+        val db = AppDatabase.build(context, dbName)
+        try {
+            val repo = ru.my.traty.data.budget.BudgetRepository(db)
+            repo.setTotal(202611, 80_000_00, repeats = true)
+            repo.setTotal(202611, 90_000_00, repeats = true)
+            assertEquals(1, db.monthBudgets().getAll().size)
+            repo.removeTotalFrom(202612)
+            val rows = db.monthBudgets().getAll()
+            assertEquals(90_000_00L, ru.my.traty.data.budget.TotalBudgets.effective(rows, 202611)?.amountKopecks)
+            assertEquals(null, ru.my.traty.data.budget.TotalBudgets.effective(rows, 202701))
+            assertEquals(1, db.expenses().getAllWithCategory().size)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun migrationChainReachesV9WithRecurringTable() = runTest {
         createV3Database()
         val db = AppDatabase.build(context, dbName)

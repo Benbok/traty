@@ -51,9 +51,10 @@ import ru.my.traty.data.insights.Observation
 import ru.my.traty.data.insights.ObservationExplainer
 import ru.my.traty.data.insights.Observations
 import ru.my.traty.data.labels.ExpenseLabelHit
-import ru.my.traty.data.labels.ExpenseLabeler
 import ru.my.traty.data.period.BillingPeriod
-import ru.my.traty.data.recurring.RecurringRepository
+import ru.my.traty.ui.budget.planItemsFlow
+import ru.my.traty.ui.budget.totalLimitFlow
+import ru.my.traty.ui.labels.expenseLabelsFlow
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.roundToLong
@@ -72,28 +73,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val categories: StateFlow<List<CategoryWithSubs>> =
         c.db.categories().observeActiveWithSubs().map { it.selectable() }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /**
-     * Метки на тратах (🔺 🔁 🆕 ⚡ 📅): считаются по всей истории, не только по показанному периоду.
-     * Живёт, только пока экран на него подписан, поэтому фоновых расчётов без UI нет.
-     */
-    val labels: StateFlow<Map<Long, List<ExpenseLabelHit>>> =
-        combine(
-            c.db.expenses().observeAllWithCategory(),
-            c.db.recurring().observeAll(),
-            c.db.categories().observeActiveWithSubs(),
-            c.settings.flow.map { it.labelsEnabled }.distinctUntilChanged(),
-        ) { expenses, recurring, cats, enabled ->
-            if (!enabled) return@combine emptyMap()
-            val candidates = RecurringRepository.suggest(expenses, recurring, cats)
-            ExpenseLabeler.label(
-                expenses,
-                ExpenseLabeler.subscriptionExpenseIds(expenses, recurring, candidates),
-                zone,
-                impulsiveCategories = cats.filter { it.category.isImpulsive }.map { it.category.name },
-            )
-        }
-            .flowOn(Dispatchers.Default)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+    /** Метки на тратах: живут, только пока экран на них подписан, поэтому фоновых расчётов без UI нет. */
+    val labels: StateFlow<Map<Long, List<ExpenseLabelHit>>> = expenseLabelsFlow(c, zone)
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /** Карточки наблюдений на Главной (для текущего расчётного периода), без скрытых пользователем. */
     val observations: StateFlow<List<Observation>> =
@@ -190,17 +173,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** Все строки планов трат (этап 8). Пусто — план ещё ни разу не задавали. */
-    val budgetRows: StateFlow<List<ru.my.traty.data.budget.Budget>> =
-        c.db.budgets().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
     /** Планы показанного расчётного периода с прогрессом — для Статистики и Трат. */
-    val plans: StateFlow<List<ru.my.traty.ui.budget.PlanItem>> =
-        combine(budgetRows, _period, expenses, categories) { rows, p, list, cats ->
-            ru.my.traty.ui.budget.planItems(rows, p, list, cats, zone)
-        }
-            .flowOn(Dispatchers.Default)
-            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val plans: StateFlow<List<ru.my.traty.ui.budget.PlanItem>> = planItemsFlow(c, _period, expenses, categories, zone)
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Общий лимит показанного периода; null — не задан. */
+    val totalLimit: StateFlow<ru.my.traty.data.budget.TotalProgress?> = totalLimitFlow(c, _period, expenses)
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** Фразы без сети (ждут разбора) и разобранные в фоне (ждут проверки). */
     val pending: StateFlow<List<PendingPhrase>> =

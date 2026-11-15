@@ -18,6 +18,8 @@ import ru.my.traty.data.AppSettings
 import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.ReconciliationRepository
+import ru.my.traty.data.budget.BudgetAlertWatcher
+import ru.my.traty.data.budget.BudgetRepository
 import ru.my.traty.data.digest.DailyDigestWork
 import ru.my.traty.data.recurring.RecurringReminderWork
 import ru.my.traty.data.SettingsRepository
@@ -52,6 +54,7 @@ open class TratyApp : Application() {
         if (parsePendingOnStart) {
             runCatching { RecurringReminderWork.schedule(this) }
             runCatching { DailyDigestWork.schedule(this) }
+            container.budgetAlerts.start(appScope)
             // Есть фразы без разбора (в т. ч. оставшиеся с прошлого запуска) — поставить фоновый разбор
             appScope.launch {
                 container.db.pendingPhrases().observeAll()
@@ -89,6 +92,10 @@ class AppContainer(
     val categories = CategoryRepository(db)
     val reconciliations = ReconciliationRepository(db, categories)
     val quickEntry = QuickEntry(db, categories, settings, clientProvider = llm)
+    val budgets = BudgetRepository(db)
+
+    /** Уведомления «потрачено 80 % / 100 % плана»; запускается из [TratyApp.onCreate]. */
+    val budgetAlerts = BudgetAlertWatcher(context.applicationContext, db, settings)
 
     /** Модель GigaAM: качается в filesDir; можно положить вручную в Android/data/<пакет>/files/models/gigaam. */
     val models = ModelManager(

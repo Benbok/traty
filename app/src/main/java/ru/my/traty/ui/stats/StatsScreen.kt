@@ -119,6 +119,7 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel(), o
     val customExpenses by rangeVm.expenses.collectAsStateWithLifecycle()
     val prevExpenses by vm.prevExpenses.collectAsStateWithLifecycle()
     val plans by vm.plans.collectAsStateWithLifecycle()
+    val totalLimit by vm.totalLimit.collectAsStateWithLifecycle()
     // План категории целиком — для строки «План … · осталось …» под категорией
     val categoryPlans = remember(plans) {
         plans.filter { it.progress.plan.subcategoryId == null }.associateBy { it.progress.plan.categoryId }
@@ -248,11 +249,12 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel(), o
         }
 
         // План трат задаётся на расчётный период; в режимах День / Неделя / Даты объясняем, где его смотреть
-        if (plans.isNotEmpty()) {
+        if (plans.isNotEmpty() || totalLimit != null) {
             item(key = "plan", contentType = "plan") {
                 if (!custom) {
                     PlanSummaryCard(
                         items = plans,
+                        total = totalLimit,
                         period = period,
                         onOpen = onOpenBudget,
                         modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
