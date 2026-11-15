@@ -13,6 +13,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +39,7 @@ import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyEmptyState
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
+import ru.my.traty.ui.designsystem.components.TratySnackbar
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.pluralRu
@@ -64,11 +67,20 @@ fun DebtDetailScreen(
 
     var filter by rememberSaveable { mutableStateOf(TreeFilter.ALL) }
     var payAmountText by rememberSaveable { mutableStateOf<String?>(null) }
-    var confirmDelete by remember { mutableStateOf(false) }
+    val error by vm.error.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(error) {
+        error?.let {
+            snackbar.showSnackbar(it)
+            vm.errorShown()
+        }
+    }
 
     Scaffold(
         containerColor = TratyTheme.colors.background,
+        snackbarHost = { SnackbarHost(snackbar) { TratySnackbar(it) } },
         topBar = {
             TratyHeaderCard(
                 modifier = Modifier.statusBarsPadding(),
@@ -80,7 +92,7 @@ fun DebtDetailScreen(
                         active = debt?.state == DebtState.ACTIVE,
                         onClose = vm::closeDebt,
                         onCancel = vm::cancelDebt,
-                        onDelete = { confirmDelete = true },
+                        onDelete = vm::askDelete,
                     )
                 },
             )
@@ -109,7 +121,6 @@ fun DebtDetailScreen(
         }
     }
 
-    // Диалог внесения платежа
     payAmountText?.let { rawAmount ->
         AddPaymentDialog(
             initialAmount = rawAmount,
@@ -120,15 +131,18 @@ fun DebtDetailScreen(
             },
         )
     }
+    DeleteDebtHost(vm, onDeleted = onBack)
+}
 
-    // Диалог подтверждения удаления
-    if (confirmDelete) {
+/** Диалог удаления: показывается, когда ViewModel посчитал, что именно исчезнет. */
+@Composable
+private fun DeleteDebtHost(vm: DebtDetailViewModel, onDeleted: () -> Unit) {
+    val deletion by vm.deletion.collectAsStateWithLifecycle()
+    deletion?.let { impact ->
         DeleteDebtDialog(
-            onDismiss = { confirmDelete = false },
-            onConfirm = {
-                confirmDelete = false
-                vm.deleteDebt(onDeleted = onBack)
-            },
+            text = DebtDeleteText.of(impact),
+            onDismiss = vm::cancelDelete,
+            onConfirm = { vm.deleteDebt(onDeleted = onDeleted) },
         )
     }
 }
@@ -191,15 +205,12 @@ private fun DebtDetailLoading(pad: PaddingValues) {
 }
 
 @Composable
-private fun DeleteDebtDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
+private fun DeleteDebtDialog(text: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Удалить покупку?", style = TratyTheme.typography.titleMedium) },
         text = {
-            Text(
-                "Запись о покупке частями будет удалена. Все уже внесённые траты останутся в вашей ленте трат, будет удалена только связь с этой покупкой.",
-                style = TratyTheme.typography.bodyMedium,
-            )
+            Text(text, style = TratyTheme.typography.bodyMedium)
         },
         confirmButton = {
             TratyButton(
