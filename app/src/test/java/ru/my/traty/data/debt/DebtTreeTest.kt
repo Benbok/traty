@@ -162,4 +162,76 @@ class DebtTreeTest {
         assertTrue(firstNode.interestKopecks > 0)
         assertTrue(firstNode.principalKopecks > 0)
     }
+
+    @Test
+    fun paymentInTwoPartsStaysInOneRow() {
+        // 10 000 внесли как 5 000 + 5 000: обе траты в первой строке, вторая строка не тронута
+        val a = row(expenseId = 1, kopecks = 500_000, day = start)
+        val b = row(expenseId = 2, kopecks = 500_000, day = start.plusDays(3))
+        val tree = DebtTree.build(tvInstallment, listOf(a, b), today = start.plusDays(5), zone = zone)
+        val first = tree.nodes[0]
+        assertEquals(TreePaymentState.PAID, first.state)
+        assertEquals(listOf(1L, 2L), first.expenseIds)
+        assertEquals(start.plusDays(3), first.actualDate)
+        assertEquals(TreePaymentState.UPCOMING, tree.nodes[1].state)
+        assertTrue(tree.nodes[1].expenseIds.isEmpty())
+    }
+
+    @Test
+    fun doublePaymentClosesTwoRows() {
+        val a = row(expenseId = 7, kopecks = 2_000_000, day = start)
+        val tree = DebtTree.build(tvInstallment, listOf(a), today = start, zone = zone)
+        assertEquals(listOf(TreePaymentState.PAID, TreePaymentState.PAID, TreePaymentState.UPCOMING), tree.nodes.take(3).map { it.state })
+        assertEquals(7L, tree.nodes[1].expenseId)
+        assertEquals(start, tree.nodes[1].actualDate)
+    }
+
+    @Test
+    fun partOfPaymentIsPartiallyPaidAndOverdueWhenLate() {
+        val a = row(expenseId = 1, kopecks = 1_400_000, day = start)
+        val onTime = DebtTree.build(tvInstallment, listOf(a), today = start.plusDays(10), zone = zone)
+        assertEquals(TreePaymentState.PARTIALLY_PAID, onTime.nodes[1].state)
+        assertEquals(400_000L, onTime.nodes[1].paidAmountKopecks)
+        assertEquals(listOf(1L), onTime.nodes[1].expenseIds)
+        val late = DebtTree.build(tvInstallment, listOf(a), today = start.plusMonths(1).plusDays(2), zone = zone)
+        assertEquals(TreePaymentState.OVERDUE, late.nodes[1].state)
+        assertEquals(600_000L, late.summary.overdueKopecks)
+    }
+
+    @Test
+    fun cancelledPurchaseHasNoOverdueRows() {
+        val p1 = row(expenseId = 10, kopecks = 1_000_000, day = start)
+        val cancelled = tvInstallment.copy(state = DebtState.CANCELLED)
+        val tree = DebtTree.build(cancelled, listOf(p1), today = LocalDate.of(2027, 3, 1), zone = zone)
+        assertEquals(1, tree.nodes.size)
+        assertEquals(TreePaymentState.PAID, tree.nodes.single().state)
+        assertEquals(0, tree.summary.overdueCount)
+        assertEquals(0L, tree.summary.overdueKopecks)
+    }
+
+    @Test
+    fun loanInterestIsPaidByFactAndLinked() {
+        val loan = Debt(
+            title = "Ноутбук", categoryId = 3, kind = DebtKind.LOAN.key, rateBasisPoints = 2000,
+            totalKopecks = 8_000_000, paymentsCount = 12, firstDueEpochDay = start.toEpochDay(),
+        )
+        val principal = row(expenseId = 1, kopecks = 607_743, day = start)
+        val interest = row(expenseId = 2, kopecks = 133_333, day = start, part = PaymentPart.INTEREST)
+        val tree = DebtTree.build(loan, listOf(principal, interest), today = start, zone = zone)
+        val first = tree.nodes[0]
+        assertEquals(listOf(2L, 1L), first.expenseIds)
+        assertEquals(607_743L + 133_333L, first.paidAmountKopecks)
+        assertEquals(0L, first.remainingKopecks)
+        // Второй платёж ещё не начат: ни процентов, ни тела
+        assertEquals(0L, tree.nodes[1].paidAmountKopecks)
+    }
+
+    @Test
+    fun summaryMatchesDebtProgress() {
+        val rows = listOf(row(expenseId = 1, kopecks = 1_400_000, day = start))
+        val tree = DebtTree.build(tvInstallment, rows, today = start, zone = zone)
+        val status = DebtProgress.of(tvInstallment, listOf(PaidPart(start.toEpochDay(), PaymentPart.PRINCIPAL, 1_400_000)), start)
+        assertEquals(status.remainingKopecks, tree.summary.remainingKopecks)
+        assertEquals(status.paidKopecks, tree.summary.paidKopecks)
+    }
 }
