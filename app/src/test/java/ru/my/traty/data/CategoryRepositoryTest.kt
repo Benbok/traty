@@ -96,6 +96,14 @@ class CategoryRepositoryTest {
     }
 
     @Test
+    fun reportsOnlyCreatedSubcategory() = runTest {
+        assertEquals("Зоомагазин", repo.resolveForSave("Питомцы", null, "зоомагазин").createdSubcategory)
+        assertEquals(null, repo.resolveForSave("Питомцы", null, "Зоомагазин").createdSubcategory)
+        assertEquals(null, repo.resolveForSave("Питомцы", null, "Корм").createdSubcategory)
+        assertEquals(null, repo.resolveForSave("Питомцы", null, null).createdSubcategory)
+    }
+
+    @Test
     fun seedCreates26CategoriesWithOtherLast() = runTest {
         val active = db.categories().getActiveWithSubs()
         assertEquals(26, active.size)

@@ -72,18 +72,20 @@ class RecurringRepository(private val db: AppDatabase) {
 
     /**
      * Вызывается при сохранении траты (голос, подтверждение): если трата из «регулярной» категории
-     * ([AUTO_ADD_CATEGORIES]) или в названии/месте сказано «подписка» и такого платежа ещё нет, заводит его — раз в месяц, следующее списание через месяц.
+     * ([AUTO_ADD_CATEGORIES]) или в названии/месте сказано «подписка» и такого платежа ещё нет, готовит предложение —
+     * раз в месяц, следующее списание через месяц. Само предложение в базу не пишется: платёж заводит только
+     * [acceptOffer] после кнопки «Добавить», а [declineOffer] запоминает отказ.
      * Если платёж уже есть и эта трата — очередной платёж по нему, дата просто сдвигается (второй траты не создаётся).
-     * Платёж, который пользователь удалил или отклонил, заново не заводится.
+     * Платёж, который пользователь удалил или отклонил, заново не предлагается.
      * Работает на DAO без своей транзакции, поэтому безопасно вызывать внутри чужой.
-     * @return название нового платежа или null, если ничего не создано.
+     * @return несохранённый платёж-предложение или null, если предлагать нечего.
      */
     suspend fun onExpenseSaved(
         expense: Expense,
         categoryName: String,
         zone: ZoneId = ZoneId.systemDefault(),
         subcategoryName: String? = null,
-    ): String? {
+    ): Recurring? {
         val saysSubscription = listOfNotNull(expense.note, expense.place).any { it.contains("подписк", ignoreCase = true) }
         if (!saysSubscription && AUTO_ADD_CATEGORIES.none { it.equals(categoryName, ignoreCase = true) }) return null
         if (expense.source == ExpenseSource.RECURRING || expense.source == ExpenseSource.RECONCILE) return null
@@ -109,22 +111,35 @@ class RecurringRepository(private val db: AppDatabase) {
         }
 
         val title = Places.normalize(expense.place) ?: label?.replaceFirstChar { it.uppercaseChar() } ?: return null
-        dao.insert(
-            Recurring(
-                title = title,
-                amountKopecks = expense.amountKopecks,
-                currency = expense.currency,
-                categoryId = expense.categoryId,
-                subcategoryId = expense.subcategoryId,
-                place = Places.normalize(expense.place),
-                periodUnit = PeriodUnit.MONTH.key,
-                nextEpochDay = RecurrencePeriod.MONTHLY.advance(day).toEpochDay(),
-                autoDetected = true,
-                detectKey = key,
-                amountVaries = VARIABLE_AMOUNT_CATEGORIES.any { it.equals(categoryName, ignoreCase = true) },
-            )
+        return Recurring(
+            title = title,
+            amountKopecks = expense.amountKopecks,
+            currency = expense.currency,
+            categoryId = expense.categoryId,
+            subcategoryId = expense.subcategoryId,
+            place = Places.normalize(expense.place),
+            periodUnit = PeriodUnit.MONTH.key,
+            nextEpochDay = RecurrencePeriod.MONTHLY.advance(day).toEpochDay(),
+            autoDetected = true,
+            detectKey = key,
+            amountVaries = VARIABLE_AMOUNT_CATEGORIES.any { it.equals(categoryName, ignoreCase = true) },
         )
-        return title
+    }
+
+    /**
+     * «Добавить» на предложении после сохранения траты. Если платёж с тем же ключом уже заведён
+     * (например, предложение приняли дважды), второй не создаётся. @return id платежа или null.
+     */
+    suspend fun acceptOffer(offer: Recurring): Long? = db.withTransaction {
+        if (offer.detectKey != null && dao.getAll().any { it.detectKey == offer.detectKey }) return@withTransaction null
+        dao.insert(offer.copy(id = 0, state = RecurringState.ACTIVE))
+    }
+
+    /** «Не надо»: запоминаем отказ (как «Это не подписка»), чтобы не предлагать тот же платёж снова. */
+    suspend fun declineOffer(offer: Recurring): Unit = db.withTransaction {
+        if (offer.detectKey == null || dao.getAll().none { it.detectKey == offer.detectKey }) {
+            dao.insert(offer.copy(id = 0, state = RecurringState.DISMISSED))
+        }
     }
 
     /**
@@ -139,7 +154,7 @@ class RecurringRepository(private val db: AppDatabase) {
 
         /**
          * Категории, где каждая новая трата с названием — скорее всего регулярный платёж (связь, подписки,
-         * аренда, коммуналка, кредиты). Такая трата сразу попадает в «Подписки».
+         * аренда, коммуналка, кредиты). После такой траты приложение предлагает добавить её в «Подписки».
          */
         val AUTO_ADD_CATEGORIES = listOf(SUBSCRIPTION_CATEGORY, "Жильё", "Коммунальные услуги", "Долги и кредиты")
 

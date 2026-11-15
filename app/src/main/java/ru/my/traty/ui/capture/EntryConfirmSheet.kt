@@ -36,6 +36,7 @@ import ru.my.traty.capture.EntryRow
 import ru.my.traty.data.Category
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.IncomeSources
+import ru.my.traty.data.sameName
 import ru.my.traty.ui.designsystem.components.TratyAmountTextField
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
@@ -116,6 +117,14 @@ fun EntryConfirmSheet(
                                     }
                                 }
                             }
+                            row.duplicate?.let { hint ->
+                                DuplicateNotice(
+                                    hint = hint,
+                                    // Повтор единственной строки — сохранять нечего, окно закрывается
+                                    onRepeat = { if (rows.size > 1) rows = rows.filterIndexed { j, _ -> j != i } else onDismiss() },
+                                    onNew = { update(i) { it.copy(duplicate = null) } },
+                                )
+                            }
                             TratyAmountTextField(
                                 value = row.amountText,
                                 onValueChange = { v -> update(i) { it.copy(amountText = v) } },
@@ -131,6 +140,9 @@ fun EntryConfirmSheet(
                                     value = row.subcategory,
                                     onValueChange = { v -> update(i) { it.copy(subcategory = v) } },
                                     label = { Text("Подкатегория") },
+                                    supportingText = if (isNewSubcategory(row, categories)) {
+                                        { Text("Новая, создастся при сохранении") }
+                                    } else null,
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = TratyTheme.shapes.small,
@@ -171,6 +183,14 @@ fun EntryConfirmSheet(
             TratyTextButton(onClick = onDismiss) { Text("Отмена") }
         },
     )
+}
+
+/** Подкатегории нет в выбранной категории (или сама категория новая) — её создаст сохранение. */
+private fun isNewSubcategory(row: EntryRow, categories: List<CategoryWithSubs>): Boolean {
+    val sub = row.subcategory.trim()
+    if (sub.isEmpty()) return false
+    val cat = categories.firstOrNull { sameName(it.category.name, row.category) } ?: return true
+    return cat.subs.none { sameName(it.name, sub) }
 }
 
 @Composable

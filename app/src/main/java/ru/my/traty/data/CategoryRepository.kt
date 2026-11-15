@@ -5,7 +5,8 @@ import androidx.room.withTransaction
 /** Ошибка операции с категориями; текст показывается пользователю. */
 class CategoryException(message: String) : Exception(message)
 
-data class ResolvedIds(val categoryId: Long, val subcategoryId: Long?)
+/** [createdSubcategory] — название подкатегории, если её пришлось создать. */
+data class ResolvedIds(val categoryId: Long, val subcategoryId: Long?, val createdSubcategory: String? = null)
 
 /** trim, схлопнуть пробелы, не длиннее 40 символов, первая буква заглавная. */
 fun normalizeName(raw: String): String =
@@ -40,6 +41,7 @@ class CategoryRepository(private val db: AppDatabase) {
     /**
      * Находит категорию и подкатегорию по названию (без учёта регистра) или создаёт их.
      * Пустая категория → «Прочее». Архивная категория переиспользуется как есть.
+     * Новую подкатегорию создаёт внутри найденной (или только что созданной) категории.
      */
     suspend fun resolveForSave(categoryName: String, newCategoryEmoji: String?, subcategoryName: String?): ResolvedIds =
         db.withTransaction {
@@ -58,13 +60,12 @@ class CategoryRepository(private val db: AppDatabase) {
                 subs = emptyList()
             }
             val subName = subcategoryName?.let(::normalizeName)?.ifEmpty { null }
-            val subId = subName?.let { sn ->
-                subs.firstOrNull { sameName(it.name, sn) }?.id
-                    ?: dao.insertSub(
-                        Subcategory(categoryId = categoryId, name = sn, sortOrder = (subs.maxOfOrNull { it.sortOrder } ?: -1) + 1)
-                    )
-            }
-            ResolvedIds(categoryId, subId)
+            val existingSub = subName?.let { sn -> subs.firstOrNull { sameName(it.name, sn) } }
+            if (subName == null || existingSub != null) return@withTransaction ResolvedIds(categoryId, existingSub?.id)
+            val subId = dao.insertSub(
+                Subcategory(categoryId = categoryId, name = subName, sortOrder = (subs.maxOfOrNull { it.sortOrder } ?: -1) + 1)
+            )
+            ResolvedIds(categoryId, subId, createdSubcategory = subName)
         }
 
     // --- Редактор категорий ---
