@@ -223,6 +223,29 @@ class DatabaseUpgradeTest {
     }
 
     @Test
+    fun migrationChainReachesV13WithWeeklyTasks() = runTest {
+        createV3Database()
+        val db = AppDatabase.build(context, dbName)
+        try {
+            val repo = ru.my.traty.data.weekly.WeeklyTaskRepository(db)
+            // Истории мало (одна трата) — заданий не предлагается, но и ошибки нет
+            assertTrue(repo.ensureWeek(java.time.LocalDate.of(2026, 11, 18)).isEmpty())
+            val mon = java.time.LocalDate.of(2026, 11, 16)
+            val custom = ru.my.traty.data.weekly.WeeklyTaskTexts.customTask(
+                mon, ru.my.traty.data.weekly.WeeklyTaskType.COUNT_LIMIT, 1, "Продукты", 2,
+            )
+            repo.add(custom)
+            val week = repo.ensureWeek(mon.plusDays(2))
+            assertEquals(listOf("«Продукты» — не больше 2 раз"), week.map { it.title })
+            repo.remove(week.single())
+            assertTrue(repo.ensureWeek(mon.plusDays(2)).isEmpty())
+            assertEquals(1, db.expenses().getAllWithCategory().size)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun migrationChainReachesV9WithRecurringTable() = runTest {
         createV3Database()
         val db = AppDatabase.build(context, dbName)

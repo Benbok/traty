@@ -50,6 +50,7 @@ import ru.my.traty.ui.designsystem.components.TratyMonthPicker
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.budget.PlanSummaryCard
+import ru.my.traty.ui.weekly.WeeklyTasksHomeCard
 import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
@@ -70,6 +71,7 @@ fun HomeScreen(
     onOpenBudget: () -> Unit = {},
     startRecording: Boolean = false,
     onStartRecordingHandled: () -> Unit = {},
+    onOpenWeekly: () -> Unit = {},
 ) {
     val showReconcileCard by prompt.showCard.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { prompt.refresh() }
@@ -311,6 +313,14 @@ fun HomeScreen(
                         compact = true,
                         detailsExpanded = settings.homePlanExpanded,
                         onToggleDetails = { vm.setHomePlanExpanded(!settings.homePlanExpanded) },
+                        modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
+                    )
+                }
+            }
+            if (selectedDate == null && searchQuery.isBlank()) {
+                item(key = "weekly", contentType = "weekly") {
+                    WeeklyTasksHomeCard(
+                        onOpen = onOpenWeekly,
                         modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
                     )
                 }

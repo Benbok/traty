@@ -55,7 +55,7 @@ private data class PlanEdit(val key: PlanKey?, val amountKopecks: Long, val repe
 
 /** Настройки → «План трат»: лимиты по категориям и подкатегориям на расчётный месяц. */
 @Composable
-fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
+fun BudgetScreen(onBack: () -> Unit, onOpenWeekly: () -> Unit = {}, vm: BudgetViewModel = viewModel()) {
     val period by vm.period.collectAsStateWithLifecycle()
     val startDay by vm.startDay.collectAsStateWithLifecycle()
     val plans by vm.items.collectAsStateWithLifecycle()
@@ -150,6 +150,9 @@ fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
                         )
                     }
                 }
+            }
+            item {
+                WeeklyTasksEntryCard(onOpenWeekly, Modifier.padding(horizontal = TratyTheme.spacing.lg))
             }
             item {
                 BudgetAlertsCard(

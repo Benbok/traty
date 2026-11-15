@@ -22,6 +22,8 @@ import ru.my.traty.data.budget.BudgetAlertWatcher
 import ru.my.traty.data.budget.BudgetRepository
 import ru.my.traty.data.digest.DailyDigestWork
 import ru.my.traty.data.onboarding.OnboardingRepository
+import ru.my.traty.data.weekly.WeeklyTaskRepository
+import ru.my.traty.data.weekly.WeeklyTaskWork
 import ru.my.traty.data.recurring.RecurringReminderWork
 import ru.my.traty.data.SettingsRepository
 import ru.my.traty.speech.GigaAmRuntime
@@ -56,6 +58,7 @@ open class TratyApp : Application() {
             runCatching { RecurringReminderWork.schedule(this) }
             runCatching { DailyDigestWork.schedule(this) }
             container.budgetAlerts.start(appScope)
+            runCatching { WeeklyTaskWork.schedule(this) }
             // Есть фразы без разбора (в т. ч. оставшиеся с прошлого запуска) — поставить фоновый разбор
             appScope.launch {
                 container.db.pendingPhrases().observeAll()
@@ -95,6 +98,7 @@ class AppContainer(
     val onboarding = OnboardingRepository(db, settings)
     val quickEntry = QuickEntry(db, categories, settings, clientProvider = llm)
     val budgets = BudgetRepository(db)
+    val weeklyTasks = WeeklyTaskRepository(db)
 
     /** Уведомления «потрачено 80 % / 100 % плана»; запускается из [TratyApp.onCreate]. */
     val budgetAlerts = BudgetAlertWatcher(context.applicationContext, db, settings)
