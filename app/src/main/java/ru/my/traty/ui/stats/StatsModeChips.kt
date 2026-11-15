@@ -44,25 +44,6 @@ fun StatsModeChips(
     }
 }
 
-/** Что показывать списком: категории (с разбивкой по магазинам внутри) или сразу все магазины. */
-@Composable
-fun StatsViewChips(
-    storesSelected: Boolean,
-    onCategories: () -> Unit,
-    onStores: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
-    ) {
-        ModeChip("Категории", selected = !storesSelected, onClick = onCategories)
-        ModeChip("Магазины", selected = storesSelected, onClick = onStores)
-    }
-}
-
 @Composable
 internal fun ModeChip(title: String, selected: Boolean, onClick: () -> Unit) {
     Surface(

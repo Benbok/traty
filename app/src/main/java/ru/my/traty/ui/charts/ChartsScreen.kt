@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.ShowChart
-import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -243,61 +242,6 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                                         }
                                     }
                                 }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Траты по магазинам (все категории вместе)
-        if (state.topStores.isNotEmpty()) {
-            item(key = "top-stores", contentType = "top-stores") {
-                val credit = state.summary.totalCreditKopecks
-                TratyCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    backgroundColor = TratyTheme.colors.surface,
-                    shape = TratyTheme.shapes.large,
-                ) {
-                    Column(Modifier.padding(TratyTheme.spacing.md)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.Storefront,
-                                contentDescription = null,
-                                tint = TratyTheme.colors.expense,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(TratyTheme.spacing.xs))
-                            Text(text = "Траты по магазинам", style = TratyTheme.typography.titleMedium)
-                        }
-                        Spacer(Modifier.height(TratyTheme.spacing.md))
-
-                        state.topStores.take(10).forEach { st ->
-                            val frac = if (credit > 0) st.totalKopecks.toFloat() / credit else 0f
-                            Column(Modifier.padding(vertical = TratyTheme.spacing.xxs)) {
-                                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = st.name,
-                                        style = TratyTheme.typography.titleSmall,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    Text(
-                                        text = "${(frac * 100).roundToInt()}%",
-                                        style = TratyTheme.typography.labelSmall,
-                                        color = TratyTheme.colors.onSurfaceVariant,
-                                    )
-                                    Spacer(Modifier.width(TratyTheme.spacing.sm))
-                                    TratyAmountText(
-                                        amountKopecks = st.totalKopecks,
-                                        size = AmountSize.SMALL,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                }
-                                TratyProgressBar(
-                                    progress = frac,
-                                    color = TratyTheme.colors.expense,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
                             }
                         }
                     }

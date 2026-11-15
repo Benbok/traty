@@ -33,7 +33,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -42,7 +41,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,7 +60,6 @@ import ru.my.traty.data.CategoryBreakdown
 import ru.my.traty.data.CategoryBreakdowns
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Places
-import ru.my.traty.data.StoreTotal
 import ru.my.traty.data.CategoryChange
 import ru.my.traty.data.PeriodComparison
 import ru.my.traty.data.RingSlice
@@ -118,8 +115,6 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel(), o
     val range by rangeVm.range.collectAsStateWithLifecycle()
     val customTotals by rangeVm.totals.collectAsStateWithLifecycle()
     val customPrev by rangeVm.prevTotals.collectAsStateWithLifecycle()
-    val periodPlaces by vm.placeTotals.collectAsStateWithLifecycle()
-    val customPlaces by rangeVm.placeTotals.collectAsStateWithLifecycle()
     val periodExpenses by vm.expenses.collectAsStateWithLifecycle()
     val customExpenses by rangeVm.expenses.collectAsStateWithLifecycle()
     val prevExpenses by vm.prevExpenses.collectAsStateWithLifecycle()
@@ -129,7 +124,6 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel(), o
         plans.filter { it.progress.plan.subcategoryId == null }.associateBy { it.progress.plan.categoryId }
     }
     var showRangePicker by remember { mutableStateOf(false) }
-    var byStores by rememberSaveable { mutableStateOf(false) }
     // Раскрытые категории: под ними видно, из чего состоит категория
     var expanded by remember { mutableStateOf(emptySet<Long>()) }
     // Выбранный способ раскрытия для каждой категории (по умолчанию — CategoryBreakdown.defaultMode)
@@ -155,11 +149,8 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel(), o
     }
     val sum = totals.sumOf { it.total }
     val prevSum = prev.sumOf { it.total }
-    val places = if (custom) customPlaces else periodPlaces
     val expenses = if (custom) customExpenses else periodExpenses
     val breakdowns = remember(expenses) { CategoryBreakdowns.build(expenses) }
-    val stores = remember(places) { Places.group(places) }
-    val emojiById = remember(totals) { totals.associate { it.categoryId to it.emoji } }
 
     // Средняя в день и прогноз на конец периода по текущему темпу (прогноз — пока период не кончился)
     val paceEnd = range?.second ?: period.endDate
@@ -304,16 +295,6 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel(), o
             item(key = "ring", contentType = "ring") { CategoryRingCard(slices = ringSlices, sum = sum) }
         }
 
-        if (totals.isNotEmpty()) {
-            item(key = "view-chips", contentType = "view-chips") {
-                StatsViewChips(
-                    storesSelected = byStores,
-                    onCategories = { byStores = false },
-                    onStores = { byStores = true },
-                )
-            }
-        }
-
         if (totals.isEmpty()) {
             item(key = "empty", contentType = "empty") {
                 TratyEmptyState(
@@ -328,11 +309,7 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel(), o
             }
         }
 
-        if (byStores) items(stores, key = { "store:" + it.key }, contentType = { "store" }) { st ->
-            StoreTotalRow(store = st, sum = sum, emojiById = emojiById)
-        }
-
-        if (!byStores) items(totals, key = { "cat:${it.categoryId}" }, contentType = { "category" }) { t ->
+        items(totals, key = { "cat:${it.categoryId}" }, contentType = { "category" }) { t ->
             val frac = if (sum > 0) t.total.toFloat() / sum else 0f
             val p = prevMap[t.categoryId]
             val breakdown = breakdowns[t.categoryId]
@@ -1188,44 +1165,6 @@ private fun BreakdownExpenseRow(e: ExpenseWithCategory, showPlace: Boolean, modi
             )
         }
         TratyAmountText(amountKopecks = e.expense.amountKopecks, size = AmountSize.SMALL)
-    }
-}
-
-/** Строка режима «Магазины»: магазин, в каких категориях тратили, сколько покупок, сумма и доля. */
-@Composable
-private fun StoreTotalRow(store: StoreTotal, sum: Long, emojiById: Map<Long, String>) {
-    val frac = if (sum > 0) store.totalKopecks.toFloat() / sum else 0f
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.sm),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Filled.Storefront,
-                contentDescription = null,
-                tint = if (store.isNoPlace) TratyTheme.colors.onSurfaceVariant else TratyTheme.colors.primary,
-                modifier = Modifier.size(24.dp),
-            )
-            Spacer(Modifier.width(TratyTheme.spacing.md))
-            Column(Modifier.weight(1f)) {
-                Text(text = store.name, style = TratyTheme.typography.titleSmall)
-                val cats = store.categoryIds.mapNotNull { emojiById[it] }.joinToString(" ")
-                Text(
-                    text = listOf(cats, purchases(store.count)).filter { it.isNotBlank() }.joinToString(" · "),
-                    style = TratyTheme.typography.bodySmall,
-                    color = TratyTheme.colors.onSurfaceVariant,
-                )
-            }
-            TratyAmountText(amountKopecks = store.totalKopecks, size = AmountSize.MEDIUM, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(TratyTheme.spacing.xs))
-        TratyProgressBar(progress = frac, modifier = Modifier.padding(vertical = TratyTheme.spacing.xxs))
-        Text(
-            text = "${(frac * 100).roundToInt()}% от всех трат",
-            style = TratyTheme.typography.bodySmall,
-            color = TratyTheme.colors.onSurfaceVariant,
-        )
     }
 }
 
