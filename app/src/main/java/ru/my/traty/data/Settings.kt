@@ -117,6 +117,7 @@ class SettingsRepository(
         val homePlanExpanded = booleanPreferencesKey("home_plan_expanded")
         val budgetAlerts = booleanPreferencesKey("budget_alerts")
         val onboardingSeen = booleanPreferencesKey("onboarding_seen")
+        val whatsNewSeenVersion = stringPreferencesKey("whats_new_seen_version")
         val weeklyTasksNotify = booleanPreferencesKey("weekly_tasks_notify")
         val updateCheck = booleanPreferencesKey("update_check")
         val updateCheckedAt = longPreferencesKey("update_checked_at")
@@ -215,6 +216,13 @@ class SettingsRepository(
 
     /** Знакомство с приложением уже показано или пропущено. Отдельно от [flow]: не трогает Keystore. */
     val onboardingSeen: Flow<Boolean> = context.dataStore.data.map { p -> p[K.onboardingSeen] ?: false }
+
+    /** Версия приложения, на которой окно «Что нового» уже показывали; null — ещё не записано. */
+    val whatsNewSeenVersion: Flow<String?> = context.dataStore.data.map { p -> p[K.whatsNewSeenVersion] }
+
+    suspend fun setWhatsNewSeenVersion(version: String) {
+        context.dataStore.edit { p -> p[K.whatsNewSeenVersion] = version }
+    }
 
     suspend fun setOnboardingSeen(seen: Boolean) {
         context.dataStore.edit { p -> p[K.onboardingSeen] = seen }

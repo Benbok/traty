@@ -19,6 +19,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import ru.my.traty.data.help.HelpTopics
+import ru.my.traty.data.whatsnew.WhatsNew
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
@@ -65,6 +66,9 @@ fun HelpScreen(
                     expanded = expandedId == topic.id,
                     onToggle = { expandedId = if (expandedId == topic.id) null else topic.id },
                 )
+            }
+            items(WhatsNew.entries, key = { "new-${it.version}" }) { entry ->
+                HelpWhatsNewCard(entry, onOpenTopic = { expandedId = it })
             }
         }
     }

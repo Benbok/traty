@@ -46,6 +46,8 @@ import ru.my.traty.ui.home.HomeScreen
 import ru.my.traty.ui.navigation.TratyNavLabel
 import ru.my.traty.ui.navigation.TratyNavTab
 import ru.my.traty.ui.help.HelpScreen
+import ru.my.traty.ui.whatsnew.WhatsNewSheet
+import ru.my.traty.ui.whatsnew.WhatsNewViewModel
 import ru.my.traty.ui.onboarding.OnboardingScreen
 import ru.my.traty.ui.onboarding.OnboardingViewModel
 import ru.my.traty.data.onboarding.OnboardingExit
@@ -70,6 +72,10 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     var showRecurring by rememberSaveable { mutableStateOf(false) }
     var showDebtsList by rememberSaveable { mutableStateOf(false) }
     var showHelp by rememberSaveable { mutableStateOf(false) }
+    // Тема справки, которую нужно сразу раскрыть (из «Что нового»)
+    var helpTopicId by rememberSaveable { mutableStateOf<String?>(null) }
+    val whatsNew: WhatsNewViewModel = viewModel()
+    val whatsNewEntries by whatsNew.entries.collectAsStateWithLifecycle()
     var selectedDebtId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showBudget by rememberSaveable { mutableStateOf(false) }
     var showWeekly by rememberSaveable { mutableStateOf(false) }
@@ -266,7 +272,11 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
         if (showHelp) {
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
                 HelpScreen(
-                    onBack = { showHelp = false },
+                    initialTopicId = helpTopicId,
+                    onBack = {
+                        showHelp = false
+                        helpTopicId = null
+                    },
                     onOpenOnboarding = {
                         showHelp = false
                         onboarding.show()
@@ -322,6 +332,19 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             }
             false -> Unit
         }
+    }
+
+    // После обновления: один раз показать новинки, но не поверх знакомства
+    if (onboardingVisible == false && whatsNewEntries.isNotEmpty()) {
+        WhatsNewSheet(
+            entries = whatsNewEntries,
+            onDismiss = whatsNew::dismiss,
+            onOpenTopic = { id ->
+                helpTopicId = id
+                showHelp = true
+                whatsNew.dismiss()
+            },
+        )
     }
 
     vm.confirm?.let { d ->
