@@ -84,4 +84,13 @@ class EntryParsingTest {
         val p = EntryPrompt.system(emptyList(), LocalDate.of(2026, 11, 14), emptyList())
         assertTrue("\"type\"" in p && "income" in p && "2026-11-14" in p)
     }
+    @Test
+    fun promptMapsMarketplaceNamesToMarketplaceSubcategories() {
+        val p = EntryPrompt.system(emptyList(), LocalDate.of(2026, 11, 15), emptyList())
+        assertTrue("категорию «Маркетплейсы» независимо от вида товара" in p)
+        assertTrue("WB/ВБ/Вайлдберриз → «Wildberries»" in p)
+        assertTrue("Ozon/Озон → «Ozon»" in p)
+        assertTrue("площадку укажи одновременно в subcategory и place" in p)
+    }
+
 }
