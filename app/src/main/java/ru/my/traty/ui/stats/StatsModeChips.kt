@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -50,7 +51,8 @@ internal fun ModeChip(title: String, selected: Boolean, onClick: () -> Unit) {
         shape = TratyTheme.shapes.small,
         color = if (selected) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
         border = if (selected) BorderStroke(1.dp, TratyTheme.colors.primary) else null,
-        modifier = Modifier.clickable(onClick = onClick),
+        // Видимый размер чипа прежний, но нажимаемая область не меньше 48dp
+        modifier = Modifier.clickable(onClick = onClick).minimumInteractiveComponentSize(),
     ) {
         Text(
             text = title,
