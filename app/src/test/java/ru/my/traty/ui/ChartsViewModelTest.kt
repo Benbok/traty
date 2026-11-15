@@ -110,15 +110,6 @@ class ChartsViewModelTest {
 
         val lastPoint = state.balancePoints.last()
         assertEquals(30_000_00L, lastPoint.cumulativeBalanceKopecks)
-
-        // Delete income
-        val income = state.recentIncomes.first()
-        vm.deleteIncome(income)
-        advanceUntilIdle()
-
-        val afterDelete = vm.uiState.filter { it.summary.totalDebitKopecks == 0L }.first()
-        assertEquals(0L, afterDelete.summary.totalDebitKopecks)
-        assertEquals(-20_000_00L, afterDelete.summary.netBalanceKopecks)
     }
 
     @Test

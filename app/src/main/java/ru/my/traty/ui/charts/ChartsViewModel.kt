@@ -131,12 +131,6 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
         billingPeriod.value = billingPeriod.value.next(startDay.value)
     }
 
-    fun deleteIncome(income: Income) {
-        viewModelScope.launch {
-            c.incomes.delete(income)
-        }
-    }
-
     private fun processUiState(
         p: ChartPeriod,
         bp: BillingPeriod,
