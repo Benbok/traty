@@ -35,11 +35,19 @@ object OfflineParser {
     private val currencyRe = Regex("""(?<![\p{L}])(руб(лей|ля|ль)?|р\.)(?![\p{L}])|₽""", RegexOption.IGNORE_CASE)
 
     fun parse(text: String, categories: List<CategoryWithSubs>, today: LocalDate = LocalDate.now()): List<ParsedExpense> {
-        val amount = SpokenAmountParser.find(text) ?: return emptyList()
+        val spoken = SpokenAmountParser.find(text) ?: return emptyList()
         val day = SpokenDateParser.find(text, today)
         val market = Marketplaces.find(text)
         val shop = if (market == null) ShopTypes.find(text) else null
-        val note = leftover(text, listOfNotNull(amount.range, day?.range, shop?.range, market?.range))
+        // «в продуктовом на 2500 купил рыбу, консерву, хлеб» — одна трата на 2500, товары в заметке
+        val total = SpokenTotal.find(text)
+        val list = ShoppingListParser.find(text)
+        val amount = total
+            ?: list?.amount?.let { SpokenAmount(it, spoken.range) }
+            ?: spoken
+        val note = list?.note()
+            ?: leftover(text, listOfNotNull(amount.range, day?.range, shop?.range, market?.range))
+                ?.let { if (total != null) ShoppingListParser.tidy(it) else it }
         if (market != null) {
             val existing = categories.firstOrNull { sameName(it.category.name, Marketplaces.CATEGORY) }
             return listOf(
