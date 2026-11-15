@@ -69,4 +69,16 @@ class SearchTextTest {
         assertFalse(SearchText.matches("кот", listOf("Кино")))
         assertFalse(SearchText.matches("кошке", listOf("Кофе")))
     }
+
+    @Test
+    fun `аванс и долг за холодильник находятся по траты на холодильник`() {
+        val advance = listOf("Маркетплейсы", "Озон", "Озон", "аванс за холодильник")
+        val debt = listOf("Покупки", null, null, "закрываю долг по холодильнику")
+        for (q in listOf("холодильник", "траты на холодильник", "холодильнику", "холодил")) {
+            assertTrue(q, SearchText.matches(q, advance))
+            assertTrue(q, SearchText.matches(q, debt))
+        }
+        assertTrue(SearchText.matches("холодильник озон", advance))
+        assertFalse(SearchText.matches("холодильник озон", debt))
+    }
 }
