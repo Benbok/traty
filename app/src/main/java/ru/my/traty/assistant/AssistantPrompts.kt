@@ -3,6 +3,7 @@ package ru.my.traty.assistant
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.period.BillingPeriod
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -20,6 +21,7 @@ object AssistantPrompts {
         val period = BillingPeriod.containing(today, startDay)
         val previous = period.previous(startDay)
         val weekday = today.dayOfWeek.getDisplayName(TextStyle.FULL, RU)
+        val october = YearMonth.of(if (today.monthValue >= 10) today.year else today.year - 1, 10)
         val cats = categories.joinToString("\n") { c ->
             val subs = c.subNames()
             "- ${c.category.name}" + if (subs.isNotEmpty()) " (подкатегории: ${subs.joinToString(", ")})" else ""
@@ -29,7 +31,7 @@ object AssistantPrompts {
 Сегодня $today, $weekday. Текущий расчётный период: ${period.startDate} — ${period.endDate}. Прошлый: ${previous.startDate} — ${previous.endDate}.
 
 Верни только JSON-объект без пояснений:
-{"intent": "...", "categories": [], "place": null, "from": null, "to": null, "compareFrom": null, "compareTo": null, "amount": null, "limit": null, "relative": false}
+{"intent": "...", "categories": [], "place": null, "from": null, "to": null, "compareFrom": null, "compareTo": null, "amount": null, "limit": null, "relative": false, "groupBy": null}
 
 intent — одно из:
 - total — сколько потрачено (всего, на категорию, в месте);
@@ -38,6 +40,8 @@ intent — одно из:
 - places — где (в каких магазинах, местах) больше всего тратится;
 - compare — сравнение двух отрезков («больше или меньше, чем в прошлом месяце», «почему вышло больше»);
 - average — сколько в среднем в день или неделю;
+- trend — как менялись траты: «по месяцам», «по неделям», «в какой день недели я трачу больше», «динамика трат на кафе»: groupBy — month, week, weekday или day;
+- list — сами покупки: «когда я последний раз был в кафе», «покажи траты в Пятёрочке», «как часто я езжу на такси», «что я купил вчера»;
 - subscriptions — подписки и регулярные платежи;
 - income — доходы, поступления, «сколько заработал», «в плюсе ли я»;
 - afford — «могу ли я позволить / хватит ли денег на покупку»: amount — сумма в рублях; если покупка из понятной категории («сходить в кафе за 3000») — укажи её в categories;
@@ -55,6 +59,7 @@ intent — одно из:
 
 Правила:
 - categories — только названия из списка ниже (категория или подкатегория), как они написаны. «Такси» — это подкатегория, бери её.
+- Товар или услуга, которых нет среди категорий («шаурма», «бензин»), — тоже в categories, как сказал пользователь: приложение поищет их в заметках.
 - Магазин, сервис или место, которого нет среди категорий («Пятёрочка», «Озон», «Яндекс»), пиши в place.
 - Даты — ГГГГ-ММ-ДД, включительно. Нет срока в вопросе — from и to null (значит текущий период).
 - «в этом месяце» — текущий период; «в прошлом месяце» — прошлый период целиком; «за неделю» — последние 7 дней включая сегодня; «вчера» — вчерашний день; названный месяц — весь этот месяц.
@@ -67,6 +72,10 @@ $cats
 
 Примеры:
 «сколько я потратил на кафе в этом месяце» → {"intent":"total","categories":["Кафе и рестораны"]}
+«сколько я потратил на такси в октябре» → {"intent":"total","categories":["Такси"],"from":"${october.atDay(1)}","to":"${october.atEndOfMonth()}"}
+«как менялись траты на продукты по месяцам» → {"intent":"trend","categories":["Продукты"],"groupBy":"month"}
+«в какой день недели я трачу больше всего» → {"intent":"trend","groupBy":"weekday"}
+«когда я последний раз был в кафе» → {"intent":"list","categories":["Кафе и рестораны"]}
 «топ 3 покупки за неделю» → {"intent":"top","limit":3,"from":"${today.minusDays(6)}","to":"$today"}
 «где я больше всего трачу на продукты» → {"intent":"places","categories":["Продукты"]}
 «могу ли я купить наушники за 15 тысяч» → {"intent":"afford","amount":15000}

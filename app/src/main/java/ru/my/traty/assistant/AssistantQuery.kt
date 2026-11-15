@@ -23,6 +23,8 @@ data class AssistantQuery(
     val limit: Int? = null,
     /** amount — не новая сумма, а прибавка (отрицательная — уменьшение): «увеличь лимит на 1000». */
     val relative: Boolean = false,
+    /** Для trend: month, week, weekday или day ([GroupBy]). */
+    val groupBy: String? = null,
 )
 
 object Intents {
@@ -45,9 +47,11 @@ object Intents {
     const val PAUSE_SUB = "pause_subscription"
     const val RESUME_SUB = "resume_subscription"
     const val EDIT_SUB = "edit_subscription"
+    const val TREND = "trend"
+    const val LIST = "list"
     const val UNKNOWN = "unknown"
 
-    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, PLAN, BALANCE, SUGGEST_PLAN, SET_PLAN, REMOVE_PLAN, CANCEL_SUB, PAUSE_SUB, RESUME_SUB, EDIT_SUB, UNKNOWN)
+    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, PLAN, BALANCE, SUGGEST_PLAN, SET_PLAN, REMOVE_PLAN, CANCEL_SUB, PAUSE_SUB, RESUME_SUB, EDIT_SUB, TREND, LIST, UNKNOWN)
 }
 
 object AssistantQueries {
