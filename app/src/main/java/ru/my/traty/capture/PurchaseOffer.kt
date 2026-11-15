@@ -90,7 +90,8 @@ data class PurchaseForm(
         val count = count.trim().takeIf { it.isNotEmpty() }?.let { c -> c.toIntOrNull()?.takeIf { it in 1..600 } ?: return null }
         val rate = rate.trim().replace(',', '.').takeIf { it.isNotEmpty() }?.let { r -> r.toBigDecimalOrNull()?.takeIf { it >= BigDecimal.ZERO && it <= BigDecimal(100) } ?: return null }
         if (kind != DebtKind.PARTIAL && (count == null || totalKopecks == null)) return null
-        if (kind == DebtKind.PARTIAL && totalKopecks == null && offer.expenseId == null) return null
+        // Оплата частями без первого платежа не бывает: такая покупка ничем не держится в истории
+        if (kind == DebtKind.PARTIAL && offer.expenseId == null) return null
         val period = periodOf(this.period)
         // Заплатили сегодня — это первый платёж графика; не платили — первый через период
         val first = if (offer.expenseId != null) offer.day else period.advance(offer.day)

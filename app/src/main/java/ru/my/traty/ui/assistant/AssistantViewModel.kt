@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 import ru.my.traty.TratyApp
 import ru.my.traty.ai.LlmClient
 import ru.my.traty.assistant.AssistantContext
+import ru.my.traty.assistant.DebtWithPaid
 import ru.my.traty.assistant.AssistantData
 import ru.my.traty.assistant.AssistantFallback
 import ru.my.traty.assistant.Balance
@@ -134,6 +135,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     Balance(it.expectedKopecks, Instant.ofEpochMilli(it.sinceMillis).atZone(zone).toLocalDate())
                 }
                 val budgets = c.db.budgets().getAll()
+                val debts = c.debts.activeWithPayments(zone).map { (d, paid) -> DebtWithPaid(d, paid) }
                 val data = withContext(Dispatchers.Default) {
                     val ctx = AssistantContext(
                         expenses = c.db.expenses().getAllWithCategory(),
@@ -145,6 +147,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                         budgets = budgets,
                         categories = categories,
                         balance = balance,
+                        debts = debts,
                     )
                     AssistantEngine.run(query, ctx)
                 }

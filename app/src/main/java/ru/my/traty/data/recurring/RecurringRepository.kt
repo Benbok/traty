@@ -161,15 +161,19 @@ class RecurringRepository(private val db: AppDatabase) {
         /** Категории, где сумма каждый месяц другая. */
         val VARIABLE_AMOUNT_CATEGORIES = listOf("Коммунальные услуги")
 
-        /** Предложения по тратам: без уже заведённых и отклонённых платежей. */
+        /**
+         * Предложения по тратам: без уже заведённых и отклонённых платежей.
+         * [debtExpenseIds] — платежи по покупкам частями: у рассрочки свой график, это не подписка.
+         */
         fun suggest(
             expenses: List<ExpenseWithCategory>,
             recurring: List<Recurring>,
             categories: List<CategoryWithSubs>,
             today: LocalDate = LocalDate.now(),
             zone: ZoneId = ZoneId.systemDefault(),
+            debtExpenseIds: Set<Long> = emptySet(),
         ): List<RecurringCandidate> = RecurringDetector.detect(
-            expenses = expenses,
+            expenses = if (debtExpenseIds.isEmpty()) expenses else expenses.filterNot { it.expense.id in debtExpenseIds },
             today = today,
             zone = zone,
             excludedKeys = recurring.mapNotNull { it.detectKey }.toSet(),

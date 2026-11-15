@@ -43,6 +43,7 @@ import ru.my.traty.data.Expense
 import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.debt.Debt
+import ru.my.traty.data.debt.RemovedPayment
 import ru.my.traty.data.Income
 import ru.my.traty.data.isUserEditable
 import ru.my.traty.data.Rule
@@ -349,9 +350,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Что удалено вместе с тратой (связь с покупкой частями, сама покупка) — для «Отменить». */
+    private var removedPayment: RemovedPayment? = null
+
     fun delete(e: Expense) = viewModelScope.launch {
         if (e.isUserEditable) {
-            c.db.expenses().delete(e)
+            // Удалили единственный платёж покупки частями — уходит и покупка, иначе следующий аванс сочли бы доплатой
+            removedPayment = c.debtRemoval.delete(e)
             deletedForUndo = e
             message = "Трата удалена"
         }
@@ -360,7 +365,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun undoDelete() {
         val e = deletedForUndo ?: return
         deletedForUndo = null
-        viewModelScope.launch { c.db.expenses().insert(e) }
+        val removed = removedPayment
+        removedPayment = null
+        viewModelScope.launch { if (removed != null) c.debtRemoval.restore(removed) else c.db.expenses().insert(e) }
     }
 
     fun clearDeletedForUndo() { deletedForUndo = null }

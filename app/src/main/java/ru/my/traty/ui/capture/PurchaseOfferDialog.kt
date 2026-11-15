@@ -41,15 +41,28 @@ fun PurchaseOfferHost(visible: Boolean = true, vm: PurchaseOfferViewModel = view
     val error by vm.error.collectAsStateWithLifecycle()
     val current = offer ?: return
     if (!visible) return
-    if (current.match != null) {
-        AttachPaymentDialog(current, status, error, onYes = { vm.attach(current) }, onNo = { vm.skip(current) })
+    // «Нет, это новая покупка»: тот же вопрос, но как о новой покупке частями
+    var asNew by remember(current.key) { mutableStateOf(false) }
+    if (current.match != null && !asNew) {
+        AttachPaymentDialog(
+            current, status, error,
+            onYes = { vm.attach(current) }, onNew = { asNew = true }, onNo = { vm.skip(current) },
+        )
     } else {
-        NewPurchaseDialog(current, error, onSave = { vm.create(current, it) }, onNo = { vm.skip(current) })
+        val fresh = current.copy(match = null)
+        NewPurchaseDialog(fresh, error, onSave = { vm.create(fresh, it) }, onNo = { vm.skip(current) })
     }
 }
 
 @Composable
-private fun AttachPaymentDialog(offer: PurchaseOffer, status: DebtStatus?, error: String?, onYes: () -> Unit, onNo: () -> Unit) {
+private fun AttachPaymentDialog(
+    offer: PurchaseOffer,
+    status: DebtStatus?,
+    error: String?,
+    onYes: () -> Unit,
+    onNew: () -> Unit,
+    onNo: () -> Unit,
+) {
     val name = listOfNotNull(offer.title, offer.place).joinToString(", ")
     AlertDialog(
         onDismissRequest = onNo,
@@ -63,7 +76,7 @@ private fun AttachPaymentDialog(offer: PurchaseOffer, status: DebtStatus?, error
                     style = TratyTheme.typography.bodyMedium,
                 )
                 Text(
-                    "Если это другая покупка, нажмите «Нет»: трата уже сохранена как обычная.",
+                    "Если это новая покупка частями, нажмите «Новая покупка». «Нет» — трата останется обычной.",
                     style = TratyTheme.typography.bodyMedium,
                     color = TratyTheme.colors.onSurfaceVariant,
                 )
@@ -71,7 +84,12 @@ private fun AttachPaymentDialog(offer: PurchaseOffer, status: DebtStatus?, error
             }
         },
         confirmButton = { TratyButton(onClick = onYes) { Text("Да, доплата") } },
-        dismissButton = { TratyTextButton(onClick = onNo) { Text("Нет") } },
+        dismissButton = {
+            Row {
+                TratyTextButton(onClick = onNo) { Text("Нет") }
+                TratyTextButton(onClick = onNew) { Text("Новая покупка") }
+            }
+        },
     )
 }
 

@@ -37,6 +37,9 @@ class QuestionRulesTest {
         assertEquals(Intents.ADVICE, intent("где я могу сэкономить"))
         assertEquals(Intents.TREND, intent("как менялись траты по месяцам"))
         assertEquals(Intents.LIST, intent("когда я последний раз был в кафе"))
+        assertEquals(Intents.DEBTS, intent("сколько я ещё должен"))
+        assertEquals(Intents.DEBTS, intent("когда следующий платёж по рассрочке"))
+        assertEquals(Intents.TOTAL, intent("сколько я потратил на кредит"))
     }
 
     @Test

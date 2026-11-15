@@ -51,7 +51,10 @@ class RecurringViewModel(app: Application) : AndroidViewModel(app) {
             c.db.expenses().observeAllWithCategory(),
             c.db.recurring().observeAll(),
             c.db.categories().observeActiveWithSubs(),
-        ) { expenses, recurring, cats -> RecurringRepository.suggest(expenses, recurring, cats) }
+            c.debts.observePayments(),
+        ) { expenses, recurring, cats, debtPayments ->
+            RecurringRepository.suggest(expenses, recurring, cats, debtExpenseIds = debtPayments.map { it.expenseId }.toSet())
+        }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
