@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.EditCalendar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -236,6 +237,7 @@ fun ChartDateCard(
                         modifier = Modifier
                             .clip(TratyTheme.shapes.small)
                             .clickable(onClick = onResetToMonth)
+                            .minimumInteractiveComponentSize()
                             .padding(vertical = 2.dp, horizontal = 4.dp),
                     )
                 }
