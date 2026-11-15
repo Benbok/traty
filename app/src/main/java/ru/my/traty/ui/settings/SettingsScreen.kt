@@ -58,6 +58,7 @@ fun SettingsScreen(
     onOpenBudget: () -> Unit = {},
     onOpenAi: () -> Unit = {},
     onOpenOnboarding: () -> Unit = {},
+    onOpenFeedback: () -> Unit = {},
 ) {
     val saved by vm.settings.collectAsStateWithLifecycle()
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
@@ -319,6 +320,8 @@ fun SettingsScreen(
                 }
             }
         }
+
+        FeedbackSettingsCard(onOpen = onOpenFeedback)
     }
 }
 }

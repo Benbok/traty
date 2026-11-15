@@ -15,6 +15,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import ru.my.traty.TestTratyApp
 import ru.my.traty.ui.budget.BudgetScreen
+import ru.my.traty.ui.feedback.FeedbackScreen
 import ru.my.traty.ui.recurring.RecurringScreen
 import ru.my.traty.ui.settings.AiSettingsScreen
 import ru.my.traty.ui.settings.RulesScreen
@@ -22,6 +23,20 @@ import ru.my.traty.ui.settings.RulesScreen
 @RunWith(RobolectricTestRunner::class)
 @Config(application = TestTratyApp::class)
 class BackNavigationTest {
+
+    @Test
+    fun feedbackScreenHandlesBack() {
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
+        val activity = controller.get()
+        var backCalled = false
+
+        activity.setContent {
+            FeedbackScreen(onBack = { backCalled = true })
+        }
+
+        activity.onBackPressedDispatcher.onBackPressed()
+        assertTrue("onBack should be called when system back is pressed in FeedbackScreen", backCalled)
+    }
 
     @Test
     fun budgetScreenHandlesBack() {
