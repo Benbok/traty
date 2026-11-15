@@ -37,6 +37,8 @@ import ru.my.traty.ui.charts.ChartsScreen
 import ru.my.traty.ui.designsystem.components.TratySnackbar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.capture.EntryConfirmSheet
+import ru.my.traty.ui.capture.RecurringOfferHost
+import ru.my.traty.ui.feedback.FeedbackScreen
 import ru.my.traty.ui.home.EditExpenseScreen
 import ru.my.traty.ui.home.HomeScreen
 import ru.my.traty.ui.navigation.TratyNavLabel
@@ -64,6 +66,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     var showBudget by rememberSaveable { mutableStateOf(false) }
     var showWeekly by rememberSaveable { mutableStateOf(false) }
     var showAiSettings by rememberSaveable { mutableStateOf(false) }
+    var showFeedback by rememberSaveable { mutableStateOf(false) }
     // null - экран сверки закрыт
     var reconcileMode by rememberSaveable { mutableStateOf<ReconcileMode?>(null) }
     val snackbar = remember { SnackbarHostState() }
@@ -180,6 +183,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onOpenBudget = { showBudget = true },
                         onOpenAi = { showAiSettings = true },
                         onOpenOnboarding = onboarding::show,
+                        onOpenFeedback = { showFeedback = true },
                     )
                 }
             }
@@ -219,6 +223,12 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
         if (showAiSettings) {
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
                 AiSettingsScreen(vm = vm, onBack = { showAiSettings = false })
+            }
+        }
+
+        if (showFeedback) {
+            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                FeedbackScreen(onBack = { showFeedback = false })
             }
         }
 
@@ -279,6 +289,9 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             onSave = { vm.saveEntry(it) },
         )
     }
+
+    // «Добавить в Подписки?» — после окна проверки и вопроса о правиле, чтобы диалоги не накладывались
+    RecurringOfferHost(visible = vm.confirm == null && vm.ruleOffer == null)
 
     vm.ruleOffer?.let { offer ->
         androidx.compose.material3.AlertDialog(

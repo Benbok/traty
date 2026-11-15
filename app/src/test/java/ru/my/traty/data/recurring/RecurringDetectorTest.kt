@@ -148,6 +148,13 @@ class RecurringDetectorTest {
     }
 
     @Test
+    fun installmentPaymentsAreNotSubscriptions() {
+        // Рассрочка: те же 10 000 ₽ каждый месяц, но у неё свой график в «Покупках частями»
+        val items = (0 until 3).map { exp(LocalDate.of(2026, 9 + it, 5), 1_000_000, "Ozon", "Телевизор · платёж ${it + 1} из 6", source = ExpenseSource.DEBT) }
+        assertTrue(detect(items).isEmpty())
+    }
+
+    @Test
     fun twoPurchasesOnOneDayCountOnce() {
         val items = monthly(3) + exp(LocalDate.of(2026, 11, 5), 39_900)
         assertEquals(3, detect(items).single().charges)

@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import ru.my.traty.capture.createdText
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
@@ -55,12 +56,8 @@ fun RecordPanel(
                         style = TratyTheme.typography.titleMedium,
                         color = TratyTheme.colors.onSurface,
                     )
-                    if (ui.result.recurringAdded.isNotEmpty()) {
-                        Text(
-                            "В подписки: ${ui.result.recurringAdded.joinToString()}",
-                            style = TratyTheme.typography.bodyMedium,
-                            color = TratyTheme.colors.onSurfaceVariant,
-                        )
+                    ui.result.createdText()?.let {
+                        Text(it, style = TratyTheme.typography.bodyMedium, color = TratyTheme.colors.onSurfaceVariant)
                     }
                     TratyButton(onClick = onEdit) { Text("Изменить") }
                 }

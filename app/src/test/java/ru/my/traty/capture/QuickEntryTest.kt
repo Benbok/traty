@@ -18,6 +18,7 @@ import ru.my.traty.ai.LlmClient
 import ru.my.traty.ai.LlmHttpException
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.PendingStatus
+import ru.my.traty.data.RecurringState
 import ru.my.traty.data.Rule
 import java.net.UnknownHostException
 import java.time.LocalDate
@@ -88,13 +89,20 @@ class QuickEntryTest {
             rawText = "подписка Клод девятьсот девяносто и Пятёрочка пятьсот",
             origin = EntryOrigin.VOICE,
         )
-        val result = quickEntry(null).save(draft)
+        val qe = quickEntry(null)
+        val result = qe.save(draft)
 
-        assertEquals(listOf("Клод"), result.recurringAdded)
+        // Сначала только вопрос: в «Подписках» пусто, пока пользователь не нажал «Добавить»
+        assertEquals(listOf("Клод"), result.recurringOffers.map { it.title })
+        assertEquals(listOf("Клод"), qe.recurringOffers.pending.value.map { it.title })
+        assertTrue(db.recurring().getAll().isEmpty())
+        assertEquals(2, db.expenses().getAllWithCategory().size)
+
+        qe.recurringOffers.accept(qe.recurringOffers.pending.value.single())
         val payments = db.recurring().getAll()
         assertEquals(listOf("Клод"), payments.map { it.title })
         assertEquals(99_000L, payments.single().amountKopecks)
-        assertEquals(2, db.expenses().getAllWithCategory().size)
+        assertTrue(qe.recurringOffers.pending.value.isEmpty())
     }
 
     @Test
@@ -109,9 +117,11 @@ class QuickEntryTest {
             rawText = "мобильная связь 1200 и подписка две сто",
             origin = EntryOrigin.VOICE,
         )
-        val result = quickEntry(null).save(draft)
+        val qe = quickEntry(null)
+        val result = qe.save(draft)
 
-        assertEquals(listOf("Мобильная связь", "Подписки"), result.recurringAdded)
+        assertEquals(listOf("Мобильная связь", "Подписки"), result.recurringOffers.map { it.title })
+        qe.recurringOffers.pending.value.forEach { qe.recurringOffers.accept(it) }
         assertEquals(listOf(120_000L, 210_000L), db.recurring().getAll().map { it.amountKopecks })
     }
 
@@ -231,5 +241,89 @@ class QuickEntryTest {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { qe.changes.collect { emitted = true } }
         qe.process("пятёрочка", EntryOrigin.VOICE, spokenAt)
         assertTrue(emitted)
+    }
+
+    @Test
+    fun petShopPhraseCreatesSubcategoryAndKeepsNote() = runTest {
+        app.container.categories.seedIfEmpty()
+        val reply = """{"items":[{"type":"expense","amount":731,"category":"Питомцы","subcategory":"Зоомагазин","place":null,"note":"лекарство для кошки Чуни от блох","date":"2023-11-13"}]}"""
+        val outcome = quickEntry(FakeLlm { reply })
+            .process("зоомагазин вчера 731 лекарство для кошки Чуни от блох", EntryOrigin.VOICE, spokenAt)
+        outcome as EntryOutcome.NeedsConfirm
+        val row = outcome.draft.rows.single()
+        assertEquals("Питомцы", row.category)
+        assertEquals("Зоомагазин", row.subcategory)
+        assertEquals("лекарство для кошки Чуни от блох", row.note)
+        // spokenAt = 2023-11-14 (UTC), «вчера» — 13-е
+        assertEquals("2023-11-13", row.dateText)
+
+        val result = quickEntry(null).save(outcome.draft)
+        assertEquals(listOf("Питомцы › Зоомагазин"), result.newSubcategories)
+        val saved = db.expenses().getAllWithCategory().single()
+        assertEquals("Питомцы", saved.categoryName)
+        assertEquals("Зоомагазин", saved.subcategoryName)
+        assertEquals("лекарство для кошки Чуни от блох", saved.expense.note)
+        assertEquals(null, saved.expense.place)
+    }
+
+    @Test
+    fun offlinePetShopPhraseCreatesMissingCategory() = runTest {
+        // Категорий нет совсем: «Питомцы» и «Зоомагазин» создадутся при сохранении
+        val outcome = quickEntry(null).process("зоомагазин вчера 731 лекарство для кошки Чуни от блох", EntryOrigin.VOICE, spokenAt)
+        outcome as EntryOutcome.NeedsConfirm
+        val row = outcome.draft.rows.single()
+        assertEquals("Питомцы", row.category)
+        assertEquals(NewCategory("Питомцы", "🐾"), row.suggestedCategory)
+        val result = quickEntry(null).save(outcome.draft)
+        assertEquals(listOf("Питомцы"), result.newCategories)
+        val saved = db.expenses().getAllWithCategory().single()
+        assertEquals("Зоомагазин", saved.subcategoryName)
+        assertEquals("лекарство для кошки Чуни от блох", saved.expense.note)
+    }
+
+    @Test
+    fun declinedRecurringOfferKeepsExpenseAndIsNotAskedAgain() = runTest {
+        app.container.categories.seedIfEmpty()
+        val row = EntryRow(EntryType.EXPENSE, "990", "Связь и подписки", "", "Клод", "", "", LocalDate.now().toString())
+        val draft = EntryDraft(listOf(row), "Клод девятьсот девяносто", EntryOrigin.VOICE)
+        val qe = quickEntry(null)
+        qe.save(draft)
+        qe.recurringOffers.decline(qe.recurringOffers.pending.value.single())
+
+        assertEquals(1, db.expenses().getAllWithCategory().size)
+        assertEquals(listOf(RecurringState.DISMISSED), db.recurring().getAll().map { it.state })
+        assertTrue(qe.save(draft).recurringOffers.isEmpty())
+        assertTrue(qe.recurringOffers.pending.value.isEmpty())
+    }
+
+    @Test
+    fun sameRecurringOfferIsAskedOnce() = runTest {
+        app.container.categories.seedIfEmpty()
+        val row = EntryRow(EntryType.EXPENSE, "990", "Связь и подписки", "", "Клод", "", "", LocalDate.now().toString())
+        val qe = quickEntry(null)
+        qe.save(EntryDraft(listOf(row, row), "Клод и снова Клод", EntryOrigin.VOICE))
+        qe.save(EntryDraft(listOf(row), "Клод", EntryOrigin.VOICE))
+        assertEquals(1, qe.recurringOffers.pending.value.size)
+    }
+
+    @Test
+    fun repeatedPhraseAsksInsteadOfSavingTwice() = runTest {
+        seedWithRule("магнит", "Продукты")
+        val reply = """{"items":[{"type":"expense","amount":250,"category":"Продукты","place":"Магнит"}]}"""
+        val qe = quickEntry(FakeLlm { reply })
+        assertTrue(qe.process("сегодня магнит 250 рублей", EntryOrigin.VOICE, spokenAt) is EntryOutcome.AutoSaved)
+
+        // Та же фраза через 10 минут: правило есть, но молча второй раз не сохраняем
+        val again = qe.process("сегодня магнит 250 рублей", EntryOrigin.VOICE, spokenAt + 10 * 60_000L)
+        again as EntryOutcome.NeedsConfirm
+        val hint = requireNotNull(again.draft.rows.single().duplicate)
+        assertEquals("Магнит", hint.label)
+        assertEquals(25_000L, hint.amountKopecks)
+        assertTrue(hint.recent)
+        assertEquals(1, db.expenses().getAllWithCategory().size)
+
+        // «Новая покупка» — пользователь сохраняет строку
+        qe.save(again.draft)
+        assertEquals(2, db.expenses().getAllWithCategory().size)
     }
 }

@@ -30,6 +30,7 @@ import ru.my.traty.capture.EntryOrigin
 import ru.my.traty.capture.EntryOutcome
 import ru.my.traty.capture.RuleOffer
 import ru.my.traty.capture.SavedEntries
+import ru.my.traty.capture.summary
 import ru.my.traty.data.PendingPhrase
 import ru.my.traty.data.VoiceEngine
 import ru.my.traty.speech.ModelState
@@ -337,9 +338,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 confirmPendingId?.let { c.db.pendingPhrases().delete(it) }
                 dismissConfirm()
                 ruleOffer = result.ruleOffer
-                message = "Сохранено: ${result.saved.count}" +
-                    (if (result.newCategories.isNotEmpty()) ". Новые категории: ${result.newCategories.joinToString()}" else "") +
-                    (if (result.recurringAdded.isNotEmpty()) ". В подписки добавлено: ${result.recurringAdded.joinToString()}" else "")
+                message = result.summary()
             } finally {
                 savingEntry = false
             }

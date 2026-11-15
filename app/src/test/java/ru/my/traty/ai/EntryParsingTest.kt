@@ -93,4 +93,21 @@ class EntryParsingTest {
         assertTrue("Площадку укажи одновременно в subcategory и place" in p)
     }
 
+    @Test
+    fun promptAsksForSubcategoryNoteAndShowsPetShopExample() {
+        val p = EntryPrompt.system(emptyList(), LocalDate.of(2026, 11, 15), emptyList())
+        assertTrue("зоомагазин и ветклиника — «Питомцы»" in p)
+        assertTrue("это не place, place = null" in p)
+        assertTrue("предложи новую: 1–2 слова" in p)
+        assertTrue("не сокращай и не пересказывай" in p)
+        assertTrue("\"note\":\"лекарство для кошки Чуни от блох\"" in p)
+        assertTrue("\"date\":\"2026-11-14\"" in p)
+    }
+
+    @Test
+    fun offlineFallbackUnderstandsDateForIncome() {
+        val r = OfflineEntryParser.parse("вчера пришла зарплата 80000", emptyList(), LocalDate.of(2026, 11, 15)).single()
+        assertEquals(EntryType.INCOME, r.entryType)
+        assertEquals("2026-11-14", r.date)
+    }
 }
