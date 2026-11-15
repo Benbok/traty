@@ -10,3 +10,7 @@
 .cxx/
 /.superpowers/
 .kotlin/
+
+# Ключи подписи релизов — никогда не коммитить
+*.jks
+*.keystore

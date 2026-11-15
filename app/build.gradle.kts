@@ -46,18 +46,36 @@ android {
         applicationId = "ru.my.traty"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1"
+        // В CI версия берётся из тега (v0.2 → 0.2), номер сборки — из счётчика запусков; локально — как раньше.
+        versionCode = System.getenv("TRATY_VERSION_CODE")?.toIntOrNull() ?: 1
+        versionName = System.getenv("TRATY_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "0.1"
         // Нативные библиотеки распознавания — только для телефонов arm64 (эмуляторами не пользуемся)
         ndk { abiFilters += "arm64-v8a" }
+    }
+
+    // Постоянный ключ для релизов на GitHub: берётся из переменных окружения (секреты Actions), в git не лежит.
+    // Без них (локальная сборка) release подписывается debug-ключом, как и раньше.
+    val releaseKeystore = System.getenv("TRATY_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }?.let(::File)
+    val hasReleaseKey = releaseKeystore?.isFile == true &&
+        !System.getenv("TRATY_KEYSTORE_PASSWORD").isNullOrBlank() &&
+        !System.getenv("TRATY_KEY_ALIAS").isNullOrBlank()
+    if (hasReleaseKey) {
+        signingConfigs {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("TRATY_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("TRATY_KEY_ALIAS")
+                keyPassword = System.getenv("TRATY_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+                    ?: System.getenv("TRATY_KEYSTORE_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Для личного использования подписываем release тем же debug-ключом
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (hasReleaseKey) "release" else "debug")
         }
     }
     compileOptions {
