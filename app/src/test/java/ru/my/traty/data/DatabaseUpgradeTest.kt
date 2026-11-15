@@ -246,6 +246,25 @@ class DatabaseUpgradeTest {
     }
 
     @Test
+    fun migrationChainReachesV14WithPurchasesInParts() = runTest {
+        createV3Database()
+        val db = AppDatabase.build(context, dbName)
+        try {
+            val categoryId = db.expenses().getAllWithCategory().single().expense.categoryId
+            val repo = ru.my.traty.data.debt.DebtRepository(db)
+            val id = repo.start(
+                ru.my.traty.data.debt.Debt(title = "Холодильник", place = "Ozon", categoryId = categoryId, totalKopecks = 6_000_000),
+                firstPaymentKopecks = 2_000_000,
+            )
+            assertEquals(4_000_000L, repo.status(id)?.remainingKopecks)
+            // Старая трата на месте, платёж добавился второй тратой
+            assertEquals(2, db.expenses().getAllWithCategory().size)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun migrationChainReachesV9WithRecurringTable() = runTest {
         createV3Database()
         val db = AppDatabase.build(context, dbName)

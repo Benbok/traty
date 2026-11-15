@@ -165,42 +165,66 @@ class RecurringRepositoryTest {
         timestamp = day.atTime(12, 0).atZone(zone).toInstant().toEpochMilli(),
     )
 
+    /** Трата сохранена, пользователь ответил «Добавить». */
+    private suspend fun savedAndAccepted(
+        expense: Expense, category: String, sub: String? = null,
+    ): String? = repo.onExpenseSaved(expense, category, zone, sub)?.also { repo.acceptOffer(it) }?.title
+
     @Test
-    fun newPaymentInRegularCategoryIsAddedAutomatically() = runTest {
-        val title = repo.onExpenseSaved(spent("Клод", "подписка", today), "Связь и подписки", zone)
-        assertEquals("Клод", title)
+    fun regularPaymentIsOnlyOfferedNotAdded() = runTest {
+        val offer = requireNotNull(repo.onExpenseSaved(spent("Клод", "подписка", today), "Связь и подписки", zone))
+        assertEquals("Клод", offer.title)
+        assertEquals(99_000L, offer.amountKopecks)
+        assertEquals("month", offer.periodUnit)
+        assertEquals(LocalDate.of(2026, 12, 14).toEpochDay(), offer.nextEpochDay)
+        assertTrue(offer.autoDetected)
+        // Без ответа пользователя в «Подписках» ничего нет
+        assertTrue(db.recurring().getAll().isEmpty())
+    }
+
+    @Test
+    fun acceptedOfferBecomesActivePaymentOnce() = runTest {
+        val offer = requireNotNull(repo.onExpenseSaved(spent("Клод", "подписка", today), "Связь и подписки", zone))
+        assertTrue(repo.acceptOffer(offer) != null)
+        assertEquals(null, repo.acceptOffer(offer))
         val saved = db.recurring().getAll().single()
-        assertEquals(99_000L, saved.amountKopecks)
-        assertEquals("month", saved.periodUnit)
-        assertEquals(LocalDate.of(2026, 12, 14).toEpochDay(), saved.nextEpochDay)
-        assertTrue(saved.autoDetected)
         assertEquals(RecurringState.ACTIVE, saved.state)
+        assertEquals("Клод", saved.title)
+    }
+
+    @Test
+    fun declinedOfferIsNotOfferedAgain() = runTest {
+        val offer = requireNotNull(repo.onExpenseSaved(spent("Клод", null, today), "Связь и подписки", zone))
+        repo.declineOffer(offer)
+        assertEquals(RecurringState.DISMISSED, db.recurring().getAll().single().state)
+        assertEquals(null, repo.onExpenseSaved(spent("Клод", null, LocalDate.of(2026, 12, 14)), "Связь и подписки", zone))
+        assertEquals(0, RecurringSummary.totals(db.recurring().getAll()).count)
     }
 
     @Test
     fun noteIsTheTitleWhenThereIsNoPlace() = runTest {
-        assertEquals("Оплата связи", repo.onExpenseSaved(spent(null, "оплата связи", today), "Связь и подписки", zone))
+        assertEquals("Оплата связи", repo.onExpenseSaved(spent(null, "оплата связи", today), "Связь и подписки", zone)?.title)
     }
 
     @Test
     fun regularCategoriesAreNotLimitedToSubscriptions() = runTest {
         val housing = db.categories().getAllWithSubs().single { it.category.name == "Жильё" }.category.id
-        assertEquals("Аренда", repo.onExpenseSaved(spent(null, "аренда", today, housing), "Жильё", zone))
+        assertEquals("Аренда", repo.onExpenseSaved(spent(null, "аренда", today, housing), "Жильё", zone)?.title)
         val loans = db.categories().getAllWithSubs().single { it.category.name == "Долги и кредиты" }.category.id
-        assertEquals("Ипотека", repo.onExpenseSaved(spent("Ипотека", null, today, loans), "Долги и кредиты", zone))
+        assertEquals("Ипотека", repo.onExpenseSaved(spent("Ипотека", null, today, loans), "Долги и кредиты", zone)?.title)
     }
 
     @Test
     fun ordinaryCategoryIsIgnoredUnlessItSaysSubscription() = runTest {
         val food = db.categories().getAllWithSubs().single { it.category.name == "Продукты" }.category.id
         assertEquals(null, repo.onExpenseSaved(spent("Пятёрочка", null, today, food), "Продукты", zone))
+        assertEquals("Подписка на журнал", repo.onExpenseSaved(spent(null, "подписка на журнал", today, food), "Продукты", zone)?.title)
         assertTrue(db.recurring().getAll().isEmpty())
-        assertEquals("Подписка на журнал", repo.onExpenseSaved(spent(null, "подписка на журнал", today, food), "Продукты", zone))
     }
 
     @Test
     fun sameDictationTwiceDoesNotDuplicateAndDismissedStaysDismissed() = runTest {
-        repo.onExpenseSaved(spent("Клод", null, today), "Связь и подписки", zone)
+        savedAndAccepted(spent("Клод", null, today), "Связь и подписки")
         assertEquals(null, repo.onExpenseSaved(spent("Клод", null, today), "Связь и подписки", zone))
         assertEquals(1, db.recurring().getAll().size)
 
@@ -211,8 +235,8 @@ class RecurringRepositoryTest {
 
     @Test
     fun nextMonthsDictationMovesTheDateInsteadOfAddingAPayment() = runTest {
-        repo.onExpenseSaved(spent("Клод", null, today), "Связь и подписки", zone)
-        // через месяц снова диктуют «Клод»: платёж один, дата уехала на следующий период
+        savedAndAccepted(spent("Клод", null, today), "Связь и подписки")
+        // через месяц снова диктуют «Клод»: платёж один, дата уехала на следующий период, спрашивать не о чем
         assertEquals(null, repo.onExpenseSaved(spent("Клод", null, LocalDate.of(2026, 12, 14)), "Связь и подписки", zone))
         val saved = db.recurring().getAll().single()
         assertEquals(LocalDate.of(2027, 1, 14).toEpochDay(), saved.nextEpochDay)
@@ -221,18 +245,18 @@ class RecurringRepositoryTest {
     @Test
     fun phraseWithoutPlaceAndNoteIsNamedBySubcategoryOrCategory() = runTest {
         // «мобильная связь 1200» и «подписка 2100»: ни места, ни заметки, только категория и подкатегория
-        assertEquals("Мобильная связь", repo.onExpenseSaved(spent(null, null, today, kopecks = 120_000), "Связь и подписки", zone, "Мобильная связь"))
-        assertEquals("Подписки", repo.onExpenseSaved(spent(null, null, today, kopecks = 210_000), "Связь и подписки", zone, "Подписки"))
+        assertEquals("Мобильная связь", savedAndAccepted(spent(null, null, today, kopecks = 120_000), "Связь и подписки", "Мобильная связь"))
+        assertEquals("Подписки", savedAndAccepted(spent(null, null, today, kopecks = 210_000), "Связь и подписки", "Подписки"))
         assertEquals(setOf("Мобильная связь", "Подписки"), db.recurring().getAll().map { it.title }.toSet())
 
         // без подкатегории — по названию категории
         val housing = db.categories().getAllWithSubs().single { it.category.name == "Жильё" }.category.id
-        assertEquals("Жильё", repo.onExpenseSaved(spent(null, null, today, housing), "Жильё", zone))
+        assertEquals("Жильё", repo.onExpenseSaved(spent(null, null, today, housing), "Жильё", zone)?.title)
     }
 
     @Test
     fun repeatedPhraseWithoutPlaceDoesNotDuplicate() = runTest {
-        repo.onExpenseSaved(spent(null, null, today, kopecks = 120_000), "Связь и подписки", zone, "Мобильная связь")
+        savedAndAccepted(spent(null, null, today, kopecks = 120_000), "Связь и подписки", "Мобильная связь")
         assertEquals(
             null,
             repo.onExpenseSaved(spent(null, null, LocalDate.of(2026, 12, 14), kopecks = 125_000), "Связь и подписки", zone, "Мобильная связь"),
@@ -252,17 +276,14 @@ class RecurringRepositoryTest {
     @Test
     fun utilitiesAreMarkedAsVaryingAndOthersAreNot() = runTest {
         val utilities = db.categories().getAllWithSubs().single { it.category.name == "Коммунальные услуги" }.category.id
-        repo.onExpenseSaved(spent(null, "квартплата", today, utilities, 650_000), "Коммунальные услуги", zone)
-        repo.onExpenseSaved(spent("Клод", null, today), "Связь и подписки", zone)
-        val byTitle = db.recurring().getAll().associateBy { it.title }
-        assertTrue(byTitle.getValue("Квартплата").amountVaries)
-        assertEquals(false, byTitle.getValue("Клод").amountVaries)
+        assertTrue(requireNotNull(repo.onExpenseSaved(spent(null, "квартплата", today, utilities, 650_000), "Коммунальные услуги", zone)).amountVaries)
+        assertEquals(false, requireNotNull(repo.onExpenseSaved(spent("Клод", null, today), "Связь и подписки", zone)).amountVaries)
     }
 
     @Test
     fun nextMonthsUtilityBillUpdatesTheEstimate() = runTest {
         val utilities = db.categories().getAllWithSubs().single { it.category.name == "Коммунальные услуги" }.category.id
-        repo.onExpenseSaved(spent(null, "квартплата", today, utilities, 650_000), "Коммунальные услуги", zone)
+        savedAndAccepted(spent(null, "квартплата", today, utilities, 650_000), "Коммунальные услуги")
         repo.onExpenseSaved(spent(null, "квартплата", LocalDate.of(2026, 12, 14), utilities, 710_000), "Коммунальные услуги", zone)
         val saved = db.recurring().getAll().single()
         assertEquals(710_000L, saved.amountKopecks)

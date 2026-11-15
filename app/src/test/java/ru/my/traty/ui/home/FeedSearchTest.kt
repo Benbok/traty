@@ -68,4 +68,35 @@ class FeedSearchTest {
         assertTrue(FeedSearch.matches(salary, "50000"))
         assertFalse(FeedSearch.matches(salary, "такси"))
     }
+
+    @Test
+    fun `слова запроса ищутся со словоформами в любом порядке`() {
+        val pills = expense(5, "Питомцы", "Ветаптека", 640_00, note = "лекарство для кошки Чуни от блох")
+        val catFood = expense(6, "Питомцы", "Корм", 900_00, note = "корм для кошки")
+        val list = listOf(pills, catFood, taxi)
+        fun ids(q: String) = list.filter { FeedSearch.matches(it, q) }.map { it.expense.id }
+        assertEquals(listOf(5L), ids("лекарство кошке"))
+        assertEquals(listOf(5L), ids("кошке лекарство"))
+        assertEquals(listOf(5L, 6L), ids("кошка"))
+        assertEquals(listOf(6L), ids("корм кошке"))
+        assertEquals(emptyList<Long>(), ids("лекарство собаке"))
+    }
+
+    @Test
+    fun `число в запросе со словом сверяется с суммой`() {
+        assertEquals(listOf(1L), find("такси 180"))
+        assertEquals(emptyList<Long>(), find("такси 2500"))
+    }
+
+    @Test
+    fun `одни знаки без букв и цифр ничего не находят`() {
+        assertEquals(emptyList<Long>(), find("₽"))
+    }
+
+    @Test
+    fun `несколько трат из одной фразы не находят друг друга по словоформам`() {
+        // В исходной фразе есть «продукты», но у трат её разобранные поля другие
+        assertEquals(emptyList<Long>(), find("продуктов"))
+        assertEquals(listOf(3L), find("бензина"))
+    }
 }

@@ -92,7 +92,10 @@ private fun CaptureScreen(vm: CaptureViewModel, onFinish: () -> Unit) {
             vm.finish()
         }
     }
-    LaunchedEffect(finish) { if (finish) onFinish() }
+    // Панель не закрывается, пока не ответили на «Добавить в Подписки?»
+    val offerVm: RecurringOfferViewModel = viewModel()
+    val offer by offerVm.offer.collectAsStateWithLifecycle()
+    LaunchedEffect(finish, offer) { if (finish && offer == null) onFinish() }
     BackHandler { vm.finish() }
 
     Box(
@@ -118,7 +121,8 @@ private fun CaptureScreen(vm: CaptureViewModel, onFinish: () -> Unit) {
         )
     }
 
-    (ui as? CaptureUi.Confirm)?.let { confirm ->
+    // После «Сохранить» окно проверки закрывается сразу, даже если панель ещё ждёт ответа про подписку
+    (ui as? CaptureUi.Confirm)?.takeIf { !finish }?.let { confirm ->
         EntryConfirmSheet(
             draft = confirm.draft,
             categories = categories,
@@ -127,4 +131,5 @@ private fun CaptureScreen(vm: CaptureViewModel, onFinish: () -> Unit) {
             onSave = { vm.save(it) },
         )
     }
+    RecurringOfferHost(visible = finish || ui !is CaptureUi.Confirm, vm = offerVm)
 }

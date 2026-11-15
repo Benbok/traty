@@ -25,6 +25,10 @@ import ru.my.traty.data.budget.BudgetDao
 import ru.my.traty.data.budget.BudgetMigrations
 import ru.my.traty.data.budget.MonthBudget
 import ru.my.traty.data.budget.MonthBudgetDao
+import ru.my.traty.data.debt.Debt
+import ru.my.traty.data.debt.DebtDao
+import ru.my.traty.data.debt.DebtMigrations
+import ru.my.traty.data.debt.DebtPayment
 import ru.my.traty.data.weekly.WeeklyMigrations
 import ru.my.traty.data.weekly.WeeklyTask
 import ru.my.traty.data.weekly.WeeklyTaskDao
@@ -71,6 +75,8 @@ object ExpenseSource {
     const val RECONCILE = "reconcile"
     /** Отмечено «списалось» у регулярного платежа. */
     const val RECURRING = "recurring"
+    /** Платёж по покупке частями (аванс, доплата, рассрочка, кредит). */
+    const val DEBT = "debt"
 }
 
 /** Откуда пришло пополнение. */
@@ -588,8 +594,8 @@ interface PendingPhraseDao {
 }
 
 @Database(
-    entities = [Expense::class, Category::class, Subcategory::class, Income::class, Reconciliation::class, Template::class, Rule::class, PendingPhrase::class, Recurring::class, Budget::class, MonthBudget::class, WeeklyTask::class],
-    version = 13,
+    entities = [Expense::class, Category::class, Subcategory::class, Income::class, Reconciliation::class, Template::class, Rule::class, PendingPhrase::class, Recurring::class, Budget::class, MonthBudget::class, WeeklyTask::class, Debt::class, DebtPayment::class],
+    version = 14,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -604,6 +610,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun budgets(): BudgetDao
     abstract fun monthBudgets(): MonthBudgetDao
     abstract fun weeklyTasks(): WeeklyTaskDao
+    abstract fun debts(): DebtDao
 
     companion object {
         val MIGRATION_2_3 = object : Migration(2, 3) {
@@ -748,7 +755,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun build(context: Context, name: String = "traty.db"): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, name)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, BudgetMigrations.MIGRATION_10_11, BudgetMigrations.MIGRATION_11_12, WeeklyMigrations.MIGRATION_12_13)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, BudgetMigrations.MIGRATION_10_11, BudgetMigrations.MIGRATION_11_12, WeeklyMigrations.MIGRATION_12_13, DebtMigrations.MIGRATION_13_14)
                 // Решение владельца: в v1 реальных данных нет — базу v1 пересоздаём.
                 // Для версий 2+ — только Migration(n, n+1).
                 .fallbackToDestructiveMigrationFrom(true, 1)

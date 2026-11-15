@@ -37,6 +37,7 @@ import ru.my.traty.ui.charts.ChartsScreen
 import ru.my.traty.ui.designsystem.components.TratySnackbar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.capture.EntryConfirmSheet
+import ru.my.traty.ui.capture.RecurringOfferHost
 import ru.my.traty.ui.feedback.FeedbackScreen
 import ru.my.traty.ui.home.EditExpenseScreen
 import ru.my.traty.ui.home.HomeScreen
@@ -288,6 +289,9 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             onSave = { vm.saveEntry(it) },
         )
     }
+
+    // «Добавить в Подписки?» — после окна проверки и вопроса о правиле, чтобы диалоги не накладывались
+    RecurringOfferHost(visible = vm.confirm == null && vm.ruleOffer == null)
 
     vm.ruleOffer?.let { offer ->
         androidx.compose.material3.AlertDialog(

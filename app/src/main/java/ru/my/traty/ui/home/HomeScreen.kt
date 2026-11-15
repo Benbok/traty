@@ -4,10 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -43,8 +41,6 @@ import ru.my.traty.data.Income
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.capture.MicButton
-import ru.my.traty.ui.designsystem.components.TratyButton
-import ru.my.traty.ui.designsystem.components.TratyEmptyState
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyMonthPicker
@@ -55,6 +51,7 @@ import ru.my.traty.ui.weekly.WeeklyTasksHomeCard
 import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
+import ru.my.traty.ui.income.DeleteIncomeConfirmDialog
 import ru.my.traty.ui.income.IncomeDetailsDialog
 import ru.my.traty.ui.income.IncomeViewModel
 import java.time.Instant
@@ -76,6 +73,7 @@ fun HomeScreen(
     onStartRecordingHandled: () -> Unit = {},
     onOpenWeekly: () -> Unit = {},
     incomeVm: IncomeViewModel = viewModel(),
+    searchVm: FeedSearchViewModel = viewModel(),
 ) {
     val showReconcileCard by prompt.showCard.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { prompt.refresh() }
@@ -94,6 +92,7 @@ fun HomeScreen(
     var searchActive by remember { mutableStateOf(false) }
     var expenseToDelete by remember { mutableStateOf<ExpenseWithCategory?>(null) }
     var incomeOpened by remember { mutableStateOf<Income?>(null) }
+    var incomeToDelete by remember { mutableStateOf<Income?>(null) }
 
     // «Назад» сначала закрывает поиск, потом сбрасывает выбранный день, и только потом выходит из приложения
     BackHandler(enabled = searchActive) {
@@ -129,6 +128,10 @@ fun HomeScreen(
         }
         base.filter { FeedSearch.matches(it, searchQuery) }
     }
+
+    // Поиск в остальных периодах: «холодильник» мог быть куплен давно
+    LaunchedEffect(searchQuery, period) { searchVm.update(searchQuery, period) }
+    val elsewhere by searchVm.elsewhere.collectAsStateWithLifecycle()
 
     // Единая лента: траты + доходы, отсортированная по времени
     val labels by vm.labels.collectAsStateWithLifecycle()
@@ -283,30 +286,9 @@ fun HomeScreen(
                     )
                 }
             }
-            if (feed.isEmpty()) {
+            if (feed.isEmpty() && elsewhere.isEmpty()) {
                 item(key = "empty", contentType = "empty") {
-                    if (selectedDate != null) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(top = TratyTheme.spacing.xl),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            TratyEmptyState(
-                                icon = Icons.AutoMirrored.Filled.ReceiptLong,
-                                title = "За ${formatDate(selectedDate!!)} записей нет",
-                                description = "Нажмите «Показать весь период», чтобы увидеть все записи периода.",
-                            )
-                            Spacer(Modifier.height(TratyTheme.spacing.md))
-                            TratyButton(onClick = vm::clearSelectedDate) {
-                                Text("Показать весь период")
-                            }
-                        }
-                    } else {
-                        TratyEmptyState(
-                            icon = Icons.AutoMirrored.Filled.ReceiptLong,
-                            title = "Трат пока нет",
-                            description = "Нажмите микрофон внизу и скажите, например: «кофе 250 и такси 400».",
-                        )
-                    }
+                    FeedEmptyState(selectedDate = selectedDate, searchQuery = searchQuery, onShowAll = vm::clearSelectedDate)
                 }
             }
             // contentType: при прокрутке LazyColumn переиспользует уже собранные строки того же типа
@@ -323,9 +305,10 @@ fun HomeScreen(
                         )
                     }
                     is FeedItem.IncomeItem -> {
-                        IncomeRow(
+                        SwipeableIncomeRow(
                             income = item.data,
                             onClick = { incomeOpened = item.data },
+                            onDelete = { incomeToDelete = item.data },
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -335,6 +318,13 @@ fun HomeScreen(
                     modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg),
                 )
             }
+            searchElsewhere(
+                groups = elsewhere,
+                startDay = settings.periodStartDay,
+                currentEmpty = feed.isEmpty(),
+                onExpenseClick = { vm.editing = it },
+                onIncomeClick = { incomeOpened = it },
+            )
         }
 
         MicButton(
@@ -364,6 +354,17 @@ fun HomeScreen(
                 incomeOpened = null
             },
             onDismiss = { incomeOpened = null },
+        )
+    }
+
+    incomeToDelete?.let { inc ->
+        DeleteIncomeConfirmDialog(
+            income = inc,
+            onConfirm = {
+                incomeVm.delete(inc)
+                incomeToDelete = null
+            },
+            onDismiss = { incomeToDelete = null },
         )
     }
 
