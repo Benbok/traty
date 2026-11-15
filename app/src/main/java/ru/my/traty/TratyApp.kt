@@ -16,6 +16,7 @@ import ru.my.traty.capture.QuickEntry
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.CategoryRepository
+import ru.my.traty.data.IncomeRepository
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.ReconciliationRepository
 import ru.my.traty.data.budget.BudgetAlertWatcher
@@ -96,6 +97,7 @@ class AppContainer(
     val categories = CategoryRepository(db)
     val reconciliations = ReconciliationRepository(db, categories)
     val onboarding = OnboardingRepository(db, settings)
+    val incomes = IncomeRepository(db)
     val quickEntry = QuickEntry(db, categories, settings, clientProvider = llm)
     val budgets = BudgetRepository(db)
     val weeklyTasks = WeeklyTaskRepository(db)

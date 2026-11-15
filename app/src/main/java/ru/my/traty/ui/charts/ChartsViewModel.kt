@@ -134,7 +134,7 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteIncome(income: Income) {
         viewModelScope.launch {
-            if (income.isUserEditable) c.db.incomes().delete(income)
+            c.incomes.delete(income)
         }
     }
 

@@ -1,5 +1,6 @@
 package ru.my.traty.ui.recurring
 
+import androidx.activity.compose.BackHandler
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -71,6 +72,8 @@ import java.time.LocalDate
 /** Подписки и регулярные платежи: итоги, предложения из истории трат, список платежей. */
 @Composable
 fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
+    // Системная «Назад» возвращает на прошлый экран, а не закрывает приложение
+    BackHandler(onBack = onBack)
     val payments by vm.items.collectAsStateWithLifecycle()
     val totals by vm.totals.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()

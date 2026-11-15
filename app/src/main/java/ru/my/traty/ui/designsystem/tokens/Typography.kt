@@ -97,9 +97,10 @@ data class TratyTypography(
     val labelSmall: TextStyle = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 10.sp,
-        lineHeight = 14.sp,
-        letterSpacing = 0.5.sp,
+        // 11sp: 10sp на телефоне читается с трудом, а этим стилем подписаны суммы и даты
+        fontSize = 11.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.2.sp,
     ),
 )
 

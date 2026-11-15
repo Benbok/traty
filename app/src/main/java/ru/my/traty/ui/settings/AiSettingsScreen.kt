@@ -1,5 +1,6 @@
 package ru.my.traty.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -57,6 +58,8 @@ fun AiSettingsScreen(
     vm: MainViewModel,
     onBack: () -> Unit,
 ) {
+    // Системная «Назад» возвращает на прошлый экран, а не закрывает приложение
+    BackHandler(onBack = onBack)
     val saved by vm.settings.collectAsStateWithLifecycle()
     var s by remember(saved) { mutableStateOf<AppSettings>(saved) }
     val snackbar = remember { SnackbarHostState() }
