@@ -1,8 +1,14 @@
 package ru.my.traty.ui.budget
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -30,7 +38,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -209,6 +221,8 @@ fun PlanProgressRow(
  * Карточка плана периода для Статистики и Трат: большая сумма «потрачено из плана», общая полоса
  * с отметкой «сегодня», остаток и «в день», затем категории (сначала самые тревожные).
  * [compact] (Траты): не больше [COMPACT_ROWS] категорий, у спокойных — без подписи.
+ * Если передан [onToggleDetails], категории сворачиваются: в свёрнутом виде видны только общая
+ * сумма, полоса и одна строка-переключатель «N категорий · подробнее», а список открывается по нажатию.
  */
 @Composable
 fun PlanSummaryCard(
@@ -217,8 +231,12 @@ fun PlanSummaryCard(
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    detailsExpanded: Boolean = true,
+    onToggleDetails: (() -> Unit)? = null,
     today: LocalDate = LocalDate.now(),
 ) {
+    val collapsible = onToggleDetails != null
+    val showDetails = !collapsible || detailsExpanded
     val totals = planTotals(items)
     val o = PlanOverview.of(totals.planned, totals.spent, period, today)
     val marker = todayMarker(period, today)
@@ -284,7 +302,7 @@ fun PlanSummaryCard(
                     )
                 }
             }
-            if (troubled == 0 && items.isNotEmpty()) {
+            if (!collapsible && troubled == 0 && items.isNotEmpty()) {
                 Spacer(Modifier.height(TratyTheme.spacing.xxs))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     StatusIcon(PlanStatus.OK)
@@ -299,43 +317,120 @@ fun PlanSummaryCard(
 
             Spacer(Modifier.height(TratyTheme.spacing.md))
             HorizontalDivider(color = TratyTheme.colors.borderSubtle)
-            shown.forEach { item ->
-                Spacer(Modifier.height(TratyTheme.spacing.md))
-                PlanProgressRow(
-                    item,
-                    period,
-                    today = today,
-                    showStatus = !compact || item.progress.status != PlanStatus.OK,
+            if (onToggleDetails != null && items.isNotEmpty()) {
+                PlanDetailsToggle(
+                    count = items.size,
+                    troubled = troubled,
+                    expanded = detailsExpanded,
+                    onClick = onToggleDetails,
                 )
             }
-            if (hidden > 0) {
-                Spacer(Modifier.height(TratyTheme.spacing.sm))
-                Text(
-                    "Ещё $hidden ${categoriesCountWord(hidden)} · весь план",
-                    style = TratyTheme.typography.labelMedium,
-                    color = TratyTheme.colors.primary,
-                )
-            }
-            if (marker != null) {
-                Spacer(Modifier.height(TratyTheme.spacing.sm))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .width(2.dp)
-                            .height(10.dp)
-                            .background(TratyTheme.colors.onSurface.copy(alpha = 0.55f)),
-                    )
-                    Spacer(Modifier.width(TratyTheme.spacing.xs))
-                    Text(
-                        "сегодня — столько можно было потратить при ровном темпе",
-                        style = TratyTheme.typography.labelSmall,
-                        color = TratyTheme.colors.onSurfaceVariant,
-                    )
+            AnimatedVisibility(
+                visible = showDetails,
+                enter = expandVertically(tween(250, easing = FastOutSlowInEasing)) + fadeIn(tween(250)),
+                exit = shrinkVertically(tween(200, easing = FastOutSlowInEasing)) + fadeOut(tween(150)),
+            ) {
+                Column(Modifier.fillMaxWidth()) {
+                    shown.forEach { item ->
+                        Spacer(Modifier.height(TratyTheme.spacing.md))
+                        PlanProgressRow(
+                            item,
+                            period,
+                            today = today,
+                            showStatus = !compact || item.progress.status != PlanStatus.OK,
+                        )
+                    }
+                    if (hidden > 0) {
+                        Spacer(Modifier.height(TratyTheme.spacing.sm))
+                        Text(
+                            "Ещё $hidden ${categoriesCountWord(hidden)} · весь план",
+                            style = TratyTheme.typography.labelMedium,
+                            color = TratyTheme.colors.primary,
+                        )
+                    }
+                    if (marker != null) {
+                        Spacer(Modifier.height(TratyTheme.spacing.sm))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier
+                                    .width(2.dp)
+                                    .height(10.dp)
+                                    .background(TratyTheme.colors.onSurface.copy(alpha = 0.55f)),
+                            )
+                            Spacer(Modifier.width(TratyTheme.spacing.xs))
+                            Text(
+                                "сегодня — столько можно было потратить при ровном темпе",
+                                style = TratyTheme.typography.labelSmall,
+                                color = TratyTheme.colors.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 }
+
+/**
+ * Строка-переключатель под общей полосой: сколько категорий в плане и есть ли тревожные,
+ * стрелка поворачивается при раскрытии. Нажатие не открывает экран плана, а только сворачивает список.
+ */
+@Composable
+private fun PlanDetailsToggle(count: Int, troubled: Int, expanded: Boolean, onClick: () -> Unit) {
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+        label = "planToggleArrow",
+    )
+    val state = if (expanded) "развёрнуто" else "свёрнуто"
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 44.dp)
+            .clip(TratyTheme.shapes.pill)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { stateDescription = state }
+            .padding(top = TratyTheme.spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StatusIcon(if (troubled == 0) PlanStatus.OK else PlanStatus.NEAR)
+        Spacer(Modifier.width(TratyTheme.spacing.xs))
+        Text(
+            planDetailsSummary(count, troubled),
+            style = TratyTheme.typography.bodySmall,
+            color = if (troubled == 0) TratyTheme.colors.onSurfaceVariant else TratyTheme.colors.warning,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            planDetailsAction(expanded),
+            style = TratyTheme.typography.labelMedium,
+            color = TratyTheme.colors.primary,
+        )
+        Icon(
+            Icons.Filled.KeyboardArrowDown,
+            contentDescription = null,
+            tint = TratyTheme.colors.primary,
+            modifier = Modifier.size(20.dp).rotate(rotation),
+        )
+    }
+}
+
+/** Сводка в свёрнутой карточке: «Все 4 категории по плану», «2 из 5 категорий требуют внимания». */
+internal fun planDetailsSummary(count: Int, troubled: Int): String = when {
+    count <= 0 -> "Категорий в плане нет"
+    troubled <= 0 -> if (count == 1) "Категория идёт по плану" else "Все $count ${categoriesCountWord(count)} по плану"
+    count == 1 -> "Категория требует внимания"
+    troubled == 1 -> "1 из $count ${categoriesNounGenitive(count)} требует внимания"
+    else -> "$troubled из $count ${categoriesNounGenitive(count)} требуют внимания"
+}
+
+/** Подпись кнопки разворота. */
+internal fun planDetailsAction(expanded: Boolean): String = if (expanded) "Свернуть" else "Подробнее"
+
+/** «из 1 категории», «из 5 категорий» (родительный падеж после «из»). */
+internal fun categoriesNounGenitive(n: Int): String = if (n % 10 == 1 && n % 100 != 11) "категории" else "категорий"
 
 /** В компактной карточке (Траты) — не больше стольких категорий. */
 const val COMPACT_ROWS = 3
