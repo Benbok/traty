@@ -20,6 +20,8 @@ import ru.my.traty.assistant.AssistantContext
 import ru.my.traty.assistant.DebtAction
 import ru.my.traty.assistant.DebtChange
 import ru.my.traty.assistant.DebtWithPaid
+import ru.my.traty.assistant.ExpenseAction
+import ru.my.traty.assistant.ExpenseChange
 import ru.my.traty.assistant.AssistantData
 import ru.my.traty.assistant.AssistantFallback
 import ru.my.traty.assistant.Balance
@@ -33,6 +35,8 @@ import ru.my.traty.assistant.QuestionRules
 import ru.my.traty.assistant.SubAction
 import ru.my.traty.assistant.SubscriptionChange
 import ru.my.traty.data.AppSettings
+import ru.my.traty.data.ExpenseEditResult
+import ru.my.traty.data.ExpenseMove
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.LlmProvider
 import ru.my.traty.data.selectable
@@ -69,6 +73,10 @@ data class ChatMessage(
     val debtChanges: List<DebtChange> = emptyList(),
     /** Сколько изменений покупок уже выполнено; null — ещё нет. */
     val debtsApplied: Int? = null,
+    /** Предложенные удаления и переносы трат — выполняются по кнопке и возвращаются кнопкой «Вернуть». */
+    val expenseChanges: List<ExpenseChange> = emptyList(),
+    val expensesApplied: Int? = null,
+    val expensesUndone: Boolean = false,
 )
 
 /**
@@ -133,7 +141,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 val offline = aiDown != null
                 val offlineReason = aiDown?.message
                 val previous = history.lastOrNull()?.let { AssistantQueries.decode(it.queryJson) }
-                val query = QuestionRules.resolve(question, fromAi, guessed, today, s.periodStartDay, previous)
+                val query = QuestionRules.resolve(question, fromAi, guessed, today, s.periodStartDay, previous, categories)
                 history += AssistantTurn(question, AssistantQueries.encode(query))
                 while (history.size > AssistantPrompts.HISTORY) history.removeAt(0)
 
@@ -169,6 +177,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     planMonth = data.planMonth,
                     subscriptionChanges = data.subscriptionChanges,
                     debtChanges = data.debtChanges,
+                    expenseChanges = data.expenseChanges,
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -273,6 +282,50 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Что можно вернуть кнопкой «Вернуть»: по номеру сообщения. Живёт, пока открыт экран. */
+    private val undoable = HashMap<Long, ExpenseEditResult>()
+
+    /** Удаляет или переносит отмеченные траты одним пакетом. Если что-то пошло не так, не меняется ничего. */
+    fun applyExpenses(messageId: Long, selected: List<ExpenseChange>) {
+        if (selected.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val result = when (selected.first().action) {
+                    ExpenseAction.DELETE -> c.expenseEdits.delete(selected.map { it.id })
+                    ExpenseAction.MOVE -> c.expenseEdits.move(
+                        selected.mapNotNull { ch ->
+                            ch.toCategoryId?.let { ExpenseMove(ch.id, it, ch.toSubcategoryId, ch.fromCategoryId, ch.fromSubcategoryId) }
+                        },
+                    )
+                }
+                undoable[messageId] = result
+                val i = messages.indexOfFirst { it.id == messageId }
+                if (i >= 0) messages[i] = messages[i].copy(expensesApplied = result.done)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                messages += ChatMessage(nextId++, false, "Не удалось изменить траты, ничего не поменялось. Попробуйте ещё раз.", error = true)
+            }
+        }
+    }
+
+    /** «Вернуть»: удалённые траты возвращаются, перенесённые встают на прежнее место. */
+    fun undoExpenses(messageId: Long) {
+        val result = undoable.remove(messageId) ?: return
+        viewModelScope.launch {
+            try {
+                c.expenseEdits.undo(result)
+                val i = messages.indexOfFirst { it.id == messageId }
+                if (i >= 0) messages[i] = messages[i].copy(expensesUndone = true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                undoable[messageId] = result
+                messages += ChatMessage(nextId++, false, "Не удалось вернуть траты. Попробуйте ещё раз.", error = true)
+            }
+        }
+    }
+
     /** Подкатегория из предложения ИИ: создаём, а если её уже успели завести — берём существующую. */
     private suspend fun subcategoryId(categoryId: Long, name: String): Long {
         c.db.categories().getActiveWithSubs().firstOrNull { it.category.id == categoryId }
@@ -292,5 +345,6 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     fun clear() {
         messages.clear()
         history.clear()
+        undoable.clear()
     }
 }

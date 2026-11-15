@@ -49,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import ru.my.traty.assistant.PlanProposal
 import ru.my.traty.assistant.DebtChange
+import ru.my.traty.assistant.ExpenseChange
 import ru.my.traty.assistant.SubscriptionChange
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -157,6 +158,8 @@ fun AssistantScreen(
                     onApplyPlan = { vm.applyPlan(m.id, it) },
                     onApplySubscriptions = { vm.applySubscriptions(m.id, it) },
                     onApplyDebts = { vm.applyDebts(m.id, it) },
+                    onApplyExpenses = { vm.applyExpenses(m.id, it) },
+                    onUndoExpenses = { vm.undoExpenses(m.id) },
                     onOpenBudget = onOpenBudget,
                     onOpenRecurring = onOpenRecurring,
                     onOpenDebts = onOpenDebts,
@@ -241,6 +244,8 @@ private fun AssistantBubble(
     onApplyPlan: (List<PlanProposal>) -> Unit,
     onApplySubscriptions: (List<SubscriptionChange>) -> Unit,
     onApplyDebts: (List<DebtChange>) -> Unit,
+    onApplyExpenses: (List<ExpenseChange>) -> Unit,
+    onUndoExpenses: () -> Unit,
     onOpenBudget: () -> Unit,
     onOpenRecurring: () -> Unit,
     onOpenDebts: () -> Unit,
@@ -274,6 +279,10 @@ private fun AssistantBubble(
             if (m.debtChanges.isNotEmpty()) {
                 Spacer(Modifier.height(TratyTheme.spacing.sm))
                 DebtChanges(m, onApply = onApplyDebts, onOpenDebts = onOpenDebts)
+            }
+            if (m.expenseChanges.isNotEmpty()) {
+                Spacer(Modifier.height(TratyTheme.spacing.sm))
+                ExpenseChanges(m, onApply = onApplyExpenses, onUndo = onUndoExpenses)
             }
             if (m.expenseIds.isNotEmpty() || m.sentFacts != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {

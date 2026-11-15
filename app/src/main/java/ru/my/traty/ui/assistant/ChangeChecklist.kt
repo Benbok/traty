@@ -36,6 +36,8 @@ internal data class ChangeTexts(
     val open: String,
     /** Подсказка под итогом, например «отпишитесь и в самом сервисе». */
     val afterNote: String? = null,
+    /** Кнопка «Вернуть» после выполнения; null — вернуть нельзя. */
+    val undo: String? = null,
 )
 
 /**
@@ -50,6 +52,9 @@ internal fun ChangeChecklist(
     texts: ChangeTexts,
     onApply: (List<Int>) -> Unit,
     onOpen: () -> Unit,
+    /** Изменения уже возвращены кнопкой «Вернуть». */
+    undone: Boolean = false,
+    onUndo: (() -> Unit)? = null,
 ) {
     var selected by remember(key) { mutableStateOf(rows.indices.filter { rows[it].preselected }) }
     Column(
@@ -69,10 +74,17 @@ internal fun ChangeChecklist(
         TratyButton(onClick = { onApply(selected.sorted()) }, enabled = selected.isNotEmpty()) {
             Text(if (rows.size == 1) texts.apply else "${texts.apply} (${selected.size})")
         }
+    } else if (undone) {
+        Text("↩ Возвращено", style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
     } else {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("✓ ${texts.done}: $applied", style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.income, modifier = Modifier.weight(1f))
-            TratyTextButton(onClick = onOpen) { Text(texts.open, style = TratyTheme.typography.labelMedium) }
+            if (texts.undo != null && onUndo != null) {
+                TratyTextButton(onClick = onUndo) { Text(texts.undo, style = TratyTheme.typography.labelMedium) }
+            }
+            if (texts.open.isNotEmpty()) {
+                TratyTextButton(onClick = onOpen) { Text(texts.open, style = TratyTheme.typography.labelMedium) }
+            }
         }
         texts.afterNote?.let {
             Text(it, style = TratyTheme.typography.labelSmall, color = TratyTheme.colors.onSurfaceVariant)
