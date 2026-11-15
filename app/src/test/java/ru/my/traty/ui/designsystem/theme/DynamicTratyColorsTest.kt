@@ -19,6 +19,7 @@ class DynamicTratyColorsTest {
         assertEquals(wallpaperBlue, colors.primary)
         assertEquals(wallpaperSurface, colors.surface)
         assertEquals(scheme.outlineVariant, colors.border)
+        assertEquals(scheme.outline, colors.outline)
     }
 
     @Test

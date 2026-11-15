@@ -1,5 +1,6 @@
 package ru.my.traty.ui.home
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,7 +22,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.InputChipDefaults
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +39,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.ui.reconcile.ReconcileCard
 import ru.my.traty.ui.reconcile.ReconcilePromptViewModel
 import ru.my.traty.data.ExpenseWithCategory
+import ru.my.traty.data.Income
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.capture.MicButton
@@ -54,6 +55,8 @@ import ru.my.traty.ui.weekly.WeeklyTasksHomeCard
 import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
+import ru.my.traty.ui.income.IncomeDetailsDialog
+import ru.my.traty.ui.income.IncomeViewModel
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -72,6 +75,7 @@ fun HomeScreen(
     startRecording: Boolean = false,
     onStartRecordingHandled: () -> Unit = {},
     onOpenWeekly: () -> Unit = {},
+    incomeVm: IncomeViewModel = viewModel(),
 ) {
     val showReconcileCard by prompt.showCard.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { prompt.refresh() }
@@ -89,6 +93,14 @@ fun HomeScreen(
     var searchQuery by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
     var expenseToDelete by remember { mutableStateOf<ExpenseWithCategory?>(null) }
+    var incomeOpened by remember { mutableStateOf<Income?>(null) }
+
+    // «Назад» сначала закрывает поиск, потом сбрасывает выбранный день, и только потом выходит из приложения
+    BackHandler(enabled = searchActive) {
+        searchActive = false
+        searchQuery = ""
+    }
+    BackHandler(enabled = !searchActive && selectedDate != null) { vm.clearSelectedDate() }
 
     val displayedExpenses = remember(expenses, selectedDate, searchQuery) {
         val base = if (selectedDate == null) {
@@ -149,40 +161,7 @@ fun HomeScreen(
                 )
             },
             content = if (searchActive) {
-                {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = {
-                            Text(
-                                text = "Поиск по тратам…",
-                                style = TratyTheme.typography.bodyMedium,
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                androidx.compose.material3.IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Close,
-                                        contentDescription = "Очистить",
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = TratyTheme.shapes.small,
-                        textStyle = TratyTheme.typography.bodyMedium,
-                    )
-                }
+                { FeedSearchField(query = searchQuery, onQueryChange = { searchQuery = it }) }
             } else null,
         )
 
@@ -273,33 +252,7 @@ fun HomeScreen(
             // Шапка «потрачено / пополнено / баланс»
             if (totalIncome > 0 || totalExpense > 0) {
                 item(key = "balance-header", contentType = "balance-header") {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.sm),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Расходы", style = TratyTheme.typography.labelSmall, color = TratyTheme.colors.onSurfaceVariant)
-                            Text(formatRub(totalExpense), style = TratyTheme.typography.titleSmall, color = TratyTheme.colors.expense)
-                        }
-                        if (totalIncome > 0) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Доходы", style = TratyTheme.typography.labelSmall, color = TratyTheme.colors.onSurfaceVariant)
-                                Text("+${formatRub(totalIncome)}", style = TratyTheme.typography.titleSmall, color = TratyTheme.colors.income)
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Баланс", style = TratyTheme.typography.labelSmall, color = TratyTheme.colors.onSurfaceVariant)
-                                val balance = totalIncome - totalExpense
-                                val balColor = if (balance >= 0) TratyTheme.colors.income else TratyTheme.colors.expense
-                                Text(
-                                    (if (balance >= 0) "+" else "") + formatRub(kotlin.math.abs(balance)),
-                                    style = TratyTheme.typography.titleSmall,
-                                    color = balColor,
-                                )
-                            }
-                        }
-                    }
+                    BalanceSummaryRow(totalExpense = totalExpense, totalIncome = totalIncome)
                 }
             }
             // План трат — за весь период, поэтому при фильтре по дню или поиске не показываем
@@ -367,7 +320,7 @@ fun HomeScreen(
                     is FeedItem.IncomeItem -> {
                         IncomeRow(
                             income = item.data,
-                            onClick = { /* TODO: редактирование дохода */ },
+                            onClick = { incomeOpened = item.data },
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -395,6 +348,17 @@ fun HomeScreen(
                 showDatePicker = false
             },
             onDismiss = { showDatePicker = false },
+        )
+    }
+
+    incomeOpened?.let { inc ->
+        IncomeDetailsDialog(
+            income = inc,
+            onDelete = {
+                incomeVm.delete(inc)
+                incomeOpened = null
+            },
+            onDismiss = { incomeOpened = null },
         )
     }
 

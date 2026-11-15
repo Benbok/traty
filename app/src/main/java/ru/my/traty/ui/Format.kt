@@ -22,6 +22,22 @@ fun formatRubSigned(kopecks: Long): String {
     return prefix + formatRub(kopecks)
 }
 
+/**
+ * Русское склонение после числа: pluralRu(1, "трата", "траты", "трат") = «трата»,
+ * 3 → «траты», 5 и 11–14 → «трат». Знак числа не важен.
+ */
+fun pluralRu(n: Long, one: String, few: String, many: String): String {
+    val abs = kotlin.math.abs(n)
+    val lastTwo = abs % 100
+    val last = abs % 10
+    return when {
+        lastTwo in 11..14 -> many
+        last == 1L -> one
+        last in 2..4 -> few
+        else -> many
+    }
+}
+
 fun formatMonth(m: YearMonth): String =
     m.month.getDisplayName(TextStyle.FULL_STANDALONE, RU).replaceFirstChar { it.uppercase() } + " " + m.year
 

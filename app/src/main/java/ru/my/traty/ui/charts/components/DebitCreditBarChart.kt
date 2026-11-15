@@ -65,7 +65,7 @@ fun DebitCreditBarChart(
             ) {
                 Column {
                     Text(
-                        text = "Дебет vs Кредит",
+                        text = "Доходы и траты",
                         style = TratyTheme.typography.titleMedium,
                         color = TratyTheme.colors.onSurface,
                     )
@@ -78,9 +78,9 @@ fun DebitCreditBarChart(
 
                 // Легенда
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    LegendItem(color = debitColor, label = "Дебет")
+                    LegendItem(color = debitColor, label = "Доходы")
                     Spacer(Modifier.width(TratyTheme.spacing.md))
-                    LegendItem(color = creditColor, label = "Кредит")
+                    LegendItem(color = creditColor, label = "Траты")
                 }
             }
 
@@ -107,13 +107,13 @@ fun DebitCreditBarChart(
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md)) {
                             Text(
-                                text = "Дебет: +${formatRub(active.debitKopecks)}",
+                                text = "Доходы: +${formatRub(active.debitKopecks)}",
                                 style = TratyTheme.typography.labelSmall,
                                 color = debitColor,
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
-                                text = "Кредит: ${formatRub(active.creditKopecks)}",
+                                text = "Траты: ${formatRub(active.creditKopecks)}",
                                 style = TratyTheme.typography.labelSmall,
                                 color = creditColor,
                                 fontWeight = FontWeight.Bold,

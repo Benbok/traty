@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.ShowChart
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,7 +42,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.data.Income
 import ru.my.traty.data.Places
-import ru.my.traty.data.isUserEditable
 import ru.my.traty.ui.charts.components.BalanceAreaChart
 import ru.my.traty.ui.charts.components.ChartDateCard
 import ru.my.traty.ui.charts.components.ChartKpiCard
@@ -61,6 +59,7 @@ import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
+import ru.my.traty.ui.income.IncomeDetailsDialog
 import ru.my.traty.ui.formatTime
 import kotlin.math.roundToInt
 
@@ -160,7 +159,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                             )
                             Spacer(Modifier.width(TratyTheme.spacing.xs))
                             Text(
-                                text = "Структура расходов (Кредит)",
+                                text = "На что ушли деньги",
                                 style = TratyTheme.typography.titleMedium,
                             )
                         }
@@ -259,7 +258,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                 ) {
                     Column(Modifier.padding(TratyTheme.spacing.md)) {
                         Text(
-                            text = "Поступления периода (Дебет)",
+                            text = "Доходы за период",
                             style = TratyTheme.typography.titleMedium,
                         )
                         Spacer(Modifier.height(TratyTheme.spacing.sm))
@@ -315,41 +314,13 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
     }
 
     incomeToDelete?.let { inc ->
-        AlertDialog(
-            onDismissRequest = { incomeToDelete = null },
-            shape = TratyTheme.shapes.large,
-            containerColor = TratyTheme.colors.surface,
-            title = { Text("Удалить доход?", style = TratyTheme.typography.titleMedium) },
-            text = {
-                Text(
-                    "${inc.source}: +${formatRub(inc.amountKopecks)}\n${inc.note ?: ""}",
-                    style = TratyTheme.typography.bodyMedium,
-                )
+        IncomeDetailsDialog(
+            income = inc,
+            onDelete = {
+                vm.deleteIncome(inc)
+                incomeToDelete = null
             },
-            confirmButton = {
-                if (inc.isUserEditable) {
-                    TratyTextButton(
-                        onClick = {
-                            vm.deleteIncome(inc)
-                            incomeToDelete = null
-                        },
-                        contentColor = TratyTheme.colors.expense,
-                    ) {
-                        Text("Удалить")
-                    }
-                } else {
-                    Text(
-                        "Запись сверки",
-                        style = TratyTheme.typography.labelLarge,
-                        color = TratyTheme.colors.onSurfaceVariant,
-                    )
-                }
-            },
-            dismissButton = {
-                TratyTextButton(onClick = { incomeToDelete = null }) {
-                    Text("Отмена")
-                }
-            },
+            onDismiss = { incomeToDelete = null },
         )
     }
 }

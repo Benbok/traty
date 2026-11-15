@@ -1,5 +1,6 @@
 package ru.my.traty.ui.budget
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -56,6 +57,8 @@ private data class PlanEdit(val key: PlanKey?, val amountKopecks: Long, val repe
 /** Настройки → «План трат»: лимиты по категориям и подкатегориям на расчётный месяц. */
 @Composable
 fun BudgetScreen(onBack: () -> Unit, onOpenWeekly: () -> Unit = {}, vm: BudgetViewModel = viewModel()) {
+    // Системная «Назад» возвращает на прошлый экран, а не закрывает приложение
+    BackHandler(onBack = onBack)
     val period by vm.period.collectAsStateWithLifecycle()
     val startDay by vm.startDay.collectAsStateWithLifecycle()
     val plans by vm.items.collectAsStateWithLifecycle()

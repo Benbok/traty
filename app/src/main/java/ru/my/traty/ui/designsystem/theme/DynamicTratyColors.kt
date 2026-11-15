@@ -25,4 +25,5 @@ internal fun TratyColors.withSystemColors(scheme: ColorScheme): TratyColors = co
     surfaceContainerHigh = scheme.surfaceContainerHigh,
     border = scheme.outlineVariant,
     borderSubtle = scheme.surfaceContainerHigh,
+    outline = scheme.outline,
 )
