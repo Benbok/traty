@@ -55,6 +55,7 @@ import ru.my.traty.ui.weekly.WeeklyTasksHomeCard
 import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
+import ru.my.traty.ui.income.DeleteIncomeConfirmDialog
 import ru.my.traty.ui.income.IncomeDetailsDialog
 import ru.my.traty.ui.income.IncomeViewModel
 import java.time.Instant
@@ -94,6 +95,7 @@ fun HomeScreen(
     var searchActive by remember { mutableStateOf(false) }
     var expenseToDelete by remember { mutableStateOf<ExpenseWithCategory?>(null) }
     var incomeOpened by remember { mutableStateOf<Income?>(null) }
+    var incomeToDelete by remember { mutableStateOf<Income?>(null) }
 
     // «Назад» сначала закрывает поиск, потом сбрасывает выбранный день, и только потом выходит из приложения
     BackHandler(enabled = searchActive) {
@@ -323,9 +325,10 @@ fun HomeScreen(
                         )
                     }
                     is FeedItem.IncomeItem -> {
-                        IncomeRow(
+                        SwipeableIncomeRow(
                             income = item.data,
                             onClick = { incomeOpened = item.data },
+                            onDelete = { incomeToDelete = item.data },
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -364,6 +367,17 @@ fun HomeScreen(
                 incomeOpened = null
             },
             onDismiss = { incomeOpened = null },
+        )
+    }
+
+    incomeToDelete?.let { inc ->
+        DeleteIncomeConfirmDialog(
+            income = inc,
+            onConfirm = {
+                incomeVm.delete(inc)
+                incomeToDelete = null
+            },
+            onDismiss = { incomeToDelete = null },
         )
     }
 
