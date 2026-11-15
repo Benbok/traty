@@ -321,6 +321,8 @@ fun SettingsScreen(
             }
         }
 
+        UpdateSettingsCard()
+
         FeedbackSettingsCard(onOpen = onOpenFeedback)
     }
 }

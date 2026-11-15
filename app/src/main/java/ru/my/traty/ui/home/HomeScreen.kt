@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -54,6 +55,8 @@ import ru.my.traty.ui.formatRub
 import ru.my.traty.ui.income.DeleteIncomeConfirmDialog
 import ru.my.traty.ui.income.IncomeDetailsDialog
 import ru.my.traty.ui.income.IncomeViewModel
+import ru.my.traty.ui.update.UpdateBanner
+import ru.my.traty.ui.update.UpdateViewModel
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -74,7 +77,10 @@ fun HomeScreen(
     onOpenWeekly: () -> Unit = {},
     incomeVm: IncomeViewModel = viewModel(),
     searchVm: FeedSearchViewModel = viewModel(),
+    updateVm: UpdateViewModel = viewModel(),
 ) {
+    val update by updateVm.available.collectAsStateWithLifecycle()
+    val uriHandler = LocalUriHandler.current
     val showReconcileCard by prompt.showCard.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { prompt.refresh() }
     val expenses by vm.expenses.collectAsStateWithLifecycle()
@@ -228,6 +234,16 @@ fun HomeScreen(
         }
 
         LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+            update?.let { u ->
+                item(key = "update-banner", contentType = "update-banner") {
+                    UpdateBanner(
+                        version = u.version,
+                        installedVersion = updateVm.installedVersion,
+                        onDownload = { uriHandler.openUri(u.url) },
+                        onDismiss = { updateVm.dismiss(u.version) },
+                    )
+                }
+            }
             if (showReconcileCard) {
                 item(key = "reconcile-card", contentType = "reconcile-card") {
                     ReconcileCard(onReconcile = onOpenReconcile, onSnooze = prompt::snooze)

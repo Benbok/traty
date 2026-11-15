@@ -68,6 +68,15 @@ data class AppSettings(
     val budgetAlertsEnabled: Boolean = true,
     /** Уведомления о заданиях на неделю: новые в понедельник, итог в воскресенье. */
     val weeklyTasksNotify: Boolean = true,
+    /** Раз в полдня спрашивать у GitHub, не вышла ли новая версия. Больше ничего в сеть не уходит. */
+    val updateCheckEnabled: Boolean = true,
+    /** Когда в последний раз проверяли (epoch millis); 0 - ещё не проверяли. */
+    val updateCheckedAtMillis: Long = 0,
+    /** Найденная новая версия («0.1.1») и откуда её скачать; пусто, если новее ничего нет. */
+    val updateVersion: String = "",
+    val updateUrl: String = "",
+    /** Версия, плашку о которой пользователь скрыл. */
+    val updateDismissedVersion: String = "",
 )
 
 internal fun encodeLines(lines: List<String>): String =
@@ -109,6 +118,11 @@ class SettingsRepository(
         val budgetAlerts = booleanPreferencesKey("budget_alerts")
         val onboardingSeen = booleanPreferencesKey("onboarding_seen")
         val weeklyTasksNotify = booleanPreferencesKey("weekly_tasks_notify")
+        val updateCheck = booleanPreferencesKey("update_check")
+        val updateCheckedAt = longPreferencesKey("update_checked_at")
+        val updateVersion = stringPreferencesKey("update_version")
+        val updateUrl = stringPreferencesKey("update_url")
+        val updateDismissed = stringPreferencesKey("update_dismissed")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -134,6 +148,11 @@ class SettingsRepository(
             homePlanExpanded = p[K.homePlanExpanded] ?: d.homePlanExpanded,
             budgetAlertsEnabled = p[K.budgetAlerts] ?: d.budgetAlertsEnabled,
             weeklyTasksNotify = p[K.weeklyTasksNotify] ?: d.weeklyTasksNotify,
+            updateCheckEnabled = p[K.updateCheck] ?: d.updateCheckEnabled,
+            updateCheckedAtMillis = (p[K.updateCheckedAt] ?: 0L).coerceAtLeast(0L),
+            updateVersion = p[K.updateVersion].orEmpty(),
+            updateUrl = p[K.updateUrl].orEmpty(),
+            updateDismissedVersion = p[K.updateDismissed].orEmpty(),
         )
     }
         // Расшифровка ключей обращается к Keystore — не на главном потоке
@@ -211,6 +230,23 @@ class SettingsRepository(
 
     suspend fun setWeeklyTasksNotify(enabled: Boolean) {
         context.dataStore.edit { p -> p[K.weeklyTasksNotify] = enabled }
+    }
+
+    suspend fun setUpdateCheckEnabled(enabled: Boolean) {
+        context.dataStore.edit { p -> p[K.updateCheck] = enabled }
+    }
+
+    /** Запоминает итог проверки. [version] пустая, если более новой версии нет. */
+    suspend fun saveUpdateCheck(checkedAtMillis: Long, version: String, url: String) {
+        context.dataStore.edit { p ->
+            p[K.updateCheckedAt] = checkedAtMillis.coerceAtLeast(0L)
+            p[K.updateVersion] = version
+            p[K.updateUrl] = url
+        }
+    }
+
+    suspend fun dismissUpdate(version: String) {
+        context.dataStore.edit { p -> p[K.updateDismissed] = version }
     }
 
     suspend fun setLabelsEnabled(enabled: Boolean) {

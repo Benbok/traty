@@ -27,6 +27,8 @@ import ru.my.traty.data.onboarding.OnboardingRepository
 import ru.my.traty.data.weekly.WeeklyTaskRepository
 import ru.my.traty.data.weekly.WeeklyTaskWork
 import ru.my.traty.data.recurring.RecurringReminderWork
+import ru.my.traty.data.update.UpdateRepository
+import ru.my.traty.data.update.installedVersionOf
 import ru.my.traty.data.SettingsRepository
 import ru.my.traty.speech.GigaAmRuntime
 import ru.my.traty.speech.ModelManager
@@ -103,6 +105,7 @@ class AppContainer(
     val budgets = BudgetRepository(db)
     val weeklyTasks = WeeklyTaskRepository(db)
     val search = SearchRepository(db)
+    val updates = UpdateRepository(settings, installedVersionOf(context))
 
     /** Уведомления «потрачено 80 % / 100 % плана»; запускается из [TratyApp.onCreate]. */
     val budgetAlerts = BudgetAlertWatcher(context.applicationContext, db, settings)
