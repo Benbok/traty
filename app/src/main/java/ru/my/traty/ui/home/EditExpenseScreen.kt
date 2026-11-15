@@ -120,7 +120,7 @@ fun EditExpenseScreen(
     var fields by remember(item) { mutableStateOf(initialFields) }
     var askDiscard by remember(item) { mutableStateOf(false) }
     // «Назад» и стрелка в шапке не теряют правки молча: если что-то поменяли, спрашиваем
-    val leave = { if (editable && fields != initialFields) askDiscard = true else onDismiss() }
+    val leave: () -> Unit = { if (editable && fields != initialFields) { askDiscard = true } else { onDismiss() } }
     BackHandler(onBack = leave)
     var picking by rememberSaveable { mutableStateOf<Picker?>(null) }
 
