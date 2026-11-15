@@ -28,6 +28,8 @@ data class ParsedEntry(
     val source: String? = null,
     /** YYYY-MM-DD или null (= день, когда фраза произнесена). */
     val date: String? = null,
+    /** Покупка частями: аванс, рассрочка, кредит, доплата. null — обычная трата. */
+    val part: PurchaseTerms? = null,
 ) {
     /** null — тип неизвестен (например, «goal_deposit» из будущих этапов). */
     val entryType: EntryType?
@@ -51,7 +53,7 @@ object EntryPrompt {
         appendLine("Источники пополнений: ${IncomeSources.ALL.joinToString(", ") { it.first }}.")
         appendLine()
         appendLine(
-            """Формат ответа: {"items":[{"type":"expense" или "income","amount":число в рублях,"category":"название из списка или новая категория (для expense)","emoji":"один эмодзи для новой категории или null","subcategory":"из списка или новая подкатегория или null","place":"магазин/место или null","note":"что куплено и для кого, словами из фразы, или null","source":"источник из списка (для income) или null","date":"YYYY-MM-DD или null"}]}"""
+            """Формат ответа: {"items":[{"type":"expense" или "income","amount":число в рублях,"category":"название из списка или новая категория (для expense)","emoji":"один эмодзи для новой категории или null","subcategory":"из списка или новая подкатегория или null","place":"магазин/место или null","note":"что куплено и для кого, словами из фразы, или null","source":"источник из списка (для income) или null","date":"YYYY-MM-DD или null","part":null или {"kind":"partial|installment|loan|topup","total":полная цена в рублях или null,"count":число платежей или null,"rate":процент годовых или null,"payment":платёж по договору в рублях или null,"period":"month|week|2weeks" или null}}]}"""
         )
         appendLine("Правила:")
         appendLine("- type = income, если деньги пришли: зарплата, аванс, дежурства, подработка, перевод мне, вернули долг, кэшбэк. Всё остальное — expense.")
@@ -73,11 +75,16 @@ object EntryPrompt {
         appendLine("- Если подходит новая подкатегория, но ни одна категория не подходит ей по смыслу — предложи новую категорию, а не «${DefaultCategories.OTHER}».")
         appendLine("- note — всё, что сказано о покупке, кроме суммы, даты, места и вида магазина. Сохраняй слова из фразы и имена как сказаны, не сокращай и не пересказывай: «лекарство для кошки Чуни от блох». Не добавляй в note название места или категории. Если о покупке больше ничего не сказано — null.")
         appendLine("- Если непонятно, на что потрачено, — «${DefaultCategories.OTHER}».")
+        appendLine("- part заполняй только для покупки частями: аванс или предоплата за товар — partial; рассрочка, «Долями», «Сплит» — installment; покупка в кредит — loan; доплата или очередной платёж за уже начатую покупку — topup. Для обычной траты и для income part = null.")
+        appendLine("- У покупки частями amount — сколько заплачено сейчас. Если сейчас ничего не платили (взял в кредит, первый платёж позже) — amount = 0, а цену укажи в part.total. note — сам товар («холодильник»).")
+        appendLine("- В part переноси только сказанное: total — полная цена; count — число платежей («на 6 месяцев» → 6, «на год» → 12); rate — процент годовых («под 20 процентов» → 20); payment — платёж по договору; period — month, week или 2weeks («Долями» — 4 платежа раз в 2 недели). Чего нет во фразе — null. Ничего не вычисляй.")
         appendLine("- Для income поле source — строго одно из списка источников; если непонятно, откуда деньги, — «${IncomeSources.DEFAULT}».")
         appendLine("- Никакого текста, кроме JSON.")
         appendLine()
         appendLine("Пример: «зоомагазин вчера 731 лекарство для кошки Чуни от блох» → ")
         appendLine("""{"items":[{"type":"expense","amount":731,"category":"Питомцы","emoji":null,"subcategory":"Зоомагазин","place":null,"note":"лекарство для кошки Чуни от блох","source":null,"date":"${today.minusDays(1)}"}]}""")
+        appendLine("Пример: «взял телевизор в рассрочку на 6 месяцев за 60 тысяч, первый платёж 10 тысяч» → ")
+        appendLine("""{"items":[{"type":"expense","amount":10000,"category":"Дом и быт","emoji":null,"subcategory":"Техника","place":null,"note":"телевизор","source":null,"date":null,"part":{"kind":"installment","total":60000,"count":6,"rate":null,"payment":null,"period":"month"}}]}""")
         if (rules.isNotEmpty()) {
             appendLine()
             appendLine("Выученные правила (место/слово → категория; применяй если совпало):")
@@ -110,7 +117,8 @@ object EntryParsing {
             val obj = cleaned.substring(objStart, cleaned.lastIndexOf('}') + 1)
             lenientJson.decodeFromString(EntryParseResult.serializer(), obj).items
         }
-        return items.filter { it.amount > 0 }.map {
+        // Покупка в кредит без оплаты сегодня приходит с amount = 0, но с ценой: её не теряем
+        return items.filter { it.amount > 0 || (it.entryType == EntryType.EXPENSE && (it.part?.total ?: 0.0) > 0) }.map {
             if (it.entryType == EntryType.INCOME) it.copy(source = IncomeSources.normalize(it.source)) else it
         }
     }
@@ -135,6 +143,7 @@ object OfflineEntryParser {
             ParsedEntry(
                 type = "expense", amount = it.amount, category = it.category, emoji = it.emoji,
                 subcategory = it.subcategory, place = it.place, note = it.note, date = it.date,
+                part = PurchaseTermsParser.find(text),
             )
         }
     }

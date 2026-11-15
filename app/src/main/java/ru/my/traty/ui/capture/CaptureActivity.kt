@@ -92,10 +92,12 @@ private fun CaptureScreen(vm: CaptureViewModel, onFinish: () -> Unit) {
             vm.finish()
         }
     }
-    // Панель не закрывается, пока не ответили на «Добавить в Подписки?»
+    // Панель не закрывается, пока не ответили на «Добавить в Подписки?» и «Покупка частями?»
     val offerVm: RecurringOfferViewModel = viewModel()
     val offer by offerVm.offer.collectAsStateWithLifecycle()
-    LaunchedEffect(finish, offer) { if (finish && offer == null) onFinish() }
+    val purchaseVm: PurchaseOfferViewModel = viewModel()
+    val purchase by purchaseVm.offer.collectAsStateWithLifecycle()
+    LaunchedEffect(finish, offer, purchase) { if (finish && offer == null && purchase == null) onFinish() }
     BackHandler { vm.finish() }
 
     Box(
@@ -132,4 +134,5 @@ private fun CaptureScreen(vm: CaptureViewModel, onFinish: () -> Unit) {
         )
     }
     RecurringOfferHost(visible = finish || ui !is CaptureUi.Confirm, vm = offerVm)
+    PurchaseOfferHost(visible = (finish || ui !is CaptureUi.Confirm) && offer == null, vm = purchaseVm)
 }

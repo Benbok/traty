@@ -86,4 +86,40 @@ class DebtRepositoryTest {
         db.expenses().delete(last)
         assertEquals(400_000L, checkNotNull(repo.status(id, zone, today)).remainingKopecks)
     }
+
+    @Test
+    fun savedVoiceExpensesBecomePurchaseAndTopUp() = runTest {
+        val advance = db.expenses().insert(
+            ru.my.traty.data.Expense(amountKopecks = 2_000_000, categoryId = techId, place = "Ozon", note = "холодильник", timestamp = 1000, source = ExpenseSource.VOICE)
+        )
+        val id = repo.startFromExpense(
+            Debt(title = "холодильник", place = "Ozon", categoryId = techId, totalKopecks = 6_000_000), advance, zone, today,
+        )
+        val topUp = db.expenses().insert(
+            ru.my.traty.data.Expense(amountKopecks = 500_000, categoryId = techId, place = "Ozon", note = "холодильник", timestamp = 2000, source = ExpenseSource.VOICE)
+        )
+        assertTrue(repo.attachExpense(id, topUp, zone, today))
+        assertFalse(repo.attachExpense(id, topUp, zone, today))
+
+        val saved = db.expenses().getAllWithCategory().map { it.expense }.sortedBy { it.timestamp }
+        assertEquals(2, saved.size)
+        assertTrue(saved.all { it.source == ExpenseSource.DEBT })
+        assertEquals(listOf("Холодильник · аванс", "Холодильник · доплата"), saved.map { it.note })
+        assertEquals(3_500_000L, checkNotNull(repo.status(id, zone, today)).remainingKopecks)
+    }
+
+    @Test
+    fun unpaidLoanStartsWithoutExpense() = runTest {
+        val id = repo.startFromExpense(
+            Debt(
+                title = "Ноутбук", categoryId = techId, kind = DebtKind.LOAN.key, totalKopecks = 8_000_000,
+                rateBasisPoints = 2000, paymentsCount = 12, firstDueEpochDay = today.plusMonths(1).toEpochDay(),
+            ),
+            expenseId = null, zone = zone, today = today,
+        )
+        assertTrue(db.expenses().getAllWithCategory().isEmpty())
+        val next = checkNotNull(checkNotNull(repo.status(id, zone, today)).next)
+        assertEquals(today.plusMonths(1), next.date)
+        assertEquals(741_076L, next.totalKopecks)
+    }
 }
