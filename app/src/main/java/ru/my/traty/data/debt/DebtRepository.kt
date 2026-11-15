@@ -12,8 +12,8 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * Покупки частями: завести покупку с первым платежом, добавить доплату, закрыть или отменить.
- * Каждый платёж записывается обычной тратой с источником [ExpenseSource.DEBT]: так он попадает в траты,
+ * Покупки частями: завести покупку с первым платежом, добавить доплату, привязать уже сохранённую трату,
+ * отменить. Каждый платёж — обычная трата с источником [ExpenseSource.DEBT]: так он попадает в траты,
  * лимиты и статистику в день оплаты, а поиск подписок его не трогает.
  * Вызывается только после подтверждения пользователя.
  */
@@ -28,15 +28,50 @@ class DebtRepository(private val db: AppDatabase) {
         zone: ZoneId = ZoneId.systemDefault(),
         today: LocalDate = LocalDate.now(),
     ): Long = db.withTransaction {
-        val id = dao.insert(debt.copy(id = 0, title = normalizeName(debt.title), createdAt = System.currentTimeMillis()))
-        if (firstPaymentKopecks != null && firstPaymentKopecks > 0) pay(id, firstPaymentKopecks, day, zone, today, first = true)
+        val id = insertDebt(debt)
+        if (firstPaymentKopecks != null && firstPaymentKopecks > 0) {
+            val stored = checkNotNull(dao.getById(id))
+            val expense = newExpense(stored, firstPaymentKopecks, entryTimestamp(day, zone, today))
+            link(stored, expense, zone, today, first = true)
+        }
         id
     }
 
     /**
-     * Платёж по покупке. У кредита из суммы сначала гасятся проценты ближайшего платежа по графику,
-     * остальное идёт в тело; проценты — отдельной тратой в «Долги и кредиты».
-     * Когда остаток доходит до нуля, покупка закрывается.
+     * Новая покупка из уже сохранённой траты (голосом: «аванс за холодильник 20 000», потом «Да» в вопросе).
+     * [expenseId] == null — сегодня ничего не платили (взял в кредит). @return id покупки.
+     */
+    suspend fun startFromExpense(
+        debt: Debt,
+        expenseId: Long?,
+        zone: ZoneId = ZoneId.systemDefault(),
+        today: LocalDate = LocalDate.now(),
+    ): Long = db.withTransaction {
+        val id = insertDebt(debt)
+        val expense = expenseId?.let { db.expenses().getByIds(listOf(it)).firstOrNull()?.expense }
+        if (expense != null) link(checkNotNull(dao.getById(id)), expense, zone, today, first = true)
+        id
+    }
+
+    /**
+     * Уже сохранённая трата — доплата за покупку («за холодильник Озону плюс 5000», потом «Да»).
+     * @return false, если покупки или траты нет, покупка закрыта или трата уже привязана.
+     */
+    suspend fun attachExpense(
+        debtId: Long,
+        expenseId: Long,
+        zone: ZoneId = ZoneId.systemDefault(),
+        today: LocalDate = LocalDate.now(),
+    ): Boolean = db.withTransaction {
+        val debt = dao.getById(debtId)?.takeIf { it.state == DebtState.ACTIVE } ?: return@withTransaction false
+        if (dao.isLinked(expenseId)) return@withTransaction false
+        val expense = db.expenses().getByIds(listOf(expenseId)).firstOrNull()?.expense ?: return@withTransaction false
+        link(debt, expense, zone, today, first = false)
+        true
+    }
+
+    /**
+     * Платёж по покупке новой тратой. Когда остаток доходит до нуля, покупка закрывается.
      * @return false, если покупки нет или она уже закрыта.
      */
     suspend fun addPayment(
@@ -45,7 +80,12 @@ class DebtRepository(private val db: AppDatabase) {
         day: LocalDate = LocalDate.now(),
         zone: ZoneId = ZoneId.systemDefault(),
         today: LocalDate = LocalDate.now(),
-    ): Boolean = db.withTransaction { pay(debtId, amountKopecks, day, zone, today, first = false) }
+    ): Boolean = db.withTransaction {
+        if (amountKopecks <= 0) return@withTransaction false
+        val debt = dao.getById(debtId)?.takeIf { it.state == DebtState.ACTIVE } ?: return@withTransaction false
+        link(debt, newExpense(debt, amountKopecks, entryTimestamp(day, zone, today)), zone, today, first = false)
+        true
+    }
 
     suspend fun getActive(): List<Debt> = dao.getActive()
 
@@ -64,42 +104,42 @@ class DebtRepository(private val db: AppDatabase) {
         dao.update(debt.copy(state = DebtState.CANCELLED))
     }
 
-    private suspend fun pay(debtId: Long, amountKopecks: Long, day: LocalDate, zone: ZoneId, today: LocalDate, first: Boolean): Boolean {
-        if (amountKopecks <= 0) return false
-        val debt = dao.getById(debtId)?.takeIf { it.state == DebtState.ACTIVE } ?: return false
-        val before = DebtProgress.of(debt, paidParts(debtId, zone), today)
-        val next = before.next
-        val interest = if (debt.debtKind == DebtKind.LOAN && next != null) minOf(amountKopecks, next.interestKopecks) else 0L
-        val principal = amountKopecks - interest
-        val timestamp = entryTimestamp(day, zone, today)
+    private suspend fun insertDebt(debt: Debt): Long =
+        dao.insert(debt.copy(id = 0, title = normalizeName(debt.title), createdAt = System.currentTimeMillis()))
 
-        if (principal > 0) {
-            val note = DebtTexts.paymentNote(debt, PaymentPart.PRINCIPAL, next?.number, next?.count, first)
-            insert(debt, debt.categoryId, debt.subcategoryId, principal, note, timestamp, PaymentPart.PRINCIPAL)
-        }
-        if (interest > 0) {
-            val (catId, subId) = interestCategory() ?: (debt.categoryId to debt.subcategoryId)
-            val note = DebtTexts.paymentNote(debt, PaymentPart.INTEREST, next?.number, next?.count, first)
-            insert(debt, catId, subId, interest, note, timestamp, PaymentPart.INTEREST)
-        }
-        if (DebtProgress.of(debt, paidParts(debtId, zone), today).isPaidOff) dao.update(debt.copy(state = DebtState.CLOSED))
-        return true
-    }
+    private fun newExpense(debt: Debt, amount: Long, timestamp: Long) = Expense(
+        amountKopecks = amount, currency = debt.currency, categoryId = debt.categoryId, subcategoryId = debt.subcategoryId,
+        place = debt.place, timestamp = timestamp, source = ExpenseSource.DEBT,
+    )
 
-    private suspend fun insert(debt: Debt, categoryId: Long, subcategoryId: Long?, amount: Long, note: String, timestamp: Long, part: String) {
-        val expenseId = db.expenses().insert(
-            Expense(
-                amountKopecks = amount,
-                currency = debt.currency,
-                categoryId = categoryId,
-                subcategoryId = subcategoryId,
-                place = debt.place,
-                note = note,
-                timestamp = timestamp,
-                source = ExpenseSource.DEBT,
-            )
+    /**
+     * Записывает [expense] платежом по покупке ([Expense.id] == 0 — новая трата, иначе уже сохранённая).
+     * У кредита из суммы сначала гасятся проценты ближайшего платежа по графику, они уходят отдельной
+     * тратой в «Долги и кредиты». Подпись траты становится «Холодильник · доплата».
+     */
+    private suspend fun link(debt: Debt, expense: Expense, zone: ZoneId, today: LocalDate, first: Boolean) {
+        val next = DebtProgress.of(debt, paidParts(debt.id, zone), today).next
+        val amount = expense.amountKopecks
+        val interest = if (debt.debtKind == DebtKind.LOAN && next != null) minOf(amount, next.interestKopecks) else 0L
+        val principal = amount - interest
+        val main = expense.copy(
+            amountKopecks = if (principal > 0) principal else amount,
+            note = DebtTexts.paymentNote(debt, if (principal > 0) PaymentPart.PRINCIPAL else PaymentPart.INTEREST, next?.number, next?.count, first),
+            source = ExpenseSource.DEBT,
         )
-        dao.insertPayment(DebtPayment(debtId = debt.id, expenseId = expenseId, part = part))
+        val mainId = if (main.id == 0L) db.expenses().insert(main) else main.id.also { db.expenses().update(main) }
+        dao.insertPayment(DebtPayment(debtId = debt.id, expenseId = mainId, part = if (principal > 0) PaymentPart.PRINCIPAL else PaymentPart.INTEREST))
+        if (interest > 0 && principal > 0) {
+            val (catId, subId) = interestCategory() ?: (debt.categoryId to debt.subcategoryId)
+            val interestId = db.expenses().insert(
+                main.copy(
+                    id = 0, amountKopecks = interest, categoryId = catId, subcategoryId = subId,
+                    note = DebtTexts.paymentNote(debt, PaymentPart.INTEREST, next?.number, next?.count, first),
+                )
+            )
+            dao.insertPayment(DebtPayment(debtId = debt.id, expenseId = interestId, part = PaymentPart.INTEREST))
+        }
+        if (DebtProgress.of(debt, paidParts(debt.id, zone), today).isPaidOff) dao.update(debt.copy(state = DebtState.CLOSED))
     }
 
     private suspend fun paidParts(debtId: Long, zone: ZoneId): List<PaidPart> = dao.getPayments(debtId).map {

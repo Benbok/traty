@@ -28,6 +28,9 @@ interface DebtDao {
     @Insert
     suspend fun insertPayment(item: DebtPayment): Long
 
+    @Query("SELECT EXISTS(SELECT 1 FROM debt_payments WHERE expenseId = :expenseId)")
+    suspend fun isLinked(expenseId: Long): Boolean
+
     @Query("SELECT * FROM debts WHERE id = :id")
     suspend fun getById(id: Long): Debt?
 

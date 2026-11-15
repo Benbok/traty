@@ -3,6 +3,7 @@ package ru.my.traty.capture
 import kotlinx.serialization.Serializable
 import ru.my.traty.ai.EntryType
 import ru.my.traty.ai.ParsedEntry
+import ru.my.traty.ai.PurchaseTerms
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.DefaultCategories
 import ru.my.traty.data.ExpenseSource
@@ -50,6 +51,8 @@ data class EntryRow(
     val suggestedCategory: NewCategory? = null,
     /** Похожая трата уже записана: в окне проверки спрашиваем «повтор или новая?». */
     val duplicate: DuplicateHint? = null,
+    /** Покупка частями из фразы: после сохранения приложение спросит, завести ли её или привязать доплату. */
+    val purchase: PurchaseTerms? = null,
 ) {
     /** Сумма в копейках или null, если сумма некорректна или не положительна. */
     fun kopecks(): Long? = parsePositiveKopecks(amountText)
@@ -81,6 +84,7 @@ data class EntryRow(
                 category = known ?: suggested?.name ?: DefaultCategories.OTHER,
                 subcategory = entry.subcategory.orEmpty(), place = Places.normalize(entry.place).orEmpty(), note = entry.note.orEmpty(),
                 source = IncomeSources.DEFAULT, dateText = day.toString(), suggestedCategory = suggested,
+                purchase = entry.part,
             )
         }
     }

@@ -11,6 +11,8 @@ import ru.my.traty.ai.LlmClient
 import ru.my.traty.ai.LlmHttpException
 import ru.my.traty.ai.OfflineEntryParser
 import ru.my.traty.ai.ParsedEntry
+import ru.my.traty.ai.PurchaseTerms
+import ru.my.traty.ai.PurchaseTermsParser
 import ru.my.traty.ai.clientFor
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.AppSettings
@@ -22,6 +24,8 @@ import ru.my.traty.data.Places
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.Recurring
 import ru.my.traty.data.SettingsRepository
+import ru.my.traty.data.debt.Debt
+import ru.my.traty.data.debt.DebtRepository
 import ru.my.traty.data.recurring.RecurringRepository
 import ru.my.traty.data.entryTimestamp
 import ru.my.traty.data.normalizeName
@@ -78,6 +82,10 @@ class QuickEntry(
 
     /** Предложения «добавить в Подписки», ждущие ответа пользователя. */
     val recurringOffers = RecurringOffers(recurring)
+    private val debts = DebtRepository(db)
+
+    /** Вопросы «Доплата за покупку?» и «Покупка частями?», ждущие ответа пользователя. */
+    val purchaseOffers = PurchaseOfferQueue(debts, zone)
     private val _changes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     /** Эмитит после каждого сохранения — виджет обновляет суммы. */
@@ -146,7 +154,7 @@ class QuickEntry(
             }
         }
 
-        val cleaned = EntryCleanup.apply(parsed, text, cats, spokenDay)
+        val cleaned = withPurchaseTerms(EntryCleanup.apply(parsed, text, cats, spokenDay), text)
         val ruled = RuleMatcher.apply(cleaned, rules, cats)
         ruled.mapNotNull { it.matchedRule }.forEach { db.rules().incrementHits(it.id) }
 
@@ -158,6 +166,13 @@ class QuickEntry(
             return EntryOutcome.NeedsConfirm(draft, notice)
         }
         return EntryOutcome.AutoSaved(save(draft), draft)
+    }
+
+    /** ИИ не заметил «в рассрочку» или «аванс за…» в фразе с одной тратой — условия берутся правилом. */
+    private fun withPurchaseTerms(entries: List<ParsedEntry>, text: String): List<ParsedEntry> {
+        val single = entries.singleOrNull() ?: return entries
+        if (single.entryType != EntryType.EXPENSE || single.part != null) return entries
+        return listOf(single.copy(part = PurchaseTermsParser.find(text)))
     }
 
     /** Помечает строки, похожие на уже записанные траты тех же дней ([DuplicateCheck]). */
@@ -184,16 +199,20 @@ class QuickEntry(
      */
     suspend fun save(draft: EntryDraft): SaveResult {
         val valid = draft.rows.filter { it.kopecks() != null }
-        if (valid.isEmpty()) return SaveResult(SavedEntries(emptyList(), emptyList()), null, emptyList())
+        // «взял ноутбук в кредит за 80 тысяч»: сегодня ничего не платили, трата не создаётся, но покупку предложим завести
+        val unpaidPurchases = draft.rows.filter { it.type == EntryType.EXPENSE && it.kopecks() == null && (it.purchase?.total ?: 0.0) > 0 }
+        if (valid.isEmpty() && unpaidPurchases.isEmpty()) return SaveResult(SavedEntries(emptyList(), emptyList()), null, emptyList())
 
         val known = db.categories().getAllWithSubs().map { it.category.name }
         val expenseIds = mutableListOf<Long>()
         val incomeIds = mutableListOf<Long>()
         val offers = mutableListOf<Recurring>()
         val newSubcategories = mutableListOf<String>()
+        val purchases = mutableListOf<PurchaseOffer>()
         var ruleOffer: RuleOffer? = null
         db.withTransaction {
             val knownPlaces = db.expenses().distinctPlaces().toMutableList()
+            val openDebts = debts.getActive()
             draft.replaces?.let { old ->
                 old.expenseIds.forEach { db.expenses().deleteById(it) }
                 old.incomeIds.forEach { db.incomes().deleteById(it) }
@@ -227,7 +246,10 @@ class QuickEntry(
                     )
                     val expenseId = db.expenses().insert(expense)
                     expenseIds += expenseId
-                    recurring.onExpenseSaved(expense.copy(id = expenseId), row.category, zone, row.subcategory)?.let { offers += it }
+                    val purchase = purchaseOffer(row, expense.copy(id = expenseId), day, openDebts)
+                    // Платёж по рассрочке или кредиту — не подписка: у покупки свой график
+                    if (purchase != null) purchases += purchase
+                    else recurring.onExpenseSaved(expense.copy(id = expenseId), row.category, zone, row.subcategory)?.let { offers += it }
                     if (ruleOffer == null && place != null) {
                         if (db.rules().findByPattern(place.lowercase()) == null) {
                             ruleOffer = RuleOffer(place, ids.categoryId, ids.subcategoryId, row.category)
@@ -235,7 +257,22 @@ class QuickEntry(
                     }
                 }
             }
+            for (row in unpaidPurchases) {
+                val ids = categories.resolveForSave(
+                    categoryName = row.category,
+                    newCategoryEmoji = row.suggestedCategory?.takeIf { it.name == row.category }?.emoji,
+                    subcategoryName = row.subcategory.ifBlank { null },
+                )
+                val day = runCatching { LocalDate.parse(row.dateText.trim()) }.getOrNull() ?: LocalDate.now()
+                val place = Places.canonical(row.place, knownPlaces)
+                val unpaid = Expense(
+                    amountKopecks = 0, categoryId = ids.categoryId, subcategoryId = ids.subcategoryId,
+                    place = place, note = row.note.trim().ifBlank { null }, timestamp = entryTimestamp(day, zone),
+                )
+                purchaseOffer(row, unpaid, day, openDebts)?.let { purchases += it }
+            }
         }
+        purchaseOffers.add(purchases)
         val created = valid.filter { it.type == EntryType.EXPENSE }
             .map { it.category }
             .filter { name -> known.none { sameName(it, name) } }
@@ -245,6 +282,25 @@ class QuickEntry(
         recurringOffers.add(uniqueOffers)
         _changes.tryEmit(Unit)
         return SaveResult(SavedEntries(expenseIds, incomeIds), ruleOffer, created, uniqueOffers, newSubcategories.distinct())
+    }
+
+    /** Вопрос про покупку частями для сохранённой траты ([expense] с id == 0 — сегодня ничего не платили). */
+    private fun purchaseOffer(row: EntryRow, expense: Expense, day: LocalDate, open: List<Debt>): PurchaseOffer? {
+        val paid = expense.id != 0L
+        val decision = PurchaseOffers.decide(row.purchase, expense.note, expense.place, open, hasPayment = paid)
+        if (decision == PurchaseDecision.None) return null
+        return PurchaseOffer(
+            expenseId = expense.id.takeIf { paid },
+            amountKopecks = if (paid) expense.amountKopecks else 0,
+            title = (decision as? PurchaseDecision.Attach)?.debt?.title
+                ?: PurchaseOffers.titleOf(expense.note, row.subcategory, expense.place),
+            place = expense.place,
+            categoryId = expense.categoryId,
+            subcategoryId = expense.subcategoryId,
+            day = day,
+            terms = row.purchase ?: PurchaseTerms(kind = PurchaseTerms.TOPUP),
+            match = (decision as? PurchaseDecision.Attach)?.debt,
+        )
     }
 
     /** Черновик из уже сохранённых записей — для «Изменить» после автосохранения. */
