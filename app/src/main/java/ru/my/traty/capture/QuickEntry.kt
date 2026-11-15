@@ -20,6 +20,7 @@ import ru.my.traty.data.Income
 import ru.my.traty.data.PendingPhrase
 import ru.my.traty.data.Places
 import ru.my.traty.data.PendingStatus
+import ru.my.traty.data.Recurring
 import ru.my.traty.data.SettingsRepository
 import ru.my.traty.data.recurring.RecurringRepository
 import ru.my.traty.data.entryTimestamp
@@ -37,14 +38,14 @@ import java.time.ZoneId
 data class RuleOffer(val place: String, val categoryId: Long, val subcategoryId: Long?, val categoryName: String)
 
 /**
- * [recurringAdded] — названия платежей, которые сами добавились в «Подписки».
- * [newSubcategories] — созданные при сохранении подкатегории, «Питомцы › Зоомагазин».
+ * [recurringOffers] — платежи, которые стоит предложить добавить в «Подписки» (ещё не добавлены,
+ * их же получает [QuickEntry.recurringOffers]). [newSubcategories] — созданные при сохранении подкатегории, «Питомцы › Зоомагазин».
  */
 data class SaveResult(
     val saved: SavedEntries,
     val ruleOffer: RuleOffer?,
     val newCategories: List<String>,
-    val recurringAdded: List<String> = emptyList(),
+    val recurringOffers: List<Recurring> = emptyList(),
     val newSubcategories: List<String> = emptyList(),
 )
 
@@ -71,6 +72,9 @@ class QuickEntry(
     private val clientProvider: (AppSettings) -> LlmClient? = ::clientFor,
 ) {
     private val recurring = RecurringRepository(db)
+
+    /** Предложения «добавить в Подписки», ждущие ответа пользователя. */
+    val recurringOffers = RecurringOffers(recurring)
     private val _changes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     /** Эмитит после каждого сохранения — виджет обновляет суммы. */
@@ -165,7 +169,7 @@ class QuickEntry(
         val known = db.categories().getAllWithSubs().map { it.category.name }
         val expenseIds = mutableListOf<Long>()
         val incomeIds = mutableListOf<Long>()
-        val recurringAdded = mutableListOf<String>()
+        val offers = mutableListOf<Recurring>()
         val newSubcategories = mutableListOf<String>()
         var ruleOffer: RuleOffer? = null
         db.withTransaction {
@@ -203,7 +207,7 @@ class QuickEntry(
                     )
                     val expenseId = db.expenses().insert(expense)
                     expenseIds += expenseId
-                    recurring.onExpenseSaved(expense.copy(id = expenseId), row.category, zone, row.subcategory)?.let { recurringAdded += it }
+                    recurring.onExpenseSaved(expense.copy(id = expenseId), row.category, zone, row.subcategory)?.let { offers += it }
                     if (ruleOffer == null && place != null) {
                         if (db.rules().findByPattern(place.lowercase()) == null) {
                             ruleOffer = RuleOffer(place, ids.categoryId, ids.subcategoryId, row.category)
@@ -217,8 +221,10 @@ class QuickEntry(
             .filter { name -> known.none { sameName(it, name) } }
             .map { normalizeName(it) }
             .distinct()
+        val uniqueOffers = offers.distinctBy { it.detectKey ?: it.title }
+        recurringOffers.add(uniqueOffers)
         _changes.tryEmit(Unit)
-        return SaveResult(SavedEntries(expenseIds, incomeIds), ruleOffer, created, recurringAdded, newSubcategories.distinct())
+        return SaveResult(SavedEntries(expenseIds, incomeIds), ruleOffer, created, uniqueOffers, newSubcategories.distinct())
     }
 
     /** Черновик из уже сохранённых записей — для «Изменить» после автосохранения. */

@@ -10,5 +10,4 @@ fun SaveResult.createdText(): String? = listOfNotNull(
 fun SaveResult.summary(): String = listOfNotNull(
     "Сохранено: ${saved.count}",
     createdText(),
-    recurringAdded.takeIf { it.isNotEmpty() }?.let { "В подписки добавлено: ${it.joinToString()}" },
 ).joinToString(". ")

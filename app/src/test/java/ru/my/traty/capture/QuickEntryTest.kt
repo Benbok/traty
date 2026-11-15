@@ -18,6 +18,7 @@ import ru.my.traty.ai.LlmClient
 import ru.my.traty.ai.LlmHttpException
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.PendingStatus
+import ru.my.traty.data.RecurringState
 import ru.my.traty.data.Rule
 import java.net.UnknownHostException
 import java.time.LocalDate
@@ -88,13 +89,20 @@ class QuickEntryTest {
             rawText = "подписка Клод девятьсот девяносто и Пятёрочка пятьсот",
             origin = EntryOrigin.VOICE,
         )
-        val result = quickEntry(null).save(draft)
+        val qe = quickEntry(null)
+        val result = qe.save(draft)
 
-        assertEquals(listOf("Клод"), result.recurringAdded)
+        // Сначала только вопрос: в «Подписках» пусто, пока пользователь не нажал «Добавить»
+        assertEquals(listOf("Клод"), result.recurringOffers.map { it.title })
+        assertEquals(listOf("Клод"), qe.recurringOffers.pending.value.map { it.title })
+        assertTrue(db.recurring().getAll().isEmpty())
+        assertEquals(2, db.expenses().getAllWithCategory().size)
+
+        qe.recurringOffers.accept(qe.recurringOffers.pending.value.single())
         val payments = db.recurring().getAll()
         assertEquals(listOf("Клод"), payments.map { it.title })
         assertEquals(99_000L, payments.single().amountKopecks)
-        assertEquals(2, db.expenses().getAllWithCategory().size)
+        assertTrue(qe.recurringOffers.pending.value.isEmpty())
     }
 
     @Test
@@ -109,9 +117,11 @@ class QuickEntryTest {
             rawText = "мобильная связь 1200 и подписка две сто",
             origin = EntryOrigin.VOICE,
         )
-        val result = quickEntry(null).save(draft)
+        val qe = quickEntry(null)
+        val result = qe.save(draft)
 
-        assertEquals(listOf("Мобильная связь", "Подписки"), result.recurringAdded)
+        assertEquals(listOf("Мобильная связь", "Подписки"), result.recurringOffers.map { it.title })
+        qe.recurringOffers.pending.value.forEach { qe.recurringOffers.accept(it) }
         assertEquals(listOf(120_000L, 210_000L), db.recurring().getAll().map { it.amountKopecks })
     }
 
@@ -269,5 +279,30 @@ class QuickEntryTest {
         val saved = db.expenses().getAllWithCategory().single()
         assertEquals("Зоомагазин", saved.subcategoryName)
         assertEquals("лекарство для кошки Чуни от блох", saved.expense.note)
+    }
+
+    @Test
+    fun declinedRecurringOfferKeepsExpenseAndIsNotAskedAgain() = runTest {
+        app.container.categories.seedIfEmpty()
+        val row = EntryRow(EntryType.EXPENSE, "990", "Связь и подписки", "", "Клод", "", "", LocalDate.now().toString())
+        val draft = EntryDraft(listOf(row), "Клод девятьсот девяносто", EntryOrigin.VOICE)
+        val qe = quickEntry(null)
+        qe.save(draft)
+        qe.recurringOffers.decline(qe.recurringOffers.pending.value.single())
+
+        assertEquals(1, db.expenses().getAllWithCategory().size)
+        assertEquals(listOf(RecurringState.DISMISSED), db.recurring().getAll().map { it.state })
+        assertTrue(qe.save(draft).recurringOffers.isEmpty())
+        assertTrue(qe.recurringOffers.pending.value.isEmpty())
+    }
+
+    @Test
+    fun sameRecurringOfferIsAskedOnce() = runTest {
+        app.container.categories.seedIfEmpty()
+        val row = EntryRow(EntryType.EXPENSE, "990", "Связь и подписки", "", "Клод", "", "", LocalDate.now().toString())
+        val qe = quickEntry(null)
+        qe.save(EntryDraft(listOf(row, row), "Клод и снова Клод", EntryOrigin.VOICE))
+        qe.save(EntryDraft(listOf(row), "Клод", EntryOrigin.VOICE))
+        assertEquals(1, qe.recurringOffers.pending.value.size)
     }
 }
