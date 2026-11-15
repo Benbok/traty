@@ -118,6 +118,17 @@ class DebtRepository(private val db: AppDatabase) {
         dao.update(debt.copy(state = DebtState.CLOSED))
     }
 
+    /** Что исчезнет при удалении покупки: для честного текста в диалоге. */
+    suspend fun deletionImpact(debtId: Long): DeletionImpact {
+        val expenses = db.expenses().getByIds(dao.getPaymentExpenseIds(debtId)).map { it.expense }
+        val removed = expenses.filter { it.source == ExpenseSource.DEBT }
+        return DeletionImpact(
+            removedCount = removed.size,
+            removedKopecks = removed.sumOf { it.amountKopecks },
+            keptCount = expenses.size - removed.size,
+        )
+    }
+
     /**
      * Удалить покупку вместе с автоматически созданными платежами ([ExpenseSource.DEBT]).
      * Траты, которые пользователь создал вручную и позже привязал к покупке, остаются в истории.
@@ -194,3 +205,6 @@ class DebtRepository(private val db: AppDatabase) {
         const val INTEREST_SUBCATEGORY = "Кредит"
     }
 }
+
+/** Сколько платежей-трат удалится вместе с покупкой, на какую сумму, и сколько трат пользователя останется. */
+data class DeletionImpact(val removedCount: Int, val removedKopecks: Long, val keptCount: Int)
