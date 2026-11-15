@@ -119,7 +119,9 @@ object AssistantEngine {
         val spending = ctx.expenses.filter { it.expense.source != ExpenseSource.RECONCILE }
         subscriptionAction(q.intent)?.let { return changeSubscription(q, ctx, it) }
         val period = BillingPeriod.containing(ctx.today, ctx.startDay)
-        val (from, to) = range(q.from, q.to, period.startDate, ctx.today)
+        val (asked, to) = range(q.from, q.to, period.startDate, ctx.today)
+        // «за всё время» — с первой записи, а не с условной даты
+        val from = if (asked == QuestionDates.ALL_TIME) spending.minOfOrNull { day(it.expense.timestamp, ctx.zone) } ?: asked else asked
 
         val filter = Filter.of(q, spending, ctx.categories)
         if (q.intent == Intents.SET_PLAN && filter.names.isEmpty() && filter.unknownNames.isNotEmpty()) {

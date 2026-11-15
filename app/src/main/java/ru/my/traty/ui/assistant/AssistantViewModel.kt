@@ -24,6 +24,7 @@ import ru.my.traty.assistant.AssistantQuery
 import ru.my.traty.assistant.AssistantTurn
 import ru.my.traty.assistant.Intents
 import ru.my.traty.assistant.PlanProposal
+import ru.my.traty.assistant.QuestionDates
 import ru.my.traty.assistant.SubAction
 import ru.my.traty.assistant.SubscriptionChange
 import ru.my.traty.data.AppSettings
@@ -107,7 +108,8 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     user = AssistantPrompts.queryUser(question, history),
                     jsonMode = true,
                 )
-                val query = AssistantQueries.correct(question, AssistantQueries.decode(rawQuery) ?: AssistantQuery(intent = Intents.UNKNOWN))
+                val decoded = AssistantQueries.decode(rawQuery) ?: AssistantQuery(intent = Intents.UNKNOWN)
+                val query = QuestionDates.apply(question, AssistantQueries.correct(question, decoded), today, s.periodStartDay)
                 history += AssistantTurn(question, AssistantQueries.encode(query))
                 while (history.size > AssistantPrompts.HISTORY) history.removeAt(0)
 
