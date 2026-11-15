@@ -42,6 +42,7 @@ import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.Expense
 import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.ExpenseWithCategory
+import ru.my.traty.data.debt.Debt
 import ru.my.traty.data.Income
 import ru.my.traty.data.isUserEditable
 import ru.my.traty.data.Rule
@@ -202,6 +203,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var message by mutableStateOf<String?>(null)
     /** Трата, открытая для редактирования. */
     var editing by mutableStateOf<ExpenseWithCategory?>(null)
+
+    fun observeDebtForExpense(expenseId: Long) = c.debts.observeDebtByExpenseId(expenseId)
+    suspend fun getDebtForExpense(expenseId: Long): Debt? = c.debts.getDebtByExpenseId(expenseId)
     /** Последняя удалённая трата для Undo. */
     var deletedForUndo by mutableStateOf<Expense?>(null)
         private set

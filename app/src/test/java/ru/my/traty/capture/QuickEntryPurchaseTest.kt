@@ -59,7 +59,7 @@ class QuickEntryPurchaseTest {
 
         val expenses = db.expenses().getAllWithCategory()
         assertEquals(2, expenses.size)
-        assertTrue(expenses.all { it.expense.source == ExpenseSource.DEBT })
+        assertTrue(expenses.all { it.expense.source == ExpenseSource.VOICE })
         val debt = db.debts().getActive().single()
         assertEquals(2_500_000L, db.debts().getPayments(debt.id).sumOf { it.amountKopecks })
         assertEquals(6_000_000L, debt.totalKopecks)

@@ -48,6 +48,8 @@ import ru.my.traty.ui.navigation.TratyNavTab
 import ru.my.traty.ui.onboarding.OnboardingScreen
 import ru.my.traty.ui.onboarding.OnboardingViewModel
 import ru.my.traty.data.onboarding.OnboardingExit
+import ru.my.traty.ui.debt.DebtDetailScreen
+import ru.my.traty.ui.debt.DebtsListScreen
 import ru.my.traty.ui.reconcile.ReconcileMode
 import ru.my.traty.ui.reconcile.ReconcileScreen
 import ru.my.traty.ui.recurring.RecurringScreen
@@ -65,6 +67,8 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     var showCategories by rememberSaveable { mutableStateOf(false) }
     var showRules by rememberSaveable { mutableStateOf(false) }
     var showRecurring by rememberSaveable { mutableStateOf(false) }
+    var showDebtsList by rememberSaveable { mutableStateOf(false) }
+    var selectedDebtId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showBudget by rememberSaveable { mutableStateOf(false) }
     var showWeekly by rememberSaveable { mutableStateOf(false) }
     var showAiSettings by rememberSaveable { mutableStateOf(false) }
@@ -182,6 +186,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onRedoReconcile = { reconcileMode = ReconcileMode.REDO },
                         onOpenRules = { showRules = true },
                         onOpenRecurring = { showRecurring = true },
+                        onOpenDebts = { showDebtsList = true },
                         onOpenBudget = { showBudget = true },
                         onOpenAi = { showAiSettings = true },
                         onOpenOnboarding = onboarding::show,
@@ -236,11 +241,14 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
 
         // Редактирование траты — отдельный экран поверх вкладок, как «Подписки»
         vm.editing?.let { item ->
+            val linkedDebt by vm.observeDebtForExpense(item.expense.id).collectAsStateWithLifecycle(initialValue = null)
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
                 EditExpenseScreen(
                     item = item,
                     categories = categories,
                     labels = labels[item.expense.id].orEmpty(),
+                    linkedDebt = linkedDebt,
+                    onOpenDebt = { debtId -> selectedDebtId = debtId },
                     onDismiss = { vm.editing = null },
                     onSave = { fields -> vm.updateExpense(item, fields) },
                     onDelete = {
@@ -248,6 +256,25 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         vm.editing = null
                     },
                     onSetCategoryImpulsive = vm::setCategoryImpulsive,
+                )
+            }
+        }
+
+        if (showDebtsList) {
+            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                DebtsListScreen(
+                    onBack = { showDebtsList = false },
+                    onSelectDebt = { debtId -> selectedDebtId = debtId },
+                )
+            }
+        }
+
+        selectedDebtId?.let { debtId ->
+            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                DebtDetailScreen(
+                    debtId = debtId,
+                    onBack = { selectedDebtId = null },
+                    onOpenExpense = { exp -> vm.editing = exp },
                 )
             }
         }

@@ -55,6 +55,7 @@ fun SettingsScreen(
     onRedoReconcile: () -> Unit,
     onOpenRules: () -> Unit = {},
     onOpenRecurring: () -> Unit = {},
+    onOpenDebts: () -> Unit = {},
     onOpenBudget: () -> Unit = {},
     onOpenAi: () -> Unit = {},
     onOpenOnboarding: () -> Unit = {},
@@ -189,6 +190,24 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(TratyTheme.spacing.md))
                 TratyOutlinedButton(onClick = onOpenRecurring) { Text("Открыть подписки") }
+            }
+        }
+
+        // Секция: Покупки частями и кредиты
+        TratyCard(
+            modifier = Modifier.fillMaxWidth(),
+            backgroundColor = TratyTheme.colors.surface,
+        ) {
+            Column(Modifier.padding(TratyTheme.spacing.lg)) {
+                Text("Покупки частями и кредиты", style = TratyTheme.typography.titleMedium)
+                Spacer(Modifier.height(TratyTheme.spacing.xs))
+                Text(
+                    "Рассрочки, кредиты, авансы с доплатами. Графики платежей и дерево выплат.",
+                    style = TratyTheme.typography.bodySmall,
+                    color = TratyTheme.colors.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(TratyTheme.spacing.md))
+                TratyOutlinedButton(onClick = onOpenDebts) { Text("Открыть покупки частями") }
             }
         }
 

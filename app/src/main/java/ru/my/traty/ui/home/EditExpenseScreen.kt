@@ -1,7 +1,9 @@
 package ru.my.traty.ui.home
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,9 +23,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.ui.text.font.FontWeight
+import ru.my.traty.data.debt.Debt
+import ru.my.traty.data.debt.DebtKind
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -88,6 +96,8 @@ fun EditExpenseScreen(
     onDelete: () -> Unit,
     onSetCategoryImpulsive: (categoryId: Long, impulsive: Boolean) -> Unit,
     labels: List<ExpenseLabelHit> = emptyList(),
+    linkedDebt: Debt? = null,
+    onOpenDebt: ((Long) -> Unit)? = null,
 ) {
     val e = item.expense
     val editable = e.isUserEditable
@@ -196,6 +206,68 @@ fun EditExpenseScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm)) {
                             labels.forEach { LabelChip(it) }
                         }
+                    }
+                }
+            }
+
+            if (linkedDebt != null && onOpenDebt != null) {
+                val d = linkedDebt
+                TratyCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenDebt(d.id) },
+                    backgroundColor = TratyTheme.colors.surface,
+                    border = BorderStroke(1.dp, TratyTheme.colors.primary.copy(alpha = 0.5f)),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(TratyTheme.spacing.md),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(TratyTheme.shapes.medium)
+                                .background(TratyTheme.colors.primaryContainer),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.AccountTree,
+                                contentDescription = null,
+                                tint = TratyTheme.colors.primary,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(TratyTheme.spacing.md))
+                        Column(Modifier.weight(1f)) {
+                            val kindText = when (d.debtKind) {
+                                DebtKind.INSTALLMENT -> "Рассрочка"
+                                DebtKind.LOAN -> "Кредит"
+                                DebtKind.PARTIAL -> "Оплата частями"
+                            }
+                            Text(
+                                text = "Покупка частями · $kindText",
+                                style = TratyTheme.typography.labelSmall,
+                                color = TratyTheme.colors.primary,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = d.title,
+                                style = TratyTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                text = "Открыть дерево и график платежей",
+                                style = TratyTheme.typography.bodySmall,
+                                color = TratyTheme.colors.onSurfaceVariant,
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Filled.ChevronRight,
+                            contentDescription = null,
+                            tint = TratyTheme.colors.onSurfaceVariant,
+                        )
                     }
                 }
             }

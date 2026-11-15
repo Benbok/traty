@@ -1,6 +1,7 @@
 package ru.my.traty.data.debt
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
@@ -25,6 +26,9 @@ interface DebtDao {
     @Update
     suspend fun update(item: Debt)
 
+    @Delete
+    suspend fun delete(item: Debt)
+
     @Insert
     suspend fun insertPayment(item: DebtPayment): Long
 
@@ -34,11 +38,17 @@ interface DebtDao {
     @Query("SELECT * FROM debts WHERE id = :id")
     suspend fun getById(id: Long): Debt?
 
+    @Query("SELECT * FROM debts WHERE id = :id")
+    fun observeById(id: Long): Flow<Debt?>
+
     @Query("SELECT * FROM debts WHERE state = 'active' ORDER BY createdAt DESC")
     suspend fun getActive(): List<Debt>
 
     @Query("SELECT * FROM debts ORDER BY state = 'active' DESC, createdAt DESC")
     fun observeAll(): Flow<List<Debt>>
+
+    @Query("SELECT expenseId FROM debt_payments WHERE debtId = :debtId")
+    suspend fun getPaymentExpenseIds(debtId: Long): List<Long>
 
     @Query(
         "SELECT p.debtId, p.expenseId, p.part, e.amountKopecks, e.timestamp FROM debt_payments p " +
@@ -48,9 +58,25 @@ interface DebtDao {
 
     @Query(
         "SELECT p.debtId, p.expenseId, p.part, e.amountKopecks, e.timestamp FROM debt_payments p " +
+            "JOIN expenses e ON e.id = p.expenseId WHERE p.debtId = :debtId ORDER BY e.timestamp"
+    )
+    fun observePayments(debtId: Long): Flow<List<DebtPaymentRow>>
+
+    @Query(
+        "SELECT p.debtId, p.expenseId, p.part, e.amountKopecks, e.timestamp FROM debt_payments p " +
             "JOIN expenses e ON e.id = p.expenseId ORDER BY e.timestamp"
     )
     fun observePayments(): Flow<List<DebtPaymentRow>>
+
+    @Query(
+        "SELECT d.* FROM debts d JOIN debt_payments p ON p.debtId = d.id WHERE p.expenseId = :expenseId LIMIT 1"
+    )
+    suspend fun getDebtByExpenseId(expenseId: Long): Debt?
+
+    @Query(
+        "SELECT d.* FROM debts d JOIN debt_payments p ON p.debtId = d.id WHERE p.expenseId = :expenseId LIMIT 1"
+    )
+    fun observeDebtByExpenseId(expenseId: Long): Flow<Debt?>
 }
 
 object DebtMigrations {

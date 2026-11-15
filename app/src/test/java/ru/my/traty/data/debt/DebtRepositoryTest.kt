@@ -103,7 +103,7 @@ class DebtRepositoryTest {
 
         val saved = db.expenses().getAllWithCategory().map { it.expense }.sortedBy { it.timestamp }
         assertEquals(2, saved.size)
-        assertTrue(saved.all { it.source == ExpenseSource.DEBT })
+        assertTrue(saved.all { it.source == ExpenseSource.VOICE })
         assertEquals(listOf("Холодильник · аванс", "Холодильник · доплата"), saved.map { it.note })
         assertEquals(3_500_000L, checkNotNull(repo.status(id, zone, today)).remainingKopecks)
     }
@@ -121,5 +121,31 @@ class DebtRepositoryTest {
         val next = checkNotNull(checkNotNull(repo.status(id, zone, today)).next)
         assertEquals(today.plusMonths(1), next.date)
         assertEquals(741_076L, next.totalKopecks)
+    }
+
+    @Test
+    fun deleteDebtRemovesAutoDebtExpensesButKeepsVoiceExpenses() = runTest {
+        // Автосозданный платёж (source=DEBT) — должен удалиться вместе с долгом
+        val autoDebtId = repo.start(
+            Debt(title = "Диван", categoryId = techId, totalKopecks = 1_000_000),
+            firstPaymentKopecks = 300_000, day = today, zone = zone, today = today,
+        )
+        // Привязанная голосовая трата (source=VOICE) — должна остаться в истории
+        val voiceExpenseId = db.expenses().insert(
+            ru.my.traty.data.Expense(amountKopecks = 2_000_000, categoryId = techId, place = "Ozon", timestamp = 1000, source = ExpenseSource.VOICE)
+        )
+        val voiceDebtId = repo.startFromExpense(
+            Debt(title = "Холодильник", place = "Ozon", categoryId = techId, totalKopecks = 6_000_000),
+            voiceExpenseId, zone, today,
+        )
+
+        // После удаления обоих долгов: только голосовая трата остаётся в базе
+        repo.delete(autoDebtId)
+        repo.delete(voiceDebtId)
+
+        val remaining = db.expenses().getAllWithCategory()
+        assertEquals(1, remaining.size)
+        assertEquals(voiceExpenseId, remaining.single().expense.id)
+        assertEquals(ExpenseSource.VOICE, remaining.single().expense.source)
     }
 }

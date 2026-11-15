@@ -91,11 +91,43 @@ class DebtRepository(private val db: AppDatabase) {
 
     fun observeAll() = dao.observeAll()
 
+    fun observeDebt(id: Long) = dao.observeById(id)
+
+    suspend fun getById(id: Long): Debt? = dao.getById(id)
+
     fun observePayments() = dao.observePayments()
+
+    fun observePayments(debtId: Long) = dao.observePayments(debtId)
+
+    suspend fun getDebtByExpenseId(expenseId: Long): Debt? = dao.getDebtByExpenseId(expenseId)
+
+    fun observeDebtByExpenseId(expenseId: Long) = dao.observeDebtByExpenseId(expenseId)
 
     suspend fun status(debtId: Long, zone: ZoneId = ZoneId.systemDefault(), today: LocalDate = LocalDate.now()): DebtStatus? {
         val debt = dao.getById(debtId) ?: return null
         return DebtProgress.of(debt, paidParts(debtId, zone), today)
+    }
+
+    /** Закрыть покупку вручную (все платежи внесены). */
+    suspend fun close(debtId: Long) {
+        val debt = dao.getById(debtId) ?: return
+        dao.update(debt.copy(state = DebtState.CLOSED))
+    }
+
+    /**
+     * Удалить покупку вместе с автоматически созданными платежами ([ExpenseSource.DEBT]).
+     * Траты, которые пользователь создал вручную и позже привязал к покупке, остаются в истории.
+     */
+    suspend fun delete(debtId: Long) {
+        db.withTransaction {
+            val expenseIds = dao.getPaymentExpenseIds(debtId)
+            val debt = dao.getById(debtId) ?: return@withTransaction
+            dao.delete(debt)   // каскадом удаляет debt_payments
+            expenseIds.forEach { expId ->
+                val expense = db.expenses().getByIds(listOf(expId)).firstOrNull()?.expense ?: return@forEach
+                if (expense.source == ExpenseSource.DEBT) db.expenses().deleteById(expId)
+            }
+        }
     }
 
     /** Отменить покупку (вернули товар): платежи остаются тратами, пока пользователь их не удалит. */
@@ -125,7 +157,7 @@ class DebtRepository(private val db: AppDatabase) {
         val main = expense.copy(
             amountKopecks = if (principal > 0) principal else amount,
             note = DebtTexts.paymentNote(debt, if (principal > 0) PaymentPart.PRINCIPAL else PaymentPart.INTEREST, next?.number, next?.count, first),
-            source = ExpenseSource.DEBT,
+            source = if (expense.id == 0L) ExpenseSource.DEBT else expense.source,
         )
         val mainId = if (main.id == 0L) db.expenses().insert(main) else main.id.also { db.expenses().update(main) }
         dao.insertPayment(DebtPayment(debtId = debt.id, expenseId = mainId, part = if (principal > 0) PaymentPart.PRINCIPAL else PaymentPart.INTEREST))

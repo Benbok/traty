@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -14,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.labels.ExpenseLabelHit
 import ru.my.traty.ui.designsystem.components.AmountSize
@@ -55,6 +57,20 @@ fun ExpenseRow(
                     color = TratyTheme.colors.onSurface,
                     modifier = Modifier.weight(1f, fill = false),
                 )
+                if (e.source == ExpenseSource.DEBT) {
+                    Spacer(Modifier.width(TratyTheme.spacing.xs))
+                    Surface(
+                        shape = TratyTheme.shapes.small,
+                        color = TratyTheme.colors.primaryContainer,
+                    ) {
+                        Text(
+                            text = "Частями",
+                            style = TratyTheme.typography.labelSmall,
+                            color = TratyTheme.colors.primary,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                        )
+                    }
+                }
                 if (labels.isNotEmpty()) {
                     Spacer(Modifier.width(TratyTheme.spacing.xs))
                     ExpenseLabelBadges(labels)
