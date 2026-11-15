@@ -71,6 +71,10 @@
             android:name=".data.recurring.RecurringActionReceiver"
             android:exported="false" />
 
+        <receiver
+            android:name=".data.debt.DebtActionReceiver"
+            android:exported="false" />
+
         <service
             android:name=".tile.VoiceTileService"
             android:exported="true"

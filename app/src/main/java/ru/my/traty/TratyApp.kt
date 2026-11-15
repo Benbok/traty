@@ -21,6 +21,7 @@ import ru.my.traty.data.IncomeRepository
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.ReconciliationRepository
 import ru.my.traty.data.debt.DebtPaymentRemoval
+import ru.my.traty.data.debt.DebtReminderWork
 import ru.my.traty.data.debt.DebtRepository
 import ru.my.traty.data.budget.BudgetAlertWatcher
 import ru.my.traty.data.budget.BudgetRepository
@@ -62,6 +63,7 @@ open class TratyApp : Application() {
         }
         if (parsePendingOnStart) {
             runCatching { RecurringReminderWork.schedule(this) }
+            runCatching { DebtReminderWork.schedule(this) }
             runCatching { DailyDigestWork.schedule(this) }
             container.budgetAlerts.start(appScope)
             runCatching { WeeklyTaskWork.schedule(this) }
