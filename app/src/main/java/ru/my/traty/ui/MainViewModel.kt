@@ -164,11 +164,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.db.expenses().observeTotals(p.startMillis(zone), p.endMillisExclusive(zone))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** Суммы по (категория, место) текущего периода — для разбивки по магазинам в статистике. */
-    val placeTotals: StateFlow<List<ru.my.traty.data.PlaceTotal>> = _period.flatMapLatest { p ->
-        c.db.expenses().observePlaceTotals(p.startMillis(zone), p.endMillisExclusive(zone))
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
     val prevTotals: StateFlow<List<CategoryTotal>> = _period.flatMapLatest { p ->
         val prev = p.previous(startDay)
         c.db.expenses().observeTotals(prev.startMillis(zone), prev.endMillisExclusive(zone))
