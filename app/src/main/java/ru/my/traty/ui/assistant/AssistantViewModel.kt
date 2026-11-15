@@ -15,16 +15,18 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.my.traty.TratyApp
+import ru.my.traty.ai.LlmClient
 import ru.my.traty.assistant.AssistantContext
+import ru.my.traty.assistant.AssistantData
+import ru.my.traty.assistant.AssistantFallback
 import ru.my.traty.assistant.Balance
 import ru.my.traty.assistant.AssistantEngine
 import ru.my.traty.assistant.AssistantPrompts
 import ru.my.traty.assistant.AssistantQueries
 import ru.my.traty.assistant.AssistantQuery
 import ru.my.traty.assistant.AssistantTurn
-import ru.my.traty.assistant.Intents
 import ru.my.traty.assistant.PlanProposal
-import ru.my.traty.assistant.QuestionDates
+import ru.my.traty.assistant.QuestionRules
 import ru.my.traty.assistant.SubAction
 import ru.my.traty.assistant.SubscriptionChange
 import ru.my.traty.data.AppSettings
@@ -103,13 +105,27 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 val s = c.settings.current()
                 val today = LocalDate.now()
                 val categories = c.db.categories().getActiveWithSubs().selectable()
-                val rawQuery = client.complete(
-                    system = AssistantPrompts.querySystem(categories, today, s.periodStartDay),
-                    user = AssistantPrompts.queryUser(question, history),
-                    jsonMode = true,
-                )
-                val decoded = AssistantQueries.decode(rawQuery) ?: AssistantQuery(intent = Intents.UNKNOWN)
-                val query = QuestionDates.apply(question, AssistantQueries.correct(question, decoded), today, s.periodStartDay)
+                // Шаг 1: вопрос → запрос. Если ИИ не ответил, пробуем понять вопрос правилами
+                var aiDown: Exception? = null
+                val fromAi = try {
+                    AssistantQueries.decode(
+                        client.complete(
+                            system = AssistantPrompts.querySystem(categories, today, s.periodStartDay),
+                            user = AssistantPrompts.queryUser(question, history),
+                            jsonMode = true,
+                        )
+                    )
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    aiDown = e
+                    null
+                }
+                val guessed = QuestionRules.guess(question, categories)
+                if (aiDown != null && guessed == null) throw aiDown
+                val offline = aiDown != null
+                val offlineReason = aiDown?.message
+                val query = QuestionRules.resolve(question, fromAi, guessed, today, s.periodStartDay)
                 history += AssistantTurn(question, AssistantQueries.encode(query))
                 while (history.size > AssistantPrompts.HISTORY) history.removeAt(0)
 
@@ -132,15 +148,13 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     )
                     AssistantEngine.run(query, ctx)
                 }
-                val text = data.direct ?: AssistantPrompts.clean(
-                    client.complete(AssistantPrompts.ANSWER_SYSTEM, AssistantPrompts.answerUser(question, data.facts), jsonMode = false)
-                )
+                val text = data.direct ?: if (offline) AssistantFallback.text(data, guessed = true, reason = offlineReason) else answer(client, question, data)
                 messages += ChatMessage(
                     nextId++, false, text,
                     headline = data.headline,
                     caption = data.caption,
                     expenseIds = data.expenseIds,
-                    sentFacts = data.facts.takeIf { data.direct == null },
+                    sentFacts = data.facts.takeIf { data.direct == null && !offline },
                     planProposals = data.planProposals,
                     planMonth = data.planMonth,
                     subscriptionChanges = data.subscriptionChanges,
@@ -153,6 +167,17 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 busy = false
             }
         }
+    }
+
+    /** Шаг 2: ответ словами по посчитанным цифрам. Если ИИ не ответил, цифры всё равно показываются. */
+    private suspend fun answer(client: LlmClient, question: String, data: AssistantData): String = try {
+        AssistantPrompts.clean(
+            client.complete(AssistantPrompts.ANSWER_SYSTEM, AssistantPrompts.answerUser(question, data.facts), jsonMode = false)
+        )
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        AssistantFallback.text(data)
     }
 
     /** Добавляет отмеченные строки предложения в «План трат» (повторяются и в следующих месяцах). */
