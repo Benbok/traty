@@ -89,8 +89,6 @@ fun EditExpenseScreen(
     onSetCategoryImpulsive: (categoryId: Long, impulsive: Boolean) -> Unit,
     labels: List<ExpenseLabelHit> = emptyList(),
 ) {
-    BackHandler(onBack = onDismiss)
-
     val e = item.expense
     val editable = e.isUserEditable
     val zone = remember { ZoneId.systemDefault() }
@@ -99,18 +97,21 @@ fun EditExpenseScreen(
     }
     val initialAmount = remember(e.amountKopecks) { AmountInput.fromKopecks(e.amountKopecks) }
 
-    var fields by remember(item) {
-        mutableStateOf(
-            EditFields(
-                amountText = initialAmount,
-                category = item.categoryName,
-                subcategory = item.subcategoryName.orEmpty(),
-                place = e.place.orEmpty(),
-                note = e.note.orEmpty(),
-                dateText = date.toString(),
-            )
+    val initialFields = remember(item) {
+        EditFields(
+            amountText = initialAmount,
+            category = item.categoryName,
+            subcategory = item.subcategoryName.orEmpty(),
+            place = e.place.orEmpty(),
+            note = e.note.orEmpty(),
+            dateText = date.toString(),
         )
     }
+    var fields by remember(item) { mutableStateOf(initialFields) }
+    var askDiscard by remember(item) { mutableStateOf(false) }
+    // «Назад» и стрелка в шапке не теряют правки молча: если что-то поменяли, спрашиваем
+    val leave = { if (editable && fields != initialFields) askDiscard = true else onDismiss() }
+    BackHandler(onBack = leave)
     var picking by rememberSaveable { mutableStateOf<Picker?>(null) }
 
     val selectedCat = categories.firstOrNull { it.category.name == fields.category }
@@ -123,7 +124,7 @@ fun EditExpenseScreen(
             TratyHeaderCard(
                 modifier = Modifier.statusBarsPadding(),
                 title = if (editable) "Трата" else "Запись сверки",
-                onBack = onDismiss,
+                onBack = leave,
                 actions = {
                     if (editable) {
                         TratyIconButton(
@@ -301,6 +302,20 @@ fun EditExpenseScreen(
             }
             Spacer(Modifier.height(TratyTheme.spacing.lg))
         }
+    }
+
+    if (askDiscard) {
+        DiscardChangesDialog(
+            onSave = {
+                askDiscard = false
+                onSave(fields)
+            },
+            onDiscard = {
+                askDiscard = false
+                onDismiss()
+            },
+            onStay = { askDiscard = false },
+        )
     }
 
     when (picking) {
