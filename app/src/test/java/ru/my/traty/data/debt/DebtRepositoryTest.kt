@@ -148,4 +148,23 @@ class DebtRepositoryTest {
         assertEquals(voiceExpenseId, remaining.single().expense.id)
         assertEquals(ExpenseSource.VOICE, remaining.single().expense.source)
     }
+
+    @Test
+    fun deletionImpactCountsAppPaymentsAndKeptExpenses() = runTest {
+        val id = repo.start(Debt(title = "Диван", categoryId = techId, totalKopecks = 5_000_000), 1_000_000, today, zone, today)
+        assertTrue(repo.addPayment(id, 500_000, today, zone, today))
+        // Трата, которую пользователь записал сам и привязал к покупке: при удалении остаётся
+        val own = db.expenses().insert(
+            ru.my.traty.data.Expense(amountKopecks = 200_000, categoryId = techId, timestamp = System.currentTimeMillis(), source = ExpenseSource.VOICE)
+        )
+        assertTrue(repo.attachExpense(id, own, zone, today))
+
+        val impact = repo.deletionImpact(id)
+        assertEquals(2, impact.removedCount)
+        assertEquals(1_500_000L, impact.removedKopecks)
+        assertEquals(1, impact.keptCount)
+
+        repo.delete(id)
+        assertEquals(listOf(200_000L), db.expenses().getAllWithCategory().map { it.expense.amountKopecks })
+    }
 }
