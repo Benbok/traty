@@ -40,7 +40,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import ru.my.traty.data.Income
 import ru.my.traty.data.Places
 import ru.my.traty.ui.charts.components.BalanceAreaChart
 import ru.my.traty.ui.charts.components.ChartDateCard
@@ -59,14 +58,12 @@ import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
-import ru.my.traty.ui.income.IncomeDetailsDialog
 import ru.my.traty.ui.formatTime
 import kotlin.math.roundToInt
 
 @Composable
 fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
     val state by vm.uiState.collectAsStateWithLifecycle()
-    var incomeToDelete by remember { mutableStateOf<Income?>(null) }
     var showRangePicker by remember { mutableStateOf(false) }
     // Категории, раскрытые до магазинов
     var expandedCats by remember { mutableStateOf(emptySet<Long>()) }
@@ -267,7 +264,6 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { incomeToDelete = inc }
                                     .padding(vertical = TratyTheme.spacing.xs),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
@@ -310,17 +306,6 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
             initialEnd = state.rangeEnd,
             onRangeSelected = vm::setCustomRange,
             onDismiss = { showRangePicker = false },
-        )
-    }
-
-    incomeToDelete?.let { inc ->
-        IncomeDetailsDialog(
-            income = inc,
-            onDelete = {
-                vm.deleteIncome(inc)
-                incomeToDelete = null
-            },
-            onDismiss = { incomeToDelete = null },
         )
     }
 }
