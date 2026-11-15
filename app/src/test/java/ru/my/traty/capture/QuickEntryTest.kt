@@ -311,10 +311,13 @@ class QuickEntryTest {
         seedWithRule("магнит", "Продукты")
         val reply = """{"items":[{"type":"expense","amount":250,"category":"Продукты","place":"Магнит"}]}"""
         val qe = quickEntry(FakeLlm { reply })
-        assertTrue(qe.process("сегодня магнит 250 рублей", EntryOrigin.VOICE, spokenAt) is EntryOutcome.AutoSaved)
+        // Тут нужно настоящее время, а не фиксированный spokenAt: время записи «сегодня» берётся по часам телефона
+        // (entryTimestamp), и признак «недавно» сравнивает его с временем повтора.
+        val first = System.currentTimeMillis()
+        assertTrue(qe.process("сегодня магнит 250 рублей", EntryOrigin.VOICE, first) is EntryOutcome.AutoSaved)
 
-        // Та же фраза через 10 минут: правило есть, но молча второй раз не сохраняем
-        val again = qe.process("сегодня магнит 250 рублей", EntryOrigin.VOICE, spokenAt + 10 * 60_000L)
+        // Та же фраза через минуту: правило есть, но молча второй раз не сохраняем
+        val again = qe.process("сегодня магнит 250 рублей", EntryOrigin.VOICE, first + 60_000L)
         again as EntryOutcome.NeedsConfirm
         val hint = requireNotNull(again.draft.rows.single().duplicate)
         assertEquals("Магнит", hint.label)

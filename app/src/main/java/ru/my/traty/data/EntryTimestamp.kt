@@ -11,8 +11,8 @@ import java.time.ZoneId
 fun entryTimestamp(
     day: LocalDate,
     zone: ZoneId,
-    today: LocalDate = LocalDate.now(),
-    nowTime: LocalTime = LocalTime.now(),
+    today: LocalDate = LocalDate.now(zone),
+    nowTime: LocalTime = LocalTime.now(zone),
 ): Long {
     val time = if (day == today) nowTime else LocalTime.NOON
     return day.atTime(time).atZone(zone).toInstant().toEpochMilli()
