@@ -65,9 +65,16 @@ object QuestionRules {
      * Итоговый запрос: ответ ИИ, а если его нет или ИИ не узнал вопрос — правила.
      * Поверх — явные команды ([AssistantQueries.correct]) и даты из вопроса ([QuestionDates]).
      */
-    fun resolve(question: String, fromAi: AssistantQuery?, guessed: AssistantQuery?, today: LocalDate, startDay: Int): AssistantQuery {
+    fun resolve(
+        question: String,
+        fromAi: AssistantQuery?,
+        guessed: AssistantQuery?,
+        today: LocalDate,
+        startDay: Int,
+        previous: AssistantQuery? = null,
+    ): AssistantQuery {
         val base = fromAi?.takeIf { it.intent != Intents.UNKNOWN } ?: guessed ?: fromAi ?: AssistantQuery(intent = Intents.UNKNOWN)
-        return QuestionDates.apply(question, AssistantQueries.correct(question, base), today, startDay)
+        return QuestionDates.apply(question, AssistantQueries.correct(question, base, previous), today, startDay)
     }
 }
 

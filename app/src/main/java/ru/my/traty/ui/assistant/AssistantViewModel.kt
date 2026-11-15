@@ -17,6 +17,8 @@ import kotlinx.coroutines.withContext
 import ru.my.traty.TratyApp
 import ru.my.traty.ai.LlmClient
 import ru.my.traty.assistant.AssistantContext
+import ru.my.traty.assistant.DebtAction
+import ru.my.traty.assistant.DebtChange
 import ru.my.traty.assistant.DebtWithPaid
 import ru.my.traty.assistant.AssistantData
 import ru.my.traty.assistant.AssistantFallback
@@ -63,6 +65,10 @@ data class ChatMessage(
     val subscriptionChanges: List<SubscriptionChange> = emptyList(),
     /** Сколько изменений подписок уже выполнено; null — ещё нет. */
     val subscriptionsApplied: Int? = null,
+    /** Предложенные изменения покупок частями — выполняются по кнопке. */
+    val debtChanges: List<DebtChange> = emptyList(),
+    /** Сколько изменений покупок уже выполнено; null — ещё нет. */
+    val debtsApplied: Int? = null,
 )
 
 /**
@@ -126,7 +132,8 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 if (aiDown != null && guessed == null) throw aiDown
                 val offline = aiDown != null
                 val offlineReason = aiDown?.message
-                val query = QuestionRules.resolve(question, fromAi, guessed, today, s.periodStartDay)
+                val previous = history.lastOrNull()?.let { AssistantQueries.decode(it.queryJson) }
+                val query = QuestionRules.resolve(question, fromAi, guessed, today, s.periodStartDay, previous)
                 history += AssistantTurn(question, AssistantQueries.encode(query))
                 while (history.size > AssistantPrompts.HISTORY) history.removeAt(0)
 
@@ -161,6 +168,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     planProposals = data.planProposals,
                     planMonth = data.planMonth,
                     subscriptionChanges = data.subscriptionChanges,
+                    debtChanges = data.debtChanges,
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -236,6 +244,31 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Exception) {
                 messages += ChatMessage(nextId++, false, "Не удалось изменить подписку: ${e.message}", error = true)
+            }
+        }
+    }
+
+    /** Удаляет, закрывает или отменяет отмеченные покупки частями — так же, как кнопки на экране покупки. */
+    fun applyDebts(messageId: Long, selected: List<DebtChange>) {
+        if (selected.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                var done = 0
+                selected.forEach { ch ->
+                    if (c.debts.getById(ch.id) == null) return@forEach
+                    when (ch.action) {
+                        DebtAction.DELETE -> c.debts.delete(ch.id)
+                        DebtAction.CLOSE -> c.debts.close(ch.id)
+                        DebtAction.CANCEL -> c.debts.cancel(ch.id)
+                    }
+                    done++
+                }
+                val i = messages.indexOfFirst { it.id == messageId }
+                if (i >= 0) messages[i] = messages[i].copy(debtsApplied = done)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                messages += ChatMessage(nextId++, false, "Не удалось изменить покупку частями. Попробуйте ещё раз.", error = true)
             }
         }
     }
