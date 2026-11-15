@@ -20,14 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
-import ru.my.traty.ui.home.ExpenseRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -416,6 +409,7 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel(), o
                             val k = groupKey(t.categoryId, mode, g)
                             expandedGroups = if (k in expandedGroups) expandedGroups - k else expandedGroups + k
                         },
+                        onOpenExpense = { vm.editing = it },
                     )
                 }
             }
@@ -489,6 +483,10 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel(), o
             onOpenDay = {
                 heatSelected = null
                 rangeVm.setRange(day, day)
+            },
+            onOpenExpense = {
+                heatSelected = null
+                vm.editing = it
             },
             onDismiss = { heatSelected = null },
         )
@@ -669,7 +667,7 @@ private fun CumulativeCard(current: CumulativeLine, previous: CumulativeLine) {
 }
 
 @Composable
-private fun LegendDot(color: Color) {
+internal fun LegendDot(color: Color) {
     Canvas(Modifier.padding(end = 4.dp).size(8.dp)) { drawCircle(color) }
 }
 
@@ -684,7 +682,7 @@ private val RING_COLORS_LIGHT = listOf(
 private val RING_COLORS_DARK = listOf(
     Color(0xFF3987E5), Color(0xFFD95926), Color(0xFF199E70), Color(0xFFC98500), Color(0xFFD55181), Color(0xFF9085E9),
 )
-private val RING_REST = Color(0xFF94A3B8)
+internal val RING_REST = Color(0xFF94A3B8)
 
 @Composable
 private fun ringPalette(): List<Color> = if (TratyTheme.colors.isDark) RING_COLORS_DARK else RING_COLORS_LIGHT
@@ -867,90 +865,6 @@ private fun HeatCalendarCard(month: HeatMonth, selected: LocalDate?, onDay: (Loc
     }
 }
 
-/**
- * Траты одного дня в нижней шторке: дата, итог и число покупок, полоса долей по категориям,
- * затем сами траты в том же виде, что на главной. Кнопка открывает статистику этого дня.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DayExpensesSheet(
-    day: LocalDate,
-    expenses: List<ExpenseWithCategory>,
-    categoryColors: Map<Long, Color>,
-    onOpenDay: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
-        containerColor = TratyTheme.colors.surface,
-    ) {
-        val total = expenses.sumOf { it.expense.amountKopecks }
-        Column(Modifier.fillMaxWidth().padding(horizontal = TratyTheme.spacing.lg)) {
-            Text(
-                text = formatDateWithWeekday(day).replaceFirstChar { it.uppercase() },
-                style = TratyTheme.typography.titleMedium,
-            )
-            Row(verticalAlignment = Alignment.Bottom) {
-                TratyAmountText(amountKopecks = total, size = AmountSize.LARGE, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(TratyTheme.spacing.sm))
-                Text(
-                    text = if (expenses.isEmpty()) "трат нет" else purchases(expenses.size),
-                    style = TratyTheme.typography.bodySmall,
-                    color = TratyTheme.colors.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-            }
-            if (expenses.isNotEmpty()) {
-                // Доли категорий дня одной тонкой полосой (сегменты через 2dp зазор), подписи — ниже
-                val byCat = expenses.groupBy { it.expense.categoryId }
-                    .map { (id, v) -> Triple(id, "${v.first().categoryEmoji} ${v.first().categoryName}", v.sumOf { it.expense.amountKopecks }) }
-                    .sortedByDescending { it.third }
-                Spacer(Modifier.height(TratyTheme.spacing.sm))
-                Row(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))) {
-                    byCat.forEachIndexed { i, (id, _, v) ->
-                        Box(
-                            Modifier
-                                .weight(v.toFloat().coerceAtLeast(1f))
-                                .fillMaxHeight()
-                                .padding(end = if (i < byCat.lastIndex) 2.dp else 0.dp)
-                                .background(categoryColors[id] ?: RING_REST),
-                        )
-                    }
-                }
-                Spacer(Modifier.height(TratyTheme.spacing.xs))
-                byCat.forEach { (id, name, v) ->
-                    Row(Modifier.padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
-                        LegendDot(categoryColors[id] ?: RING_REST)
-                        Text(
-                            name,
-                            style = TratyTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(formatRub(v), style = TratyTheme.typography.labelMedium, color = TratyTheme.colors.onSurfaceVariant)
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.height(TratyTheme.spacing.sm))
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(max = 420.dp)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            expenses.forEach { ExpenseRow(row = it, onClick = {}) }
-        }
-        TratyButton(
-            onClick = onOpenDay,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.md),
-        ) { Text("Статистика за этот день") }
-        Spacer(Modifier.height(TratyTheme.spacing.lg))
-    }
-}
-
 /** Где не было трат, когда сравнивать не с чем. */
 private fun emptyCompareText(span: StatsSpan) = when (span) {
     StatsSpan.PERIOD -> "в эти же дни прошлого периода"
@@ -1078,6 +992,7 @@ private fun CategoryBreakdownView(
     onMode: (BreakdownMode) -> Unit,
     isGroupExpanded: (BreakdownGroup) -> Boolean,
     onToggleGroup: (BreakdownGroup) -> Unit,
+    onOpenExpense: (ExpenseWithCategory) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(start = 48.dp)) {
         if (breakdown.modes.size > 1) {
@@ -1089,12 +1004,12 @@ private fun CategoryBreakdownView(
             }
         }
         if (mode == BreakdownMode.EXPENSES) {
-            ExpenseList(breakdown.expenses, mode)
+            ExpenseList(breakdown.expenses, mode, onOpenExpense)
         } else {
             breakdown.groups(mode).forEach { g ->
                 val open = isGroupExpanded(g)
                 BreakdownGroupRow(group = g, categoryTotal = breakdown.total, expanded = open, onClick = { onToggleGroup(g) })
-                if (open) Column(Modifier.padding(start = TratyTheme.spacing.md)) { ExpenseList(g.expenses, mode) }
+                if (open) Column(Modifier.padding(start = TratyTheme.spacing.md)) { ExpenseList(g.expenses, mode, onOpenExpense) }
             }
         }
     }
@@ -1137,8 +1052,10 @@ private fun BreakdownGroupRow(group: BreakdownGroup, categoryTotal: Long, expand
 
 /** Траты списком: что купили, когда и где, сумма. */
 @Composable
-private fun ExpenseList(list: List<ExpenseWithCategory>, mode: BreakdownMode) {
-    list.take(EXPENSES_SHOWN).forEach { e -> BreakdownExpenseRow(e, showPlace = mode != BreakdownMode.STORES) }
+private fun ExpenseList(list: List<ExpenseWithCategory>, mode: BreakdownMode, onOpenExpense: (ExpenseWithCategory) -> Unit) {
+    list.take(EXPENSES_SHOWN).forEach { e ->
+        BreakdownExpenseRow(e, showPlace = mode != BreakdownMode.STORES, modifier = Modifier.clickable { onOpenExpense(e) })
+    }
     if (list.size > EXPENSES_SHOWN) {
         Text(
             text = "и ещё ${purchases(list.size - EXPENSES_SHOWN)} — все траты на главной",
