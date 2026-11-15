@@ -26,10 +26,11 @@ enum class TreePaymentState {
  * [scheduledDate] — плановая дата по графику (null для аванса без графика).
  * [actualDate] — дата фактической оплаты (если оплачен).
  * [principalKopecks] — тело долга в копейках.
- * [interestKopecks] — проценты в копейках (для кредита).
- * [paidAmountKopecks] — сколько фактически оплачено по этому узлу.
+ * [interestKopecks] — проценты по графику в копейках (для кредита).
+ * [paidAmountKopecks] — сколько фактически оплачено по этому узлу: тело и уплаченные проценты.
  * [state] — статус ([TreePaymentState]).
- * [expenseId] — id связанной траты в базе (для перехода к деталям траты).
+ * [expenseIds] — траты, из которых сложился платёж (их может быть несколько: платёж внесли частями),
+ * [expenseId] — последняя из них, для перехода к деталям траты.
  * [daysOverdue] — количество дней просрочки (если статус [TreePaymentState.OVERDUE]).
  */
 data class DebtTreeNode(
@@ -42,7 +43,8 @@ data class DebtTreeNode(
     val interestKopecks: Long = 0L,
     val paidAmountKopecks: Long = 0L,
     val state: TreePaymentState,
-    val expenseId: Long? = null,
+    val expenseIds: List<Long> = emptyList(),
+    val expenseId: Long? = expenseIds.lastOrNull(),
     val daysOverdue: Long = 0L,
     val note: String? = null,
 ) {
@@ -70,6 +72,9 @@ data class DebtTreeSummary(
 
 /**
  * Полное дерево платежей по покупке частями (рассрочке, кредиту, авансу с доплатами).
+ *
+ * Итоги (оплачено, остаток, переплата) берутся из [DebtProgress], как в списке покупок, вопросе
+ * «Доплата?» и ответах ассистента, чтобы цифры везде совпадали.
  */
 data class DebtTree(
     val debt: Debt,
@@ -83,140 +88,100 @@ data class DebtTree(
             today: LocalDate = LocalDate.now(),
             zone: ZoneId = ZoneId.systemDefault(),
         ): DebtTree {
-            val principalPayments = payments.filter { it.part == PaymentPart.PRINCIPAL }
-            val interestPayments = payments.filter { it.part == PaymentPart.INTEREST }
-            val totalPaidPrincipal = principalPayments.sumOf { it.amountKopecks }
-            val totalPaidInterest = interestPayments.sumOf { it.amountKopecks }
-            val totalPaid = totalPaidPrincipal + totalPaidInterest
-
+            val status = DebtProgress.of(debt, payments.map { it.toPaidPart(zone) }, today)
             val schedule = DebtSchedule.of(debt)
-            return if (schedule.isNotEmpty()) {
-                buildScheduledTree(
-                    debt = debt,
-                    schedule = schedule,
-                    payments = payments,
-                    totalPaidPrincipal = totalPaidPrincipal,
-                    totalPaidInterest = totalPaidInterest,
-                    today = today,
-                    zone = zone,
-                )
-            } else {
-                buildUnscheduledTree(
-                    debt = debt,
-                    payments = payments,
-                    totalPaidPrincipal = totalPaidPrincipal,
-                    totalPaidInterest = totalPaidInterest,
-                    zone = zone,
-                )
-            }
+            val nodes = if (schedule.isNotEmpty()) scheduledNodes(debt, schedule, payments, today, zone)
+            else unscheduledNodes(debt, payments, status, zone)
+            return DebtTree(debt, summaryOf(debt, status, nodes), nodes)
         }
 
-        private fun buildScheduledTree(
+        /** Что пришлось на одну строку графика. */
+        private class Slot(val item: ScheduledPayment) {
+            var principal = 0L
+            var interest = 0L
+            var completedOn: LocalDate? = null
+            val expenseIds = mutableListOf<Long>()
+            fun add(expenseId: Long) { if (expenseId !in expenseIds) expenseIds += expenseId }
+        }
+
+        /**
+         * Каждая трата раскладывается по строкам графика по сумме: платёж двумя частями ложится в одну строку,
+         * двойной платёж закрывает две. Проценты кредита идут в строку, которая была ближайшей в момент
+         * оплаты (так их и считает [DebtRepository]).
+         */
+        private fun scheduledNodes(
             debt: Debt,
             schedule: List<ScheduledPayment>,
             payments: List<DebtPaymentRow>,
-            totalPaidPrincipal: Long,
-            totalPaidInterest: Long,
             today: LocalDate,
             zone: ZoneId,
-        ): DebtTree {
-            val totalPaid = totalPaidPrincipal + totalPaidInterest
-            val nodes = mutableListOf<DebtTreeNode>()
-            var cumulativePrincipal = 0L
-            var overdueAmount = 0L
-
-            val actualPrincipalRows = payments.filter { it.part == PaymentPart.PRINCIPAL }
-            var actualIndex = 0
-
-            for (item in schedule) {
-                val before = cumulativePrincipal
-                cumulativePrincipal += item.principalKopecks
-                val itemTargetDate = item.date
-
-                val covered = (totalPaidPrincipal - before).coerceIn(0L, item.principalKopecks)
-                val isFullyPaid = covered >= item.principalKopecks
-                val isPartiallyPaid = covered > 0L && !isFullyPaid
-                val isPast = itemTargetDate.isBefore(today)
-
-                val state = when {
-                    isFullyPaid -> TreePaymentState.PAID
-                    isPartiallyPaid -> if (isPast) TreePaymentState.OVERDUE else TreePaymentState.PARTIALLY_PAID
-                    isPast -> TreePaymentState.OVERDUE
-                    else -> TreePaymentState.UPCOMING
+        ): List<DebtTreeNode> {
+            val slots = schedule.map { Slot(it) }
+            var current = 0
+            // Проценты того же платежа записаны с тем же временем: их раскладываем раньше тела
+            val ordered = payments.sortedWith(compareBy({ it.timestamp }, { if (it.part == PaymentPart.INTEREST) 0 else 1 }))
+            for (row in ordered) {
+                val day = Instant.ofEpochMilli(row.timestamp).atZone(zone).toLocalDate()
+                if (row.part == PaymentPart.INTEREST) {
+                    val slot = slots[current.coerceAtMost(slots.lastIndex)]
+                    slot.interest += row.amountKopecks
+                    slot.add(row.expenseId)
+                    continue
                 }
-
-                val daysOverdue = if (state == TreePaymentState.OVERDUE) {
-                    ChronoUnit.DAYS.between(itemTargetDate, today).coerceAtLeast(0L)
-                } else 0L
-
-                val unpaidPrincipal = item.principalKopecks - covered
-                if (state == TreePaymentState.OVERDUE) {
-                    overdueAmount += unpaidPrincipal + item.interestKopecks
+                var left = row.amountKopecks
+                while (left > 0 && current < slots.size) {
+                    val slot = slots[current]
+                    val take = minOf(left, slot.item.principalKopecks - slot.principal)
+                    slot.principal += take
+                    slot.add(row.expenseId)
+                    left -= take
+                    if (slot.principal >= slot.item.principalKopecks) {
+                        slot.completedOn = day
+                        current++
+                    }
                 }
-
-                val matchedActual = if (covered > 0L && actualIndex < actualPrincipalRows.size) {
-                    val row = actualPrincipalRows[actualIndex]
-                    if (isFullyPaid) actualIndex++
-                    row
-                } else null
-
-                val actualDate = matchedActual?.let {
-                    Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate()
-                }
-
-                nodes += DebtTreeNode(
-                    id = "scheduled_${item.number}",
-                    number = item.number,
-                    totalCount = schedule.size,
-                    scheduledDate = itemTargetDate,
-                    actualDate = actualDate,
-                    principalKopecks = item.principalKopecks,
-                    interestKopecks = item.interestKopecks,
-                    paidAmountKopecks = covered + (if (isFullyPaid) item.interestKopecks else 0L),
-                    state = state,
-                    expenseId = matchedActual?.expenseId,
-                    daysOverdue = daysOverdue,
-                )
+                // Заплатили больше цены — лишнее остаётся у последней строки
+                if (left > 0) slots.last().let { it.principal += left; it.add(row.expenseId) }
             }
-
-            val totalCost = debt.totalKopecks
-            val remainingPrincipal = totalCost?.let { (it - totalPaidPrincipal).coerceAtLeast(0L) }
-            val isPaidOff = (remainingPrincipal == 0L || debt.state == DebtState.CLOSED) && totalCost != null
-
-            val summary = DebtTreeSummary(
-                totalCount = nodes.size,
-                paidCount = nodes.count { it.state == TreePaymentState.PAID },
-                overdueCount = nodes.count { it.state == TreePaymentState.OVERDUE },
-                upcomingCount = nodes.count { it.state == TreePaymentState.UPCOMING || it.state == TreePaymentState.PARTIALLY_PAID },
-                totalKopecks = totalCost,
-                paidKopecks = totalPaid,
-                remainingKopecks = remainingPrincipal,
-                overdueKopecks = overdueAmount,
-                plannedOverpaymentKopecks = schedule.sumOf { it.interestKopecks },
-                paidInterestKopecks = totalPaidInterest,
-                progressPercent = if (totalCost != null && totalCost > 0) {
-                    (totalPaidPrincipal.toFloat() / totalCost.toFloat()).coerceIn(0f, 1f)
-                } else 0f,
-                isPaidOff = isPaidOff,
-            )
-
-            return DebtTree(debt = debt, summary = summary, nodes = nodes)
+            val active = debt.state == DebtState.ACTIVE
+            return slots.mapNotNull { slot -> nodeOf(slot, schedule.size, today, active) }
         }
 
-        private fun buildUnscheduledTree(
-            debt: Debt,
-            payments: List<DebtPaymentRow>,
-            totalPaidPrincipal: Long,
-            totalPaidInterest: Long,
-            zone: ZoneId,
-        ): DebtTree {
-            val totalPaid = totalPaidPrincipal + totalPaidInterest
-            val nodes = mutableListOf<DebtTreeNode>()
+        /** У закрытой и отменённой покупки неоплаченные строки не нужны: их уже не ждут. */
+        private fun nodeOf(slot: Slot, count: Int, today: LocalDate, active: Boolean): DebtTreeNode? {
+            val item = slot.item
+            val fullyPaid = slot.principal >= item.principalKopecks
+            val started = slot.principal > 0 || slot.interest > 0
+            val past = item.date.isBefore(today)
+            val state = when {
+                fullyPaid -> TreePaymentState.PAID
+                !active && !started -> return null
+                !active -> TreePaymentState.PARTIALLY_PAID
+                past -> TreePaymentState.OVERDUE
+                started -> TreePaymentState.PARTIALLY_PAID
+                else -> TreePaymentState.UPCOMING
+            }
+            return DebtTreeNode(
+                id = "scheduled_${item.number}",
+                number = item.number,
+                totalCount = count,
+                scheduledDate = item.date,
+                actualDate = slot.completedOn,
+                principalKopecks = item.principalKopecks,
+                interestKopecks = item.interestKopecks,
+                paidAmountKopecks = minOf(slot.principal, item.principalKopecks) + minOf(slot.interest, item.interestKopecks),
+                state = state,
+                expenseIds = slot.expenseIds.toList(),
+                daysOverdue = if (state == TreePaymentState.OVERDUE) ChronoUnit.DAYS.between(item.date, today) else 0L,
+            )
+        }
 
-            for ((index, row) in payments.withIndex()) {
+        /** Аванс и доплаты без графика: каждая трата — свой узел, в конце остаток. */
+        private fun unscheduledNodes(debt: Debt, payments: List<DebtPaymentRow>, status: DebtStatus, zone: ZoneId): List<DebtTreeNode> {
+            val nodes = payments.sortedBy { it.timestamp }.mapIndexed { index, row ->
                 val date = Instant.ofEpochMilli(row.timestamp).atZone(zone).toLocalDate()
                 val isPrincipal = row.part == PaymentPart.PRINCIPAL
-                nodes += DebtTreeNode(
+                DebtTreeNode(
                     id = "actual_${row.expenseId}_${row.part}",
                     number = index + 1,
                     totalCount = null,
@@ -226,48 +191,44 @@ data class DebtTree(
                     interestKopecks = if (!isPrincipal) row.amountKopecks else 0L,
                     paidAmountKopecks = row.amountKopecks,
                     state = TreePaymentState.PAID,
-                    expenseId = row.expenseId,
+                    expenseIds = listOf(row.expenseId),
                     note = if (index == 0) "Аванс" else "Доплата",
                 )
             }
+            val remaining = status.remainingKopecks
+            if (remaining == null || remaining <= 0 || debt.state != DebtState.ACTIVE) return nodes
+            return nodes + DebtTreeNode(
+                id = "remainder",
+                number = nodes.size + 1,
+                totalCount = null,
+                scheduledDate = null,
+                actualDate = null,
+                principalKopecks = remaining,
+                state = TreePaymentState.UPCOMING,
+                note = "Остаток к доплате",
+            )
+        }
 
-            val totalCost = debt.totalKopecks
-            val remaining = totalCost?.let { (it - totalPaidPrincipal).coerceAtLeast(0L) }
-            if (remaining != null && remaining > 0 && debt.state == DebtState.ACTIVE) {
-                nodes += DebtTreeNode(
-                    id = "remainder",
-                    number = nodes.size + 1,
-                    totalCount = null,
-                    scheduledDate = null,
-                    actualDate = null,
-                    principalKopecks = remaining,
-                    interestKopecks = 0L,
-                    paidAmountKopecks = 0L,
-                    state = TreePaymentState.UPCOMING,
-                    note = "Остаток к доплате",
-                )
-            }
-
-            val isPaidOff = (remaining == 0L || debt.state == DebtState.CLOSED) && totalCost != null
-
-            val summary = DebtTreeSummary(
+        private fun summaryOf(debt: Debt, status: DebtStatus, nodes: List<DebtTreeNode>): DebtTreeSummary {
+            val total = debt.totalKopecks
+            val overdue = nodes.filter { it.state == TreePaymentState.OVERDUE }
+            return DebtTreeSummary(
                 totalCount = nodes.size,
                 paidCount = nodes.count { it.state == TreePaymentState.PAID },
-                overdueCount = 0,
-                upcomingCount = nodes.count { it.state == TreePaymentState.UPCOMING },
-                totalKopecks = totalCost,
-                paidKopecks = totalPaid,
-                remainingKopecks = remaining,
-                overdueKopecks = 0L,
-                plannedOverpaymentKopecks = 0L,
-                paidInterestKopecks = totalPaidInterest,
-                progressPercent = if (totalCost != null && totalCost > 0) {
-                    (totalPaidPrincipal.toFloat() / totalCost.toFloat()).coerceIn(0f, 1f)
-                } else 0f,
-                isPaidOff = isPaidOff,
+                overdueCount = overdue.size,
+                upcomingCount = nodes.count { it.state == TreePaymentState.UPCOMING || it.state == TreePaymentState.PARTIALLY_PAID },
+                totalKopecks = total,
+                paidKopecks = status.paidKopecks,
+                remainingKopecks = status.remainingKopecks,
+                overdueKopecks = overdue.sumOf { it.remainingKopecks },
+                plannedOverpaymentKopecks = status.plannedOverpaymentKopecks,
+                paidInterestKopecks = status.paidInterestKopecks,
+                progressPercent = if (total != null && total > 0) (status.paidPrincipalKopecks.toFloat() / total).coerceIn(0f, 1f) else 0f,
+                isPaidOff = total != null && (status.isPaidOff || debt.state == DebtState.CLOSED),
             )
-
-            return DebtTree(debt = debt, summary = summary, nodes = nodes)
         }
+
+        private fun DebtPaymentRow.toPaidPart(zone: ZoneId) =
+            PaidPart(Instant.ofEpochMilli(timestamp).atZone(zone).toLocalDate().toEpochDay(), part, amountKopecks)
     }
 }
