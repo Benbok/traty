@@ -1,11 +1,9 @@
 package ru.my.traty.assistant
 
-import ru.my.traty.data.CategoryTotal
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Income
-import ru.my.traty.data.IncomeOrigin
 import ru.my.traty.data.PeriodComparison
 import ru.my.traty.data.Recurring
 import ru.my.traty.data.RecurringState
@@ -24,14 +22,10 @@ import ru.my.traty.data.recurring.nextDate
 import ru.my.traty.data.recurring.period
 import ru.my.traty.data.recurring.yearlyKopecks
 import ru.my.traty.ui.formatRub
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 /** Сколько денег на счёте по последней сверке и записям после неё. */
@@ -116,8 +110,6 @@ object AssistantEngine {
     const val MAX_SHOWN_IDS = 300
 
     private val RU: Locale = Locale.forLanguageTag("ru")
-    private val dayFmt = DateTimeFormatter.ofPattern("d MMMM", RU)
-    private val dayYearFmt = DateTimeFormatter.ofPattern("d MMMM yyyy", RU)
 
     const val NOT_UNDERSTOOD = "Я отвечаю на вопросы о ваших тратах, доходах и подписках. " +
         "Например: «Сколько я потратил на кафе в этом месяце?» или «Могу ли я потратить 10 000 ₽ до конца месяца?»"
@@ -773,127 +765,4 @@ object AssistantEngine {
         it.state == RecurringState.ACTIVE && it.nextDate().isAfter(ctx.today) && !it.nextDate().isAfter(period.endDate)
     }
 
-    // --- Отбор трат ---
-
-    /** «кафе» → «кафе и рестораны», «ресторан» → «кафе и рестораны»: модель не всегда пишет название точно. */
-    internal fun closest(n: String, known: Collection<String>): String? {
-        if (n.length < 4) return null
-        known.filter { it.contains(n) }.minByOrNull { it.length }?.let { return it }
-        val stem = n.take(maxOf(4, n.length - 2))
-        return known.filter { k -> k.split(' ', ',', '-').any { w -> w.length >= 4 && (w.startsWith(stem) || n.startsWith(w.take(maxOf(4, w.length - 2)))) } }
-            .minByOrNull { it.length }
-    }
-
-    private class Filter(val names: Set<String>, val unknownNames: List<String>, val place: String?) {
-        val isEmpty get() = names.isEmpty() && place == null
-
-        fun matches(r: ExpenseWithCategory): Boolean {
-            if (names.isNotEmpty()) {
-                val cat = r.categoryName.lowercase(RU)
-                val sub = r.subcategoryName?.lowercase(RU)
-                if (cat !in names && sub !in names) return false
-            }
-            if (place != null) {
-                val p = r.expense.place?.lowercase(RU).orEmpty()
-                val n = r.expense.note?.lowercase(RU).orEmpty()
-                if (place !in p && place !in n) return false
-            }
-            return true
-        }
-
-        fun describe(): String? = listOfNotNull(
-            names.takeIf { it.isNotEmpty() }?.joinToString(", ") { it.replaceFirstChar { c -> c.uppercase() } },
-            place?.let { "«$it»" },
-        ).joinToString(", ").ifEmpty { null }
-
-        companion object {
-            fun of(q: AssistantQuery, rows: List<ExpenseWithCategory>, categories: List<CategoryWithSubs>): Filter {
-                val known = HashSet<String>()
-                rows.forEach { r -> known += r.categoryName.lowercase(RU); r.subcategoryName?.let { known += it.lowercase(RU) } }
-                categories.forEach { c -> known += c.category.name.lowercase(RU); c.subs.forEach { known += it.name.lowercase(RU) } }
-                val asked = q.categories.map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase(RU) }
-                val place = q.place?.trim()?.lowercase(RU)?.takeIf { it.isNotEmpty() }
-                val found = HashSet<String>()
-                val missing = ArrayList<String>()
-                for (a in asked) {
-                    val n = a.lowercase(RU)
-                    val hit = if (n in known) n else closest(n, known)
-                    if (hit != null) found += hit else missing += a
-                }
-                return Filter(found, missing, place)
-            }
-        }
-    }
-
-    // --- Даты ---
-
-    /** Отрезок из запроса; без дат — текущий период до сегодня. Будущее обрезается сегодняшним днём. */
-    internal fun range(fromText: String?, toText: String?, defaultFrom: LocalDate, today: LocalDate): Pair<LocalDate, LocalDate> {
-        var from = parse(fromText) ?: defaultFrom
-        var to = parse(toText) ?: today
-        if (to.isAfter(today)) to = today
-        if (from.isAfter(to)) from = to.also { to = from }
-        if (to.isAfter(today)) to = today
-        return from to to
-    }
-
-    private fun compareRange(q: AssistantQuery, from: LocalDate, to: LocalDate, period: BillingPeriod, ctx: AssistantContext): Pair<LocalDate, LocalDate> {
-        parse(q.compareFrom)?.let { a ->
-            val b = parse(q.compareTo) ?: a.plusDays(ChronoUnit.DAYS.between(from, to))
-            return if (a.isAfter(b)) b to a else a to b
-        }
-        // Текущий период до сегодня сравниваем с тем же сроком прошлого, иначе — с отрезком той же длины перед ним
-        if (from == period.startDate && to == ctx.today) {
-            return PeriodComparison.comparableWindow(period, period.previous(ctx.startDay), ctx.today)
-        }
-        val len = ChronoUnit.DAYS.between(from, to) + 1
-        return from.minusDays(len) to from.minusDays(1)
-    }
-
-    private fun parse(s: String?): LocalDate? = s?.trim()?.takeIf { it.isNotEmpty() }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-
-    private fun day(ts: Long, zone: ZoneId) = Instant.ofEpochMilli(ts).atZone(zone).toLocalDate()
-
-    internal fun span(from: LocalDate, to: LocalDate): String = when {
-        from == to -> date(from)
-        from.year == to.year && from.month == to.month -> "${from.dayOfMonth}–${to.format(dayFmt)}"
-        from.year == to.year -> "${from.format(dayFmt)} — ${to.format(dayFmt)}"
-        else -> "${from.format(dayYearFmt)} — ${to.format(dayYearFmt)}"
-    }
-
-    private fun date(d: LocalDate) = d.format(dayFmt)
-
-    private fun header(ctx: AssistantContext) = "Сегодня ${ctx.today.format(dayYearFmt)}. Суммы в рублях.\n"
-
-    // --- Форматирование ---
-
-    private fun byCategory(rows: List<ExpenseWithCategory>): List<Pair<String, Long>> =
-        rows.groupBy { it.categoryName }.map { (k, v) -> k to v.sumOf { it.expense.amountKopecks } }.sortedByDescending { it.second }
-
-    private fun totals(rows: List<ExpenseWithCategory>): List<CategoryTotal> =
-        rows.groupBy { it.expense.categoryId }.map { (id, v) -> CategoryTotal(id, v.first().categoryName, v.first().categoryEmoji, v.sumOf { it.expense.amountKopecks }) }
-
-    private fun incomesIn(ctx: AssistantContext, from: LocalDate, to: LocalDate) = ctx.incomes.filter {
-        it.origin != IncomeOrigin.RECONCILE && day(it.timestamp, ctx.zone).let { d -> !d.isBefore(from) && !d.isAfter(to) }
-    }
-
-    private fun describe(r: ExpenseWithCategory, zone: ZoneId): String {
-        val what = listOfNotNull(r.categoryName, r.subcategoryName, r.expense.place, r.expense.note).distinct().joinToString(", ")
-        return "${date(day(r.expense.timestamp, zone))}: ${formatRub(r.expense.amountKopecks)}, $what"
-    }
-
-    private fun ids(rows: List<ExpenseWithCategory>) =
-        rows.sortedByDescending { it.expense.timestamp }.take(MAX_SHOWN_IDS).map { it.expense.id }
-
-    private fun share(part: Long, total: Long) = if (total <= 0) "0%" else "${(part * 100.0 / total).roundToInt()}%"
-
-    private fun signed(k: Long) = when {
-        k > 0 -> "+" + formatRub(k)
-        k < 0 -> "−" + formatRub(abs(k))
-        else -> formatRub(0)
-    }
-
-    private fun percent(diff: Long, base: Long) = if (base == 0L) null else "${if (diff > 0) "+" else if (diff < 0) "−" else ""}${abs(diff * 100.0 / base).roundToInt()}%"
-
-    private fun daysWord(n: Int) = if (n % 10 == 1 && n % 100 != 11) "день" else if (n % 10 in 2..4 && n % 100 !in 12..14) "дня" else "дней"
 }

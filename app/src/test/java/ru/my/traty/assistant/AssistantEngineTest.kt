@@ -106,7 +106,7 @@ class AssistantEngineTest {
 
     @Test
     fun explicitDatesAreUsedAndFutureIsClipped() {
-        val (from, to) = AssistantEngine.range("2026-10-01", "2026-12-31", nov(1), today)
+        val (from, to) = range("2026-10-01", "2026-12-31", nov(1), today)
         assertEquals(oct(1), from)
         assertEquals(today, to)
         val d = run(AssistantQuery(intent = Intents.TOTAL, from = "2026-10-01", to = "2026-10-31"))
@@ -115,7 +115,7 @@ class AssistantEngineTest {
 
     @Test
     fun swappedDatesAreFixed() {
-        val (from, to) = AssistantEngine.range("2026-11-10", "2026-11-01", nov(1), today)
+        val (from, to) = range("2026-11-10", "2026-11-01", nov(1), today)
         assertEquals(nov(1), from)
         assertEquals(nov(10), to)
     }
@@ -202,9 +202,9 @@ class AssistantEngineTest {
 
     @Test
     fun spanFormatting() {
-        assertEquals("1–14 ноября", AssistantEngine.span(nov(1), nov(14)))
-        assertEquals("14 ноября", AssistantEngine.span(nov(14), nov(14)))
-        assertEquals("28 октября — 3 ноября", AssistantEngine.span(oct(28), nov(3)))
+        assertEquals("1–14 ноября", span(nov(1), nov(14)))
+        assertEquals("14 ноября", span(nov(14), nov(14)))
+        assertEquals("28 октября — 3 ноября", span(oct(28), nov(3)))
     }
 
     @Test
