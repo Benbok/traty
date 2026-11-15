@@ -1,11 +1,21 @@
 name: Release APK
 
-# Релиз запускается пушем тега вида v0.2:
-#   git tag v0.2
-#   git push origin v0.2
+# Два способа выпустить релиз:
+#  1) пушем тега:  git tag v0.2 && git push origin v0.2
+#  2) кнопкой «Run workflow» на вкладке Actions (в поле «version» указать, например, 0.2)
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия без «v», например 0.2 (тег станет v0.2)"
+        required: true
+        default: "0.0.1-test"
+      prerelease:
+        description: "Пометить как pre-release (для проверок)"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -15,6 +25,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Определить версию
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION="${REF_NAME#v}"
+          fi
+          VERSION="${VERSION#v}"
+          if ! echo "$VERSION" | grep -Eq '^[0-9A-Za-z._-]+$'; then
+            echo "::error::Недопустимая версия: '$VERSION' (разрешены буквы, цифры, точка, дефис, подчёркивание)"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
@@ -46,17 +74,19 @@ jobs:
           TRATY_KEYSTORE_PASSWORD: ${{ secrets.TRATY_KEYSTORE_PASSWORD }}
           TRATY_KEY_ALIAS: ${{ secrets.TRATY_KEY_ALIAS }}
           TRATY_KEY_PASSWORD: ${{ secrets.TRATY_KEY_PASSWORD }}
-          TRATY_VERSION_NAME: ${{ github.ref_name }}
+          TRATY_VERSION_NAME: ${{ env.VERSION }}
           TRATY_VERSION_CODE: ${{ github.run_number }}
-        run: |
-          export TRATY_VERSION_NAME="${TRATY_VERSION_NAME#v}"
-          ./gradlew :app:assembleRelease --console=plain
+        run: ./gradlew :app:assembleRelease --console=plain
 
       - name: Переименовать APK
-        run: cp app/build/outputs/apk/release/app-release.apk "traty-${GITHUB_REF_NAME#v}.apk"
+        run: cp app/build/outputs/apk/release/app-release.apk "traty-${VERSION}.apk"
 
       - name: Опубликовать релиз
         uses: softprops/action-gh-release@v2
         with:
-          files: traty-*.apk
+          tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: Traty ${{ env.VERSION }}
+          prerelease: ${{ inputs.prerelease == true }}
+          files: traty-${{ env.VERSION }}.apk
           generate_release_notes: true
