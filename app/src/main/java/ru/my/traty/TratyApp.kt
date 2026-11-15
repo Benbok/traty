@@ -13,6 +13,7 @@ import ru.my.traty.ai.LlmClient
 import ru.my.traty.ai.clientFor
 import ru.my.traty.capture.PendingParseWork
 import ru.my.traty.capture.QuickEntry
+import ru.my.traty.data.search.SearchRepository
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.CategoryRepository
@@ -101,6 +102,7 @@ class AppContainer(
     val quickEntry = QuickEntry(db, categories, settings, clientProvider = llm)
     val budgets = BudgetRepository(db)
     val weeklyTasks = WeeklyTaskRepository(db)
+    val search = SearchRepository(db)
 
     /** Уведомления «потрачено 80 % / 100 % плана»; запускается из [TratyApp.onCreate]. */
     val budgetAlerts = BudgetAlertWatcher(context.applicationContext, db, settings)

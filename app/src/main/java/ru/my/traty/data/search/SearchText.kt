@@ -11,7 +11,8 @@ import java.util.Locale
  * - предлоги и союзы в запросе («для», «от», «с», «и»…) пропускаются;
  * - порядок слов не важен, но каждое слово запроса должно найтись в тексте записи;
  * - слово находится, если оно входит в слово текста («супер» → «Супермаркет», «бензи» → «Бензин»)
- *   (слово из одной-двух букв — только в начале слова) или у них одна основа («кошке» → «кошки», «лекарства» → «лекарство»).
+ *   (слово из одной-двух букв — только в начале слова) или у них одна основа («кошке» → «кошки», «лекарства» → «лекарство»);
+ * - «Озон» находит «Ozon», «ВБ» находит «Wildberries» ([SearchAliases]).
  */
 object SearchText {
 
@@ -53,7 +54,9 @@ object SearchText {
         if (hay.any { if (q.length < 3) it.startsWith(q) else it.contains(q) }) return true
         val qs = RussianStemmer.stem(q)
         // Совпадение основ: короткие основы («к», «ко») дали бы ложные находки
-        return qs.length >= 3 && hayStems.any { it == qs }
+        if (qs.length >= 3 && hayStems.any { it == qs }) return true
+        val group = SearchAliases.groupOf(q) ?: return false
+        return hay.any { SearchAliases.groupOf(it) == group }
     }
 
     private fun words(s: String): List<String> = fold(s).split(SPLIT).filter { it.isNotEmpty() }

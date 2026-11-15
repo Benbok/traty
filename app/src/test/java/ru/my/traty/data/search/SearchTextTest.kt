@@ -81,4 +81,19 @@ class SearchTextTest {
         assertTrue(SearchText.matches("холодильник озон", advance))
         assertFalse(SearchText.matches("холодильник озон", debt))
     }
+
+    @Test
+    fun `маркетплейс по-русски и латиницей — одно и то же`() {
+        val ozon = listOf("Маркетплейсы", "Ozon", "Ozon", "чехол")
+        val wb = listOf("Маркетплейсы", "Wildberries", "Wildberries", "кроссовки")
+        assertTrue(SearchText.matches("озон", ozon))
+        assertTrue(SearchText.matches("на озоне чехол", ozon))
+        assertTrue(SearchText.matches("вб", wb))
+        assertTrue(SearchText.matches("WB кроссовки", wb))
+        assertTrue(SearchText.matches("вайлдберриз", wb))
+        assertTrue(SearchText.matches("ozon", listOf("купил на Озоне")))
+        assertTrue(SearchText.matches("wb", listOf("ВБ")))
+        assertFalse(SearchText.matches("озон", wb))
+        assertFalse(SearchText.matches("вб", ozon))
+    }
 }
