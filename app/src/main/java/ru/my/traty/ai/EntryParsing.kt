@@ -55,6 +55,7 @@ object EntryPrompt {
         )
         appendLine("Правила:")
         appendLine("- type = income, если деньги пришли: зарплата, аванс, дежурства, подработка, перевод мне, вернули долг, кэшбэк. Всё остальное — expense.")
+        appendLine("- Оплата покупки или услуги — всегда expense, даже со словами «аванс», «предоплата», «доплата», «пополнение», «плюс»: «аванс за холодильник, купленный на Озоне, 20 тысяч» → expense 20000; «пополнение за холодильник Озону плюс 5000» → expense 5000 (доплата за ту же покупку). Как income «аванс» — только аванс по зарплате («пришёл аванс», «аванс за ноябрь»).")
         appendLine("- Числа словами переводи в цифры: «двести пятьдесят» → 250, «полторы тысячи» → 1500, «тыща», «косарь» → 1000, «пятихатка» → 500, «восемьдесят тысяч» → 80000.")
         appendLine("- В разговорной речи слово «тысяча» часто пропускают: «две сто» → 2100, «две пятьсот» → 2500, «три двести» → 3200, «двадцать пять триста» → 25300. Если за числом идёт название сотен («сто», «двести», … «девятьсот»), первое число — тысячи. Но «сто пятьдесят» — это 150, а «двадцать пять» без сотен после — это 25.")
         appendLine("- Если в фразе несколько операций — верни несколько элементов.")
@@ -117,13 +118,14 @@ object EntryParsing {
 
 /**
  * Запасной разбор без ИИ: одна операция; тип — по словам «зарплата / аванс / пришло / вернули…».
+ * «аванс за холодильник», «доплата» — трата ([PurchasePayment]).
  * После него всегда нужно подтверждение.
  */
 object OfflineEntryParser {
     private val incomeWords = Regex("""зарплат|аванс|дежур|пришл|вернул|возврат|подработ|кэшбэк|кешбэк""")
 
     fun parse(text: String, categories: List<CategoryWithSubs>, today: LocalDate = LocalDate.now()): List<ParsedEntry> {
-        if (incomeWords.containsMatchIn(text.lowercase())) {
+        if (incomeWords.containsMatchIn(text.lowercase()) && !PurchasePayment.isPurchasePayment(text)) {
             val day = SpokenDateParser.find(text, today)?.date?.toString()
             return OfflineIncomeParser.parse(text).map {
                 ParsedEntry(type = "income", amount = it.amount, source = it.source, note = it.note, date = it.date ?: day)

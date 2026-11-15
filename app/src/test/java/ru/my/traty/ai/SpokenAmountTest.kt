@@ -12,6 +12,8 @@ class SpokenAmountTest {
         assertEquals(731.0, value("зоомагазин вчера 731 лекарство для кошки"))
         assertEquals(1500.0, value("такси 1 500"))
         assertEquals(99.5, value("кофе 99,5"))
+        // неразрывный пробел (U+00A0) между тысячами — так пишет распознавание речи
+        assertEquals(1500.0, value("такси 1${0x00A0.toChar()}500"))
     }
 
     @Test

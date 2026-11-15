@@ -3,6 +3,7 @@ package ru.my.traty.capture
 import ru.my.traty.ai.EntryType
 import ru.my.traty.ai.OfflineParser
 import ru.my.traty.ai.ParsedEntry
+import ru.my.traty.ai.PurchasePayment
 import ru.my.traty.ai.ShopTypes
 import ru.my.traty.ai.SpokenDateParser
 import ru.my.traty.data.CategoryWithSubs
@@ -15,12 +16,14 @@ import java.time.LocalDate
  * - вид магазина («Зоомагазин») — не место, а подкатегория;
  * - подкатегория не повторяет категорию, а известная подкатегория подтягивает свою категорию вместо «Прочее»;
  * - заметка не начинается с места и не пропадает, если ИИ её не вернул;
- * - «вчера», «позавчера» в фразе с одной тратой считаются правилом, а не ИИ.
+ * - «вчера», «позавчера» в фразе с одной тратой считаются правилом, а не ИИ;
+ * - «аванс за холодильник», «доплата» — трата, даже если ИИ решил, что деньги пришли.
  */
 object EntryCleanup {
     fun apply(entries: List<ParsedEntry>, rawText: String, categories: List<CategoryWithSubs>, today: LocalDate): List<ParsedEntry> {
         val single = entries.size == 1
-        return entries.map { e ->
+        return entries.map { e0 ->
+            val e = if (single) paymentNotIncome(e0, rawText, categories, today) else e0
             if (e.entryType != EntryType.EXPENSE) return@map e
             var r = shopTypeAsSubcategory(e)
             r = fixSubcategory(r, categories)
@@ -31,6 +34,24 @@ object EntryCleanup {
             }
             r
         }
+    }
+
+    /**
+     * ИИ записал «аванс за холодильник» или «пополнение за холодильник плюс 5000» как пришедшие деньги — это трата.
+     * Категорию, место и заметку берём из простого разбора фразы, сумму и дату оставляем от ИИ.
+     */
+    private fun paymentNotIncome(e: ParsedEntry, rawText: String, categories: List<CategoryWithSubs>, today: LocalDate): ParsedEntry {
+        if (e.entryType != EntryType.INCOME || !PurchasePayment.isPurchasePayment(rawText)) return e
+        val guess = OfflineParser.parse(rawText, categories, today).firstOrNull()
+        return e.copy(
+            type = "expense",
+            category = guess?.category ?: DefaultCategories.OTHER,
+            emoji = guess?.emoji,
+            subcategory = guess?.subcategory,
+            place = e.place ?: guess?.place,
+            note = e.note ?: guess?.note,
+            source = null,
+        )
     }
 
     private fun shopTypeAsSubcategory(e: ParsedEntry): ParsedEntry {

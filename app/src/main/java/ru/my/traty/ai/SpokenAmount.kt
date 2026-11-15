@@ -9,7 +9,7 @@ data class SpokenAmount(val value: Double, val range: IntRange)
  */
 object SpokenAmountParser {
     // пробел, NBSP (U+00A0), узкий NBSP (U+202F)
-    private const val SEP = "[   ]"
+    private const val SEP = "[   ]"
     private val digitsRe = Regex("""\d{1,3}(?:$SEP\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?""")
     private val wordRe = Regex("""[а-яёА-ЯЁ]+""")
     private val thousandRe = Regex("""^(тысяч\p{L}*|тыщ\p{L}*|тыс|к)$""")

@@ -37,8 +37,19 @@ object OfflineParser {
     fun parse(text: String, categories: List<CategoryWithSubs>, today: LocalDate = LocalDate.now()): List<ParsedExpense> {
         val amount = SpokenAmountParser.find(text) ?: return emptyList()
         val day = SpokenDateParser.find(text, today)
-        val shop = ShopTypes.find(text)
-        val note = leftover(text, listOfNotNull(amount.range, day?.range, shop?.range))
+        val market = Marketplaces.find(text)
+        val shop = if (market == null) ShopTypes.find(text) else null
+        val note = leftover(text, listOfNotNull(amount.range, day?.range, shop?.range, market?.range))
+        if (market != null) {
+            val existing = categories.firstOrNull { sameName(it.category.name, Marketplaces.CATEGORY) }
+            return listOf(
+                ParsedExpense(
+                    amount = amount.value, category = existing?.category?.name ?: Marketplaces.CATEGORY,
+                    emoji = if (existing == null) Marketplaces.EMOJI else null,
+                    subcategory = market.name, place = market.name, note = note, date = day?.date?.toString(),
+                )
+            )
+        }
         val (cat, emoji, sub) = pickCategory(shop?.type, note.orEmpty(), categories)
         return listOf(
             ParsedExpense(
@@ -98,22 +109,17 @@ object OfflineParser {
     }
 }
 
-/** Запасной разбор без интернета: «аванс 30 000» → 30000 ₽, источник по ключевым словам. */
+/** Запасной разбор без интернета: «аванс 30 000», «премия двадцать тысяч» → сумма, источник по ключевым словам. */
 object OfflineIncomeParser {
-    // пробел, NBSP (U+00A0), узкий NBSP (U+202F)
-    private const val SEP = "[   ]"
-
-    // «80 000» (разделитель тысяч — пробел/NBSP/NNBSP между 3-значными группами) либо обычное число;
-    // дробная часть через «,» или «.». Берётся только первое число в тексте.
-    private val numberRe = Regex("""\d{1,3}(?:$SEP\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?""")
     private val currencyRe = Regex("""(руб(лей|ля|ль)?|₽|р\.)""")
 
+    /** Сумма — первое число цифрами («30 000», «20 тысяч») или словами, как у трат ([SpokenAmountParser]). */
     fun parse(text: String): List<ParsedIncome> {
-        val m = numberRe.find(text) ?: return emptyList()
-        val amount = m.value.replace(Regex(SEP), "").replace(',', '.').toDoubleOrNull() ?: return emptyList()
+        val m = SpokenAmountParser.find(text) ?: return emptyList()
         val note = text.removeRange(m.range).replace(currencyRe, "")
+            .replace(Regex("""\s+"""), " ")
             .trim(' ', ',', '.').ifBlank { null }
-        return listOf(ParsedIncome(amount = amount, source = guessSource(text), note = note))
+        return listOf(ParsedIncome(amount = m.value, source = guessSource(text), note = note))
     }
 
     private fun guessSource(text: String): String {

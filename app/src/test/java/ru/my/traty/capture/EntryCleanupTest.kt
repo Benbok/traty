@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import ru.my.traty.ai.EntryParsing
+import ru.my.traty.ai.EntryType
 import ru.my.traty.ai.ParsedEntry
 import ru.my.traty.data.Category
 import ru.my.traty.data.CategoryWithSubs
@@ -109,5 +110,23 @@ class EntryCleanupTest {
         val r = EntryCleanup.apply(items, "зоомагазин вчера 731 лекарство и Пятёрочка 500", cats, today)
         assertEquals(listOf("лекарство", null), r.map { it.note })
         assertEquals(listOf("2026-11-14", null), r.map { it.date })
+    }
+
+    @Test
+    fun advanceForPurchaseFromModelBecomesExpense() {
+        val ai = ParsedEntry(type = "income", amount = 20000.0, source = "Аванс", note = "холодильник", date = "2026-11-14")
+        val e = clean(ai, text = "аванс за холодильник, купленный на Озоне вчера, 20 тысяч")
+        assertEquals(EntryType.EXPENSE, e.entryType)
+        assertEquals(20000.0, e.amount, 0.0)
+        assertEquals("Маркетплейсы", e.category)
+        assertEquals("Ozon", e.place)
+        assertEquals("холодильник", e.note)
+        assertNull(e.source)
+    }
+
+    @Test
+    fun salaryAdvanceFromModelStaysIncome() {
+        val ai = ParsedEntry(type = "income", amount = 30000.0, source = "Аванс")
+        assertEquals(EntryType.INCOME, clean(ai, text = "пришёл аванс 30000").entryType)
     }
 }

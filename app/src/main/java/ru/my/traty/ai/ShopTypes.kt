@@ -65,3 +65,24 @@ object ShopTypes {
         return petSub ?: found.first()
     }
 }
+
+/** Маркетплейс во фразе («на Озоне», «Озону», «ВБ») — как в промпте: категория «Маркетплейсы», площадка в подкатегории и месте. */
+object Marketplaces {
+    const val CATEGORY = "Маркетплейсы"
+    const val EMOJI = "📦"
+
+    data class Match(val name: String, val range: IntRange)
+
+    private val table: List<Pair<Regex, String>> = listOf(
+        "озон\\p{L}*|ozon" to "Ozon",
+        "wildberries|вайлдберриз\\p{L}*|вайлдбериз\\p{L}*|вб|wb" to "Wildberries",
+        "алиэкспресс\\p{L}*|aliexpress" to "AliExpress",
+        "яндекс\\s+маркет\\p{L}*" to "Яндекс Маркет",
+        "сбермегамаркет\\p{L}*|мегамаркет\\p{L}*" to "Мегамаркет",
+    ).map { (stem, name) ->
+        Regex("""(?<![\p{L}])(?:(?:на|в|во|с|со)\s+)?(?:$stem)(?![\p{L}])""", RegexOption.IGNORE_CASE) to name
+    }
+
+    fun find(text: String): Match? =
+        table.mapNotNull { (re, name) -> re.find(text)?.let { Match(name, it.range) } }.minByOrNull { it.range.first }
+}
