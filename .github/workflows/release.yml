@@ -1,11 +1,21 @@
 name: Release APK
 
-# Релиз запускается пушем тега вида v0.2:
-#   git tag v0.2
-#   git push origin v0.2
+# Два способа выпустить релиз:
+#  1) пушем тега:  git tag v0.2 && git push origin v0.2
+#  2) кнопкой «Run workflow» на вкладке Actions (в поле «version» указать, например, 0.2)
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия без «v», например 0.2 (тег станет v0.2)"
+        required: true
+        default: "0.0.1-test"
+      prerelease:
+        description: "Пометить как pre-release (для проверок)"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -15,6 +25,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Определить версию
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION="${REF_NAME#v}"
+          fi
+          VERSION="${VERSION#v}"
+          if ! echo "$VERSION" | grep -Eq '^[0-9A-Za-z._-]+$'; then
+            echo "::error::Недопустимая версия: '$VERSION' (разрешены буквы, цифры, точка, дефис, подчёркивание)"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
@@ -29,8 +57,13 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.TRATY_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.TRATY_KEY_ALIAS }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
-            echo "::error::Не заданы секреты TRATY_KEYSTORE_BASE64, TRATY_KEYSTORE_PASSWORD, TRATY_KEY_ALIAS (Settings → Secrets and variables → Actions). Без них APK подписался бы чужим ключом и не обновил бы установленное приложение."
+          # Значения не печатаем, только имена тех, каких не хватает
+          missing=""
+          if [ -z "$KEYSTORE_BASE64" ]; then missing="$missing TRATY_KEYSTORE_BASE64"; fi
+          if [ -z "$KEYSTORE_PASSWORD" ]; then missing="$missing TRATY_KEYSTORE_PASSWORD"; fi
+          if [ -z "$KEY_ALIAS" ]; then missing="$missing TRATY_KEY_ALIAS"; fi
+          if [ -n "$missing" ]; then
+            echo "::error::Не заданы секреты (или они пустые):$missing. Нужны в Settings → Secrets and variables → Actions → Repository secrets. Без них APK подписался бы чужим ключом и не обновил бы установленное приложение."
             exit 1
           fi
 
@@ -46,17 +79,34 @@ jobs:
           TRATY_KEYSTORE_PASSWORD: ${{ secrets.TRATY_KEYSTORE_PASSWORD }}
           TRATY_KEY_ALIAS: ${{ secrets.TRATY_KEY_ALIAS }}
           TRATY_KEY_PASSWORD: ${{ secrets.TRATY_KEY_PASSWORD }}
-          TRATY_VERSION_NAME: ${{ github.ref_name }}
+          TRATY_VERSION_NAME: ${{ env.VERSION }}
           TRATY_VERSION_CODE: ${{ github.run_number }}
-        run: |
-          export TRATY_VERSION_NAME="${TRATY_VERSION_NAME#v}"
-          ./gradlew :app:assembleRelease --console=plain
+        run: ./gradlew :app:assembleRelease --console=plain
 
       - name: Переименовать APK
-        run: cp app/build/outputs/apk/release/app-release.apk "traty-${GITHUB_REF_NAME#v}.apk"
+        run: cp app/build/outputs/apk/release/app-release.apk "traty-${VERSION}.apk"
+
+      # Если тег v<версия> уже есть, аннотированный и в его сообщении есть текст — это описание релиза
+      # (его кладёт scripts/release.ps1; работает и при пуше тега, и при повторном запуске кнопкой).
+      # Иначе (тега нет, лёгкий тег) — автоописание из коммитов.
+      - name: Описание релиза
+        run: |
+          TAG="v${VERSION}"
+          git fetch --force origin "+refs/tags/${TAG}:refs/tags/${TAG}" || true
+          if [ "$(git cat-file -t "refs/tags/${TAG}" 2>/dev/null)" = "tag" ]; then
+            git for-each-ref "refs/tags/${TAG}" --format='%(contents)' > "$RUNNER_TEMP/release-notes.md"
+            if [ -s "$RUNNER_TEMP/release-notes.md" ] && grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md"; then
+              echo "NOTES_FILE=$RUNNER_TEMP/release-notes.md" >> "$GITHUB_ENV"
+            fi
+          fi
 
       - name: Опубликовать релиз
         uses: softprops/action-gh-release@v2
         with:
-          files: traty-*.apk
-          generate_release_notes: true
+          tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: Traty ${{ env.VERSION }}
+          prerelease: ${{ inputs.prerelease == true }}
+          files: traty-${{ env.VERSION }}.apk
+          body_path: ${{ env.NOTES_FILE }}
+          generate_release_notes: ${{ env.NOTES_FILE == '' }}
