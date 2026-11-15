@@ -11,9 +11,9 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-/** Траты, по которым считаются задания: без сверки и без списаний подписок (их неделей не сократить). */
+/** Траты, по которым считаются задания: без сверки, подписок и платежей по рассрочкам (их неделей не сократить). */
 fun List<ExpenseWithCategory>.toTaskSpends(zone: ZoneId): List<TaskSpend> =
-    filter { it.expense.source != ExpenseSource.RECONCILE && it.expense.source != ExpenseSource.RECURRING }
+    filter { it.expense.source != ExpenseSource.RECONCILE && it.expense.source != ExpenseSource.RECURRING && it.expense.source != ExpenseSource.DEBT }
         .map { TaskSpend(it.expense.categoryId, it.expense.amountKopecks, Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate()) }
 
 /** Задания на неделю: создание по понедельникам, замена, свои задания и отметки. */
