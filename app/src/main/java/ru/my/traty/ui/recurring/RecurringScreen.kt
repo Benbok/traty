@@ -1,11 +1,11 @@
 package ru.my.traty.ui.recurring
 
+import androidx.activity.compose.BackHandler
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,14 +19,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -54,8 +48,6 @@ import ru.my.traty.data.recurring.canNotify
 import ru.my.traty.data.recurring.nextDate
 import ru.my.traty.data.recurring.period
 import ru.my.traty.data.recurring.yearlyKopecks
-import ru.my.traty.ui.AmountInput
-import ru.my.traty.ui.designsystem.components.TratyAmountTextField
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
@@ -66,13 +58,12 @@ import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatDateWithWeekday
 import java.time.temporal.ChronoUnit
 import ru.my.traty.ui.formatRub
-import ru.my.traty.ui.home.CategoryPicker
-import ru.my.traty.ui.home.DateField
 import java.time.LocalDate
 
 /** Подписки и регулярные платежи: итоги, предложения из истории трат, список платежей. */
 @Composable
 fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
+    // Системная «Назад» возвращает на прошлый экран, а не закрывает приложение
     BackHandler(onBack = onBack)
     val payments by vm.items.collectAsStateWithLifecycle()
     val totals by vm.totals.collectAsStateWithLifecycle()
@@ -91,6 +82,8 @@ fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
     var editing by remember { mutableStateOf<Recurring?>(null) }
     // платёж с меняющейся суммой: перед «Списалось» спрашиваем, сколько списалось на самом деле
     var paying by remember { mutableStateOf<Recurring?>(null) }
+    // удаление без возврата, поэтому сначала спрашиваем
+    var deleting by remember { mutableStateOf<Recurring?>(null) }
 
     Scaffold(
         containerColor = TratyTheme.colors.background,
@@ -164,11 +157,22 @@ fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
                     onEdit = { editing = r.recurring },
                     onMarkPaid = { if (r.recurring.amountVaries) paying = r.recurring else vm.markPaid(r.recurring) },
                     onTogglePause = { vm.setPaused(r.recurring, r.recurring.state == RecurringState.ACTIVE) },
-                    onDelete = { vm.remove(r.recurring) },
+                    onDelete = { deleting = r.recurring },
                 )
             }
             item { Spacer(Modifier.height(TratyTheme.spacing.xxl)) }
         }
+    }
+
+    deleting?.let { item ->
+        DeleteRecurringDialog(
+            item = item,
+            onDismiss = { deleting = null },
+            onConfirm = {
+                vm.remove(item)
+                deleting = null
+            },
+        )
     }
 
     paying?.let { item ->
@@ -336,31 +340,3 @@ private fun RecurringRow(
     }
 }
 
-
-
-@Composable
-private fun PaidAmountDialog(item: Recurring, onDismiss: () -> Unit, onConfirm: (Long) -> Unit) {
-    var amount by remember { mutableStateOf(AmountInput.fromKopecks(item.amountKopecks)) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = TratyTheme.shapes.large,
-        containerColor = TratyTheme.colors.surface,
-        title = { Text("Сколько списалось?", style = TratyTheme.typography.titleMedium) },
-        text = {
-            TratyAmountTextField(
-                value = amount,
-                onValueChange = { amount = it },
-                label = item.title,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        },
-        confirmButton = {
-            TratyButton(
-                onClick = {
-                    AmountInput.parsePositiveKopecks(amount)?.let(onConfirm)
-                },
-            ) { Text("Списалось") }
-        },
-        dismissButton = { TratyTextButton(onClick = onDismiss) { Text("Отмена") } },
-    )
-}

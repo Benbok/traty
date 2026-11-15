@@ -1,0 +1,4 @@
+<resources>
+    <!-- TratyPalette.Slate50: фон светлой темы -->
+    <color name="traty_window_background">#FFF8FAFC</color>
+</resources>

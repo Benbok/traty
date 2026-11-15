@@ -55,14 +55,20 @@ import androidx.compose.material3.Surface
 
 /** Настройки → «План трат»: лимиты по категориям и подкатегориям на расчётный месяц. */
 @Composable
-fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
+fun BudgetScreen(onBack: () -> Unit, onOpenWeekly: () -> Unit = {}, vm: BudgetViewModel = viewModel()) {
+    // Системная «Назад» возвращает на прошлый экран, а не закрывает приложение
     BackHandler(onBack = onBack)
     val period by vm.period.collectAsStateWithLifecycle()
     val startDay by vm.startDay.collectAsStateWithLifecycle()
     val plans by vm.items.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
-    val totals = remember(plans) { planTotals(plans) }
+    val total by vm.total.collectAsStateWithLifecycle()
+    val alertsOn by vm.alertsEnabled.collectAsStateWithLifecycle()
+    val categoryTotals = remember(plans) { planTotals(plans) }
+    // С общим лимитом шапка показывает его и все траты месяца, без него — сумму планов категорий
+    val totals = total?.let { PlanTotals(it.planned, it.spent) } ?: categoryTotals
     var editing by remember { mutableStateOf<PlanEdit?>(null) }
+    var editingTotal by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = TratyTheme.colors.background,
@@ -100,17 +106,26 @@ fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
                     onPrev = { vm.shift(-1) },
                     onNext = { vm.shift(1) },
                     deltaText = when {
-                        plans.isEmpty() -> "Плана на этот период нет"
+                        plans.isEmpty() && total == null -> "Плана на этот период нет"
                         totals.spent > totals.planned -> "Потрачено ${formatRub(totals.spent)} · перерасход ${formatRub(totals.spent - totals.planned)}"
                         else -> "Потрачено ${formatRub(totals.spent)} · осталось ${formatRub(totals.planned - totals.spent)}"
                     },
+                )
+            }
+            item {
+                TotalLimitCard(
+                    total = total,
+                    categoriesPlanned = categoryTotals.planned,
+                    period = period,
+                    onClick = { editingTotal = true },
+                    modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg),
                 )
             }
             if (plans.isEmpty()) {
                 item {
                     TratyEmptyState(
                         icon = Icons.Filled.Flag,
-                        title = "Плана пока нет",
+                        title = "Планов по категориям пока нет",
                         description = "Нажмите «+», выберите категорию и сумму на месяц. План будет виден в Статистике и в Тратах, " +
                             "а «можно тратить в день» подскажет, сколько осталось до конца периода.",
                     )
@@ -138,6 +153,17 @@ fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
                     }
                 }
             }
+            item {
+                WeeklyTasksEntryCard(onOpenWeekly, Modifier.padding(horizontal = TratyTheme.spacing.lg))
+            }
+            item {
+                BudgetAlertsCard(
+                    enabled = alertsOn,
+                    hasPlans = plans.isNotEmpty() || total != null,
+                    onChange = vm::setAlertsEnabled,
+                    modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg),
+                )
+            }
             if (startDay != 1) {
                 item {
                     Text(
@@ -149,6 +175,23 @@ fun BudgetScreen(onBack: () -> Unit, vm: BudgetViewModel = viewModel()) {
                 }
             }
         }
+    }
+
+    if (editingTotal) {
+        TotalLimitDialog(
+            current = total,
+            repeatsNow = vm.ownTotalRepeats() ?: total?.limit?.repeats ?: true,
+            monthTitle = formatMonth(PlanMonth.toYearMonth(PlanMonth.of(period))).lowercase(),
+            onDismiss = { editingTotal = false },
+            onSave = { amount, repeats ->
+                vm.saveTotal(amount, repeats)
+                editingTotal = false
+            },
+            onRemove = {
+                vm.removeTotal()
+                editingTotal = false
+            },
+        )
     }
 
     editing?.let { edit ->

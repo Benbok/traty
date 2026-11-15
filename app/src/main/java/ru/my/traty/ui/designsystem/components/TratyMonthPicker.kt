@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -112,6 +113,7 @@ fun TratyMonthPicker(
                         modifier = Modifier
                             .clip(TratyTheme.shapes.small)
                             .clickable(onClick = onClearDate)
+                            .minimumInteractiveComponentSize()
                             .padding(top = 2.dp, start = 4.dp, end = 4.dp),
                     )
                 } else if (!deltaText.isNullOrBlank()) {

@@ -204,6 +204,48 @@ class DatabaseUpgradeTest {
     }
 
     @Test
+    fun migrationChainReachesV12WithMonthLimit() = runTest {
+        createV3Database()
+        val db = AppDatabase.build(context, dbName)
+        try {
+            val repo = ru.my.traty.data.budget.BudgetRepository(db)
+            repo.setTotal(202611, 80_000_00, repeats = true)
+            repo.setTotal(202611, 90_000_00, repeats = true)
+            assertEquals(1, db.monthBudgets().getAll().size)
+            repo.removeTotalFrom(202612)
+            val rows = db.monthBudgets().getAll()
+            assertEquals(90_000_00L, ru.my.traty.data.budget.TotalBudgets.effective(rows, 202611)?.amountKopecks)
+            assertEquals(null, ru.my.traty.data.budget.TotalBudgets.effective(rows, 202701))
+            assertEquals(1, db.expenses().getAllWithCategory().size)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun migrationChainReachesV13WithWeeklyTasks() = runTest {
+        createV3Database()
+        val db = AppDatabase.build(context, dbName)
+        try {
+            val repo = ru.my.traty.data.weekly.WeeklyTaskRepository(db)
+            // Истории мало (одна трата) — заданий не предлагается, но и ошибки нет
+            assertTrue(repo.ensureWeek(java.time.LocalDate.of(2026, 11, 18)).isEmpty())
+            val mon = java.time.LocalDate.of(2026, 11, 16)
+            val custom = ru.my.traty.data.weekly.WeeklyTaskTexts.customTask(
+                mon, ru.my.traty.data.weekly.WeeklyTaskType.COUNT_LIMIT, 1, "Продукты", 2,
+            )
+            repo.add(custom)
+            val week = repo.ensureWeek(mon.plusDays(2))
+            assertEquals(listOf("«Продукты» — не больше 2 раз"), week.map { it.title })
+            repo.remove(week.single())
+            assertTrue(repo.ensureWeek(mon.plusDays(2)).isEmpty())
+            assertEquals(1, db.expenses().getAllWithCategory().size)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun migrationChainReachesV9WithRecurringTable() = runTest {
         createV3Database()
         val db = AppDatabase.build(context, dbName)

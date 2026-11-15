@@ -17,9 +17,7 @@ import ru.my.traty.TratyApp
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Income
 import ru.my.traty.data.Places
-import ru.my.traty.data.StoreTotal
 import ru.my.traty.data.placeTotals
-import ru.my.traty.data.isUserEditable
 import ru.my.traty.data.period.BillingPeriod
 import ru.my.traty.ui.RU
 import ru.my.traty.ui.charts.model.BalancePoint
@@ -45,8 +43,6 @@ data class ChartsUiState(
     val balancePoints: List<BalancePoint> = emptyList(),
     val debitCreditBars: List<DebitCreditBar> = emptyList(),
     val categoryShares: List<CategoryCreditShare> = emptyList(),
-    /** Магазины с названием, по убыванию суммы — для блока «Траты по магазинам». */
-    val topStores: List<StoreTotal> = emptyList(),
     val recentIncomes: List<Income> = emptyList(),
 )
 
@@ -137,7 +133,7 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteIncome(income: Income) {
         viewModelScope.launch {
-            if (income.isUserEditable) c.db.incomes().delete(income)
+            c.incomes.delete(income)
         }
     }
 
@@ -183,7 +179,6 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
             balancePoints = balancePoints,
             debitCreditBars = debitCreditBars,
             categoryShares = categoryShares,
-            topStores = Places.group(expenses.placeTotals()).filterNot { it.isNoPlace },
             recentIncomes = incomes.take(15),
         )
     }

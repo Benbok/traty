@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 и ниже (на случай, если allowBackup когда-нибудь включат): настройки и модель речи не копируются. -->
+<full-backup-content>
+    <exclude domain="file" path="datastore" />
+    <exclude domain="file" path="models" />
+</full-backup-content>

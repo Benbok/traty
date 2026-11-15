@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.EditCalendar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +36,7 @@ import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import ru.my.traty.ui.pluralRu
 
 /**
  * Карточка периода и календаря анализа на странице «Финансовая аналитика и Графики».
@@ -165,7 +167,7 @@ fun ChartDateCard(
                         // Начальная дата
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "Начало анализа",
+                                text = "Начало",
                                 style = TratyTheme.typography.labelSmall,
                                 color = TratyTheme.colors.onSurfaceVariant,
                             )
@@ -187,7 +189,7 @@ fun ChartDateCard(
                         // Конечная дата
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "Конец анализа",
+                                text = "Конец",
                                 style = TratyTheme.typography.labelSmall,
                                 color = TratyTheme.colors.onSurfaceVariant,
                             )
@@ -222,7 +224,7 @@ fun ChartDateCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = "Длительность: $daysCount ${daysRussianWord(daysCount)}",
+                    text = "За $daysCount ${pluralRu(daysCount, "день", "дня", "дней")}",
                     style = TratyTheme.typography.bodySmall,
                     color = TratyTheme.colors.onSurfaceVariant,
                 )
@@ -235,21 +237,11 @@ fun ChartDateCard(
                         modifier = Modifier
                             .clip(TratyTheme.shapes.small)
                             .clickable(onClick = onResetToMonth)
+                            .minimumInteractiveComponentSize()
                             .padding(vertical = 2.dp, horizontal = 4.dp),
                     )
                 }
             }
         }
-    }
-}
-
-private fun daysRussianWord(count: Long): String {
-    val c = count % 100
-    val last = c % 10
-    return when {
-        c in 11..19 -> "дней"
-        last == 1L -> "день"
-        last in 2..4 -> "дня"
-        else -> "дней"
     }
 }

@@ -30,6 +30,7 @@ import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 @Composable
 fun RulesScreen(vm: MainViewModel, onBack: () -> Unit) {
+    // Системная «Назад» возвращает на прошлый экран, а не закрывает приложение
     BackHandler(onBack = onBack)
     val rules by vm.rules.collectAsStateWithLifecycle()
 

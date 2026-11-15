@@ -176,4 +176,29 @@ class CsvBackupTest {
         val r = CsvBackup.parse("2026-11-13T10:00;250;;Продукты;;;;\n", zone)
         assertEquals("RUB", r.rows.single().currency)
     }
+
+    @Test
+    fun formulaLikeTextIsGuardedInFileAndRestoredOnImport() {
+        val w = StringWriter()
+        CsvBackup.write(listOf(row(place = "=HYPERLINK(\"http://x\")", note = "-5% скидка", raw = "@cmd")), emptyList(), zone, w)
+        val text = w.toString()
+        assertTrue(text.contains("\"'=HYPERLINK"))
+        assertTrue(text.contains("\"'-5% скидка\""))
+        assertTrue(text.contains("\"'@cmd\""))
+        val back = CsvBackup.parse(text, zone).rows.single()
+        assertEquals("=HYPERLINK(\"http://x\")", back.place)
+        assertEquals("-5% скидка", back.note)
+        assertEquals("@cmd", back.rawText)
+    }
+
+    @Test
+    fun ordinaryApostropheIsKept() {
+        val back = roundTrip(row(note = "'обычный текст")).rows.single()
+        assertEquals("'обычный текст", back.note)
+    }
+
+    @Test(expected = CsvFormatException::class)
+    fun tooLargeImportIsRejected() {
+        CsvBackup.readLimited(java.io.ByteArrayInputStream(ByteArray(CsvBackup.MAX_IMPORT_BYTES + 1)))
+    }
 }

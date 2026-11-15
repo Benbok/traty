@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+: allowBackup="false" отключает облачную копию, но не перенос «телефон → телефон».
+  Настройки (в них зашифрованные ключи ИИ) и модель речи (~300 МБ) не переносим ни туда, ни туда.
+  Ключ Keystore на новый телефон не переносится, поэтому ключи ИИ там всё равно нужно ввести заново.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="datastore" />
+        <exclude domain="file" path="models" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="datastore" />
+        <exclude domain="file" path="models" />
+    </device-transfer>
+</data-extraction-rules>

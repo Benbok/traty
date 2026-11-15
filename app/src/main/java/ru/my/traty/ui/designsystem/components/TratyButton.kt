@@ -68,7 +68,7 @@ fun TratyOutlinedButton(
             contentColor = TratyTheme.colors.primary,
             disabledContentColor = TratyTheme.colors.onSurfaceVariant,
         ),
-        border = BorderStroke(1.dp, if (enabled) TratyTheme.colors.border else TratyTheme.colors.borderSubtle),
+        border = BorderStroke(1.dp, if (enabled) TratyTheme.colors.outline else TratyTheme.colors.borderSubtle),
         contentPadding = contentPadding,
         content = content,
     )

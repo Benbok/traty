@@ -132,6 +132,27 @@ class ExpenseLabelerTest {
     }
 
     @Test
+    fun spendOverPlanIsImpulsiveOnlyInImpulsiveCategory() {
+        val cafe = exp(5, hour = 12, cat = 2, sub = null, catName = "Кафе и рестораны", subName = null)
+        val pharmacy = exp(5, hour = 12)
+        val overPlan = mapOf(cafe.expense.id to "Трата сверх плана.", pharmacy.expense.id to "Трата сверх плана.")
+        val result = ExpenseLabeler.label(listOf(cafe, pharmacy), emptySet(), zone, overPlan = overPlan)
+        assertEquals(listOf(ExpenseLabel.IMPULSIVE), labelsOf(result, cafe))
+        assertEquals("Трата сверх плана.", result.getValue(cafe.expense.id).single().reason)
+        // «Здоровье» не импульсивная категория — перерасход не делает трату импульсивной
+        assertTrue(labelsOf(result, pharmacy).isEmpty())
+    }
+
+    @Test
+    fun nightSpendOverPlanKeepsBothReasons() {
+        val cafe = exp(5, hour = 23, cat = 2, sub = null, catName = "Кафе и рестораны", subName = null)
+        val result = ExpenseLabeler.label(listOf(cafe), emptySet(), zone, overPlan = mapOf(cafe.expense.id to "Трата сверх плана."))
+        val reason = result.getValue(cafe.expense.id).single().reason
+        assertTrue("23:00" in reason)
+        assertTrue("сверх плана" in reason)
+    }
+
+    @Test
     fun threeSmallPurchasesPerDayAreImpulsive() {
         fun cafe(day: Int, hour: Int) = exp(day, hour, kopecks = 20_000, cat = 2, sub = null, catName = "Кафе и рестораны", subName = null)
         val three = listOf(cafe(1, 9), cafe(1, 12), cafe(1, 16))

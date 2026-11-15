@@ -41,10 +41,23 @@ private fun postJson(url: String, body: JsonObject, headers: Map<String, String>
     }.post(body.toString().toRequestBody(JSON_MEDIA)).build()
     http.newCall(req).execute().use { r ->
         val text = r.body?.string().orEmpty()
-        if (!r.isSuccessful) throw LlmHttpException(r.code, "HTTP ${r.code}: ${text.take(300)}")
+        if (!r.isSuccessful) throw LlmHttpException(r.code, httpErrorText(r.code, text))
         return lenientJson.parseToJsonElement(text).jsonObject
     }
 }
+
+/** Понятное сообщение для частых ошибок; тело ответа укорочено (ключ в нём не возвращается). */
+internal fun httpErrorText(code: Int, body: String): String = when (code) {
+    401, 403 -> "HTTP $code: ключ не подходит или нет доступа (Настройки)"
+    402 -> "HTTP 402: на счёте провайдера закончились деньги"
+    429 -> "HTTP 429: слишком много запросов, попробуйте позже"
+    else -> "HTTP $code: ${body.take(300)}"
+}
+
+/** Достаёт текст ответа по пути полей; при неожиданном формате — понятная ошибка вместо NullPointerException. */
+private fun JsonObject.textAt(provider: String, read: (JsonObject) -> String?): String =
+    runCatching { read(this) }.getOrNull()
+        ?: throw IllegalStateException("$provider вернул ответ неожиданного формата")
 
 /** DeepSeek — OpenAI-совместимый API. */
 class DeepSeekClient(private val apiKey: String, private val model: String) : LlmClient {
@@ -67,7 +80,7 @@ class DeepSeekClient(private val apiKey: String, private val model: String) : Ll
                 body,
                 mapOf("Authorization" to "Bearer $apiKey"),
             )
-            resp["choices"]!!.jsonArray[0].jsonObject["message"]!!.jsonObject["content"]!!.jsonPrimitive.content
+            resp.textAt(name) { it["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.get("message")?.jsonObject?.get("content")?.jsonPrimitive?.content }
         }
 }
 
@@ -101,8 +114,10 @@ class YandexGptClient(
                 body,
                 mapOf("Authorization" to "Api-Key $apiKey", "x-folder-id" to folderId),
             )
-            resp["result"]!!.jsonObject["alternatives"]!!.jsonArray[0]
-                .jsonObject["message"]!!.jsonObject["text"]!!.jsonPrimitive.content
+            resp.textAt(name) {
+                it["result"]?.jsonObject?.get("alternatives")?.jsonArray?.firstOrNull()
+                    ?.jsonObject?.get("message")?.jsonObject?.get("text")?.jsonPrimitive?.content
+            }
         }
 }
 

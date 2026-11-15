@@ -58,6 +58,7 @@ fun AiSettingsScreen(
     vm: MainViewModel,
     onBack: () -> Unit,
 ) {
+    // Системная «Назад» возвращает на прошлый экран, а не закрывает приложение
     BackHandler(onBack = onBack)
     val saved by vm.settings.collectAsStateWithLifecycle()
     var s by remember(saved) { mutableStateOf<AppSettings>(saved) }

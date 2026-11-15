@@ -24,8 +24,6 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.ShowChart
-import androidx.compose.material.icons.filled.Storefront
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,7 +42,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.data.Income
 import ru.my.traty.data.Places
-import ru.my.traty.data.isUserEditable
 import ru.my.traty.ui.charts.components.BalanceAreaChart
 import ru.my.traty.ui.charts.components.ChartDateCard
 import ru.my.traty.ui.charts.components.ChartKpiCard
@@ -62,6 +59,7 @@ import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatRub
+import ru.my.traty.ui.income.IncomeDetailsDialog
 import ru.my.traty.ui.formatTime
 import kotlin.math.roundToInt
 
@@ -161,7 +159,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                             )
                             Spacer(Modifier.width(TratyTheme.spacing.xs))
                             Text(
-                                text = "Структура расходов (Кредит)",
+                                text = "На что ушли деньги",
                                 style = TratyTheme.typography.titleMedium,
                             )
                         }
@@ -250,61 +248,6 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
             }
         }
 
-        // Траты по магазинам (все категории вместе)
-        if (state.topStores.isNotEmpty()) {
-            item(key = "top-stores", contentType = "top-stores") {
-                val credit = state.summary.totalCreditKopecks
-                TratyCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    backgroundColor = TratyTheme.colors.surface,
-                    shape = TratyTheme.shapes.large,
-                ) {
-                    Column(Modifier.padding(TratyTheme.spacing.md)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.Storefront,
-                                contentDescription = null,
-                                tint = TratyTheme.colors.expense,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(TratyTheme.spacing.xs))
-                            Text(text = "Траты по магазинам", style = TratyTheme.typography.titleMedium)
-                        }
-                        Spacer(Modifier.height(TratyTheme.spacing.md))
-
-                        state.topStores.take(10).forEach { st ->
-                            val frac = if (credit > 0) st.totalKopecks.toFloat() / credit else 0f
-                            Column(Modifier.padding(vertical = TratyTheme.spacing.xxs)) {
-                                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = st.name,
-                                        style = TratyTheme.typography.titleSmall,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    Text(
-                                        text = "${(frac * 100).roundToInt()}%",
-                                        style = TratyTheme.typography.labelSmall,
-                                        color = TratyTheme.colors.onSurfaceVariant,
-                                    )
-                                    Spacer(Modifier.width(TratyTheme.spacing.sm))
-                                    TratyAmountText(
-                                        amountKopecks = st.totalKopecks,
-                                        size = AmountSize.SMALL,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                }
-                                TratyProgressBar(
-                                    progress = frac,
-                                    color = TratyTheme.colors.expense,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         // Блок последних доходов периода
         if (state.recentIncomes.isNotEmpty()) {
             item(key = "recent-incomes", contentType = "recent-incomes") {
@@ -315,7 +258,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                 ) {
                     Column(Modifier.padding(TratyTheme.spacing.md)) {
                         Text(
-                            text = "Поступления периода (Дебет)",
+                            text = "Доходы за период",
                             style = TratyTheme.typography.titleMedium,
                         )
                         Spacer(Modifier.height(TratyTheme.spacing.sm))
@@ -371,41 +314,13 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
     }
 
     incomeToDelete?.let { inc ->
-        AlertDialog(
-            onDismissRequest = { incomeToDelete = null },
-            shape = TratyTheme.shapes.large,
-            containerColor = TratyTheme.colors.surface,
-            title = { Text("Удалить доход?", style = TratyTheme.typography.titleMedium) },
-            text = {
-                Text(
-                    "${inc.source}: +${formatRub(inc.amountKopecks)}\n${inc.note ?: ""}",
-                    style = TratyTheme.typography.bodyMedium,
-                )
+        IncomeDetailsDialog(
+            income = inc,
+            onDelete = {
+                vm.deleteIncome(inc)
+                incomeToDelete = null
             },
-            confirmButton = {
-                if (inc.isUserEditable) {
-                    TratyTextButton(
-                        onClick = {
-                            vm.deleteIncome(inc)
-                            incomeToDelete = null
-                        },
-                        contentColor = TratyTheme.colors.expense,
-                    ) {
-                        Text("Удалить")
-                    }
-                } else {
-                    Text(
-                        "Запись сверки",
-                        style = TratyTheme.typography.labelLarge,
-                        color = TratyTheme.colors.onSurfaceVariant,
-                    )
-                }
-            },
-            dismissButton = {
-                TratyTextButton(onClick = { incomeToDelete = null }) {
-                    Text("Отмена")
-                }
-            },
+            onDismiss = { incomeToDelete = null },
         )
     }
 }

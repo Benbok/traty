@@ -1,0 +1,4 @@
+<resources>
+    <!-- TratyPalette.Slate950: фон тёмной темы, чтобы при запуске не вспыхивал белый экран -->
+    <color name="traty_window_background">#FF090D16</color>
+</resources>

@@ -2,8 +2,6 @@ package ru.my.traty.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Column
@@ -13,18 +11,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.BrightnessAuto
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import android.Manifest
@@ -38,12 +31,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.my.traty.data.AppSettings
-import ru.my.traty.data.ThemeMode
 import ru.my.traty.data.period.MAX_PERIOD_START_DAY
 import ru.my.traty.data.period.MIN_PERIOD_START_DAY
 import ru.my.traty.ui.MainViewModel
@@ -66,6 +57,7 @@ fun SettingsScreen(
     onOpenRecurring: () -> Unit = {},
     onOpenBudget: () -> Unit = {},
     onOpenAi: () -> Unit = {},
+    onOpenOnboarding: () -> Unit = {},
 ) {
     val saved by vm.settings.collectAsStateWithLifecycle()
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
@@ -93,66 +85,9 @@ fun SettingsScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md),
         ) {
-        // Секция: Тема оформления
-        TratyCard(
-            modifier = Modifier.fillMaxWidth(),
-            backgroundColor = TratyTheme.colors.surface,
-        ) {
-            Column(Modifier.padding(TratyTheme.spacing.lg)) {
-                Text("Тема оформления", style = TratyTheme.typography.titleMedium)
-                Spacer(Modifier.height(TratyTheme.spacing.xs))
-                Text(
-                    "Выберите светлую, тёмную или системную тему.",
-                    style = TratyTheme.typography.bodySmall,
-                    color = TratyTheme.colors.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(TratyTheme.spacing.md))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
-                ) {
-                    ThemeMode.entries.forEach { mode ->
-                        val isSelected = saved.themeMode == mode
-                        val icon = when (mode) {
-                            ThemeMode.LIGHT -> Icons.Filled.LightMode
-                            ThemeMode.DARK -> Icons.Filled.DarkMode
-                            ThemeMode.SYSTEM -> Icons.Filled.BrightnessAuto
-                        }
-                        TratyCard(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    vm.setThemeMode(mode)
-                                },
-                            backgroundColor = if (isSelected) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
-                            border = if (isSelected) BorderStroke(1.5.dp, TratyTheme.colors.primary) else null,
-                            shape = TratyTheme.shapes.medium,
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = TratyTheme.spacing.md),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = mode.title,
-                                    tint = if (isSelected) TratyTheme.colors.primary else TratyTheme.colors.onSurfaceVariant,
-                                    modifier = Modifier.size(24.dp),
-                                )
-                                Spacer(Modifier.height(TratyTheme.spacing.xs))
-                                Text(
-                                    text = mode.title,
-                                    style = TratyTheme.typography.labelMedium,
-                                    color = if (isSelected) TratyTheme.colors.primary else TratyTheme.colors.onSurface,
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        OnboardingSettingsCard(onOpen = onOpenOnboarding)
+
+        ThemeSettingsCard()
 
         // Секция: День начала расчётного периода
         TratyCard(

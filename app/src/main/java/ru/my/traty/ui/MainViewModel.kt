@@ -25,7 +25,6 @@ import kotlinx.coroutines.withContext
 import ru.my.traty.TratyApp
 import kotlinx.serialization.json.Json
 import ru.my.traty.ai.EntryParsing
-import ru.my.traty.ai.clientFor
 import ru.my.traty.capture.EntryDraft
 import ru.my.traty.capture.EntryOrigin
 import ru.my.traty.capture.EntryOutcome
@@ -37,7 +36,6 @@ import ru.my.traty.speech.ModelState
 import ru.my.traty.backup.CsvBackup
 import ru.my.traty.backup.CsvImporter
 import ru.my.traty.data.AppSettings
-import ru.my.traty.data.ThemeMode
 import ru.my.traty.data.CategoryTotal
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.Expense
@@ -53,9 +51,10 @@ import ru.my.traty.data.insights.Observation
 import ru.my.traty.data.insights.ObservationExplainer
 import ru.my.traty.data.insights.Observations
 import ru.my.traty.data.labels.ExpenseLabelHit
-import ru.my.traty.data.labels.ExpenseLabeler
 import ru.my.traty.data.period.BillingPeriod
-import ru.my.traty.data.recurring.RecurringRepository
+import ru.my.traty.ui.budget.planItemsFlow
+import ru.my.traty.ui.budget.totalLimitFlow
+import ru.my.traty.ui.labels.expenseLabelsFlow
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.roundToLong
@@ -74,28 +73,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val categories: StateFlow<List<CategoryWithSubs>> =
         c.db.categories().observeActiveWithSubs().map { it.selectable() }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /**
-     * Метки на тратах (🔺 🔁 🆕 ⚡ 📅): считаются по всей истории, не только по показанному периоду.
-     * Живёт, только пока экран на него подписан, поэтому фоновых расчётов без UI нет.
-     */
-    val labels: StateFlow<Map<Long, List<ExpenseLabelHit>>> =
-        combine(
-            c.db.expenses().observeAllWithCategory(),
-            c.db.recurring().observeAll(),
-            c.db.categories().observeActiveWithSubs(),
-            c.settings.flow.map { it.labelsEnabled }.distinctUntilChanged(),
-        ) { expenses, recurring, cats, enabled ->
-            if (!enabled) return@combine emptyMap()
-            val candidates = RecurringRepository.suggest(expenses, recurring, cats)
-            ExpenseLabeler.label(
-                expenses,
-                ExpenseLabeler.subscriptionExpenseIds(expenses, recurring, candidates),
-                zone,
-                impulsiveCategories = cats.filter { it.category.isImpulsive }.map { it.category.name },
-            )
-        }
-            .flowOn(Dispatchers.Default)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+    /** Метки на тратах: живут, только пока экран на них подписан, поэтому фоновых расчётов без UI нет. */
+    val labels: StateFlow<Map<Long, List<ExpenseLabelHit>>> = expenseLabelsFlow(c, zone)
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /** Карточки наблюдений на Главной (для текущего расчётного периода), без скрытых пользователем. */
     val observations: StateFlow<List<Observation>> =
@@ -118,7 +99,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun explainObservation(o: Observation) {
         if (explainingObservation != null) return
-        val client = clientFor(settings.value) ?: run { message = "Для пояснения нужен ИИ (Настройки)"; return }
+        val client = c.llm(settings.value) ?: run { message = "Для пояснения нужен ИИ (Настройки)"; return }
         viewModelScope.launch {
             explainingObservation = o.key
             try {
@@ -165,11 +146,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.db.expenses().observeTotals(p.startMillis(zone), p.endMillisExclusive(zone))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** Суммы по (категория, место) текущего периода — для разбивки по магазинам в статистике. */
-    val placeTotals: StateFlow<List<ru.my.traty.data.PlaceTotal>> = _period.flatMapLatest { p ->
-        c.db.expenses().observePlaceTotals(p.startMillis(zone), p.endMillisExclusive(zone))
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
     val prevTotals: StateFlow<List<CategoryTotal>> = _period.flatMapLatest { p ->
         val prev = p.previous(startDay)
         c.db.expenses().observeTotals(prev.startMillis(zone), prev.endMillisExclusive(zone))
@@ -197,17 +173,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** Все строки планов трат (этап 8). Пусто — план ещё ни разу не задавали. */
-    val budgetRows: StateFlow<List<ru.my.traty.data.budget.Budget>> =
-        c.db.budgets().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
     /** Планы показанного расчётного периода с прогрессом — для Статистики и Трат. */
-    val plans: StateFlow<List<ru.my.traty.ui.budget.PlanItem>> =
-        combine(budgetRows, _period, expenses, categories) { rows, p, list, cats ->
-            ru.my.traty.ui.budget.planItems(rows, p, list, cats, zone)
-        }
-            .flowOn(Dispatchers.Default)
-            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val plans: StateFlow<List<ru.my.traty.ui.budget.PlanItem>> = planItemsFlow(c, _period, expenses, categories, zone)
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Общий лимит показанного периода; null — не задан. */
+    val totalLimit: StateFlow<ru.my.traty.data.budget.TotalProgress?> = totalLimitFlow(c, _period, expenses)
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** Фразы без сети (ждут разбора) и разобранные в фоне (ждут проверки). */
     val pending: StateFlow<List<PendingPhrase>> =
@@ -435,10 +409,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setThemeMode(mode: ThemeMode) = viewModelScope.launch {
-        c.settings.setThemeMode(mode)
-    }
-
     /** Состояние модели распознавания речи GigaAM. */
     val modelState: StateFlow<ModelState> = c.models.state
 
@@ -460,6 +430,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .onFailure { message = it.message ?: "Не удалось изменить категорию" }
     }
 
+    /** Свернуть или развернуть категории в карточке «План трат» на Тратах; выбор запоминается. */
+    fun setHomePlanExpanded(expanded: Boolean) = viewModelScope.launch {
+        c.settings.setHomePlanExpanded(expanded)
+    }
+
     fun setLabelsEnabled(enabled: Boolean) = viewModelScope.launch {
         c.settings.setLabelsEnabled(enabled)
     }
@@ -479,13 +454,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun testConnection(s: AppSettings) = viewModelScope.launch {
         c.settings.save(s)
-        val client = clientFor(s) ?: run { message = "Выбран режим без ИИ"; return@launch }
+        val client = c.llm(s) ?: run { message = "Выбран режим без ИИ"; return@launch }
         message = try {
             val r = EntryParsing.parse(
                 client, "кофе двести пятьдесят и такси 400",
                 c.db.categories().getActiveWithSubs().selectable(), emptyList(), LocalDate.now(),
             )
             "${client.name} работает: " + r.joinToString { "${it.category} ${it.amount.toInt()}" }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             "${client.name}: ошибка — ${e.message}"
         }
@@ -493,7 +470,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** ИИ получает только агрегированные суммы по категориям, без мест и заметок. */
     fun requestInsight() {
-        val client = clientFor(settings.value) ?: run { message = "Для комментария нужен ИИ (Настройки)"; return }
+        val client = c.llm(settings.value) ?: run { message = "Для комментария нужен ИИ (Настройки)"; return }
         val cur = totals.value
         if (cur.isEmpty()) { message = "За этот период трат нет"; return }
         val prev = prevTotals.value.associate { it.categoryId to it.total }
@@ -513,29 +490,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     user = summary,
                     jsonMode = false,
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 "Ошибка: ${e.message}"
+            } finally {
+                insightBusy = false
             }
-            insightBusy = false
         }
     }
 
+    /** Ошибка записи (нет места, файл удалён, облачная папка недоступна) показывается сообщением, а не роняет приложение. */
     fun exportCsv(uri: Uri) = viewModelScope.launch {
-        val all = c.db.expenses().getAllWithCategory()
-        val incomes = c.db.incomes().getAll()
-        withContext(Dispatchers.IO) {
-            getApplication<Application>().contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { w ->
-                CsvBackup.write(all, incomes, zone, w)
+        message = try {
+            val all = c.db.expenses().getAllWithCategory()
+            val incomes = c.db.incomes().getAll()
+            withContext(Dispatchers.IO) {
+                val out = getApplication<Application>().contentResolver.openOutputStream(uri)
+                    ?: throw IllegalStateException("не удалось открыть файл")
+                out.bufferedWriter(Charsets.UTF_8).use { w -> CsvBackup.write(all, incomes, zone, w) }
             }
+            "Экспортировано записей: ${all.size + incomes.size}"
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            "Экспорт не удался: ${e.message ?: e.javaClass.simpleName}"
         }
-        message = "Экспортировано записей: ${all.size + incomes.size}"
     }
 
     /** Восстановление из CSV (своего экспорта или пересохранённого в Excel). Уже существующие траты пропускаются. */
     fun importCsv(uri: Uri) = viewModelScope.launch {
         message = try {
             val text = withContext(Dispatchers.IO) {
-                getApplication<Application>().contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                getApplication<Application>().contentResolver.openInputStream(uri)?.use(CsvBackup::readLimited)
                     ?.let(CsvBackup::decode)
             } ?: throw IllegalStateException("не удалось открыть файл")
             val r = CsvImporter(c.db, c.categories).import(CsvBackup.parse(text, zone))
@@ -547,6 +534,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     if (r.badLines.size > 10) append("…")
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             "Импорт не удался: ${e.message ?: e.javaClass.simpleName}"
         }

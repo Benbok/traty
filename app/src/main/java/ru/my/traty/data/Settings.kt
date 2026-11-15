@@ -8,11 +8,16 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import ru.my.traty.data.period.MAX_PERIOD_START_DAY
 import ru.my.traty.data.period.MIN_PERIOD_START_DAY
+import ru.my.traty.data.secure.AesGcmSecretCipher
+import ru.my.traty.data.secure.KeystoreKeys
+import ru.my.traty.data.secure.SecretCodec
 
 enum class ThemeMode(val title: String) {
     SYSTEM("Системная"),
@@ -33,6 +38,10 @@ enum class VoiceEngine(val title: String) {
 
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    /** Android 12+: цвета приложения подбираются под обои. Цвета трат и доходов не меняются. */
+    val dynamicColor: Boolean = false,
+    /** Праздничное оформление в Новый год, 23 Февраля, 8 Марта, 1 и 9 Мая. */
+    val holidayDecor: Boolean = true,
     val provider: LlmProvider = LlmProvider.DEEPSEEK,
     val deepseekKey: String = "",
     val deepseekModel: String = "deepseek-chat",
@@ -53,6 +62,12 @@ data class AppSettings(
     val dailyDigestEnabled: Boolean = true,
     /** Ключи скрытых карточек наблюдений на Главной. */
     val dismissedObservations: Set<String> = emptySet(),
+    /** Карточка «План трат» на Тратах: показаны ли категории. По умолчанию свёрнуто — только общий итог. */
+    val homePlanExpanded: Boolean = false,
+    /** Уведомлять, когда план категории или общий лимит выбран на 80 % и на 100 %. */
+    val budgetAlertsEnabled: Boolean = true,
+    /** Уведомления о заданиях на неделю: новые в понедельник, итог в воскресенье. */
+    val weeklyTasksNotify: Boolean = true,
 )
 
 internal fun encodeLines(lines: List<String>): String =
@@ -63,15 +78,20 @@ internal fun decodeLines(raw: String?): List<String> =
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
-/**
- * Ключи хранятся в приватном хранилище приложения (другим приложениям недоступно,
- * allowBackup=false). Для личного APK этого достаточно.
- */
 private const val MAX_DISMISSED = 60
 
-class SettingsRepository(private val context: Context) {
+/**
+ * API-ключи ИИ хранятся зашифрованными ключом Android Keystore ([SecretCodec]);
+ * сам файл настроек лежит в приватной папке приложения и исключён из резервных копий и переноса.
+ */
+class SettingsRepository(
+    private val context: Context,
+    private val secrets: SecretCodec = SecretCodec(AesGcmSecretCipher(KeystoreKeys::secretsKey)),
+) {
     private object K {
         val themeMode = stringPreferencesKey("theme_mode")
+        val dynamicColor = booleanPreferencesKey("dynamic_color")
+        val holidayDecor = booleanPreferencesKey("holiday_decor")
         val provider = stringPreferencesKey("provider")
         val dsKey = stringPreferencesKey("deepseek_key")
         val dsModel = stringPreferencesKey("deepseek_model")
@@ -85,16 +105,22 @@ class SettingsRepository(private val context: Context) {
         val labelsEnabled = booleanPreferencesKey("labels_enabled")
         val dailyDigest = booleanPreferencesKey("daily_digest")
         val dismissedObservations = stringSetPreferencesKey("dismissed_observations")
+        val homePlanExpanded = booleanPreferencesKey("home_plan_expanded")
+        val budgetAlerts = booleanPreferencesKey("budget_alerts")
+        val onboardingSeen = booleanPreferencesKey("onboarding_seen")
+        val weeklyTasksNotify = booleanPreferencesKey("weekly_tasks_notify")
     }
 
     val flow: Flow<AppSettings> = context.dataStore.data.map { p ->
         val d = AppSettings()
         AppSettings(
             themeMode = p[K.themeMode]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: d.themeMode,
+            dynamicColor = p[K.dynamicColor] ?: d.dynamicColor,
+            holidayDecor = p[K.holidayDecor] ?: d.holidayDecor,
             provider = p[K.provider]?.let { runCatching { LlmProvider.valueOf(it) }.getOrNull() } ?: d.provider,
-            deepseekKey = p[K.dsKey] ?: "",
+            deepseekKey = secrets.open(p[K.dsKey]),
             deepseekModel = p[K.dsModel] ?: d.deepseekModel,
-            yandexKey = p[K.yaKey] ?: "",
+            yandexKey = secrets.open(p[K.yaKey]),
             yandexFolderId = p[K.yaFolder] ?: "",
             yandexModel = p[K.yaModel] ?: d.yandexModel,
             periodStartDay = (p[K.periodStartDay] ?: d.periodStartDay)
@@ -105,8 +131,13 @@ class SettingsRepository(private val context: Context) {
             labelsEnabled = p[K.labelsEnabled] ?: d.labelsEnabled,
             dailyDigestEnabled = p[K.dailyDigest] ?: d.dailyDigestEnabled,
             dismissedObservations = p[K.dismissedObservations] ?: d.dismissedObservations,
+            homePlanExpanded = p[K.homePlanExpanded] ?: d.homePlanExpanded,
+            budgetAlertsEnabled = p[K.budgetAlerts] ?: d.budgetAlertsEnabled,
+            weeklyTasksNotify = p[K.weeklyTasksNotify] ?: d.weeklyTasksNotify,
         )
     }
+        // Расшифровка ключей обращается к Keystore — не на главном потоке
+        .flowOn(Dispatchers.Default)
 
     suspend fun current(): AppSettings = flow.first()
 
@@ -114,12 +145,22 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { p ->
             p[K.themeMode] = s.themeMode.name
             p[K.provider] = s.provider.name
-            p[K.dsKey] = s.deepseekKey.trim()
+            p[K.dsKey] = secrets.seal(s.deepseekKey.trim())
             p[K.dsModel] = s.deepseekModel.trim()
-            p[K.yaKey] = s.yandexKey.trim()
+            p[K.yaKey] = secrets.seal(s.yandexKey.trim())
             p[K.yaFolder] = s.yandexFolderId.trim()
             p[K.yaModel] = s.yandexModel.trim()
             p[K.periodStartDay] = s.periodStartDay.coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY)
+        }
+    }
+
+    /** Перешифровывает ключи, сохранённые старыми версиями открытым текстом. */
+    suspend fun upgradeStoredSecrets() {
+        context.dataStore.edit { p ->
+            for (key in listOf(K.dsKey, K.yaKey)) {
+                val stored = p[key]
+                if (secrets.needsUpgrade(stored)) p[key] = secrets.seal(stored!!)
+            }
         }
     }
 
@@ -153,6 +194,25 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { p -> p[K.dailyDigest] = enabled }
     }
 
+    /** Знакомство с приложением уже показано или пропущено. Отдельно от [flow]: не трогает Keystore. */
+    val onboardingSeen: Flow<Boolean> = context.dataStore.data.map { p -> p[K.onboardingSeen] ?: false }
+
+    suspend fun setOnboardingSeen(seen: Boolean) {
+        context.dataStore.edit { p -> p[K.onboardingSeen] = seen }
+    }
+
+    suspend fun setHomePlanExpanded(expanded: Boolean) {
+        context.dataStore.edit { p -> p[K.homePlanExpanded] = expanded }
+    }
+
+    suspend fun setBudgetAlertsEnabled(enabled: Boolean) {
+        context.dataStore.edit { p -> p[K.budgetAlerts] = enabled }
+    }
+
+    suspend fun setWeeklyTasksNotify(enabled: Boolean) {
+        context.dataStore.edit { p -> p[K.weeklyTasksNotify] = enabled }
+    }
+
     suspend fun setLabelsEnabled(enabled: Boolean) {
         context.dataStore.edit { p -> p[K.labelsEnabled] = enabled }
     }
@@ -161,5 +221,13 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { p ->
             p[K.themeMode] = mode.name
         }
+    }
+
+    suspend fun setDynamicColor(enabled: Boolean) {
+        context.dataStore.edit { p -> p[K.dynamicColor] = enabled }
+    }
+
+    suspend fun setHolidayDecor(enabled: Boolean) {
+        context.dataStore.edit { p -> p[K.holidayDecor] = enabled }
     }
 }

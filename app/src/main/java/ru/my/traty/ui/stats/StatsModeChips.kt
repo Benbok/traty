@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -44,32 +45,14 @@ fun StatsModeChips(
     }
 }
 
-/** Что показывать списком: категории (с разбивкой по магазинам внутри) или сразу все магазины. */
-@Composable
-fun StatsViewChips(
-    storesSelected: Boolean,
-    onCategories: () -> Unit,
-    onStores: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
-    ) {
-        ModeChip("Категории", selected = !storesSelected, onClick = onCategories)
-        ModeChip("Магазины", selected = storesSelected, onClick = onStores)
-    }
-}
-
 @Composable
 internal fun ModeChip(title: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         shape = TratyTheme.shapes.small,
         color = if (selected) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
         border = if (selected) BorderStroke(1.dp, TratyTheme.colors.primary) else null,
-        modifier = Modifier.clickable(onClick = onClick),
+        // Видимый размер чипа прежний, но нажимаемая область не меньше 48dp
+        modifier = Modifier.clickable(onClick = onClick).minimumInteractiveComponentSize(),
     ) {
         Text(
             text = title,

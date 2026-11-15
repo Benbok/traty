@@ -16,9 +16,15 @@ import ru.my.traty.capture.QuickEntry
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.CategoryRepository
+import ru.my.traty.data.IncomeRepository
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.ReconciliationRepository
+import ru.my.traty.data.budget.BudgetAlertWatcher
+import ru.my.traty.data.budget.BudgetRepository
 import ru.my.traty.data.digest.DailyDigestWork
+import ru.my.traty.data.onboarding.OnboardingRepository
+import ru.my.traty.data.weekly.WeeklyTaskRepository
+import ru.my.traty.data.weekly.WeeklyTaskWork
 import ru.my.traty.data.recurring.RecurringReminderWork
 import ru.my.traty.data.SettingsRepository
 import ru.my.traty.speech.GigaAmRuntime
@@ -34,7 +40,10 @@ open class TratyApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = createContainer()
-        if (seedOnStart) container.seedIfEmpty()
+        if (seedOnStart) {
+            container.seedIfEmpty()
+            container.protectSecrets()
+        }
         if (updateWidgetOnChanges) {
             appScope.launch {
                 container.quickEntry.changes.collect {
@@ -49,6 +58,8 @@ open class TratyApp : Application() {
         if (parsePendingOnStart) {
             runCatching { RecurringReminderWork.schedule(this) }
             runCatching { DailyDigestWork.schedule(this) }
+            container.budgetAlerts.start(appScope)
+            runCatching { WeeklyTaskWork.schedule(this) }
             // Есть фразы без разбора (в т. ч. оставшиеся с прошлого запуска) — поставить фоновый разбор
             appScope.launch {
                 container.db.pendingPhrases().observeAll()
@@ -80,10 +91,19 @@ class AppContainer(
     val db: AppDatabase = AppDatabase.build(context),
     clientProvider: (AppSettings) -> LlmClient? = ::clientFor,
 ) {
+    /** Единая точка выбора языковой модели: экраны берут клиента здесь, тесты подменяют. */
+    val llm: (AppSettings) -> LlmClient? = clientProvider
     val settings = SettingsRepository(context)
     val categories = CategoryRepository(db)
     val reconciliations = ReconciliationRepository(db, categories)
-    val quickEntry = QuickEntry(db, categories, settings, clientProvider = clientProvider)
+    val onboarding = OnboardingRepository(db, settings)
+    val incomes = IncomeRepository(db)
+    val quickEntry = QuickEntry(db, categories, settings, clientProvider = llm)
+    val budgets = BudgetRepository(db)
+    val weeklyTasks = WeeklyTaskRepository(db)
+
+    /** Уведомления «потрачено 80 % / 100 % плана»; запускается из [TratyApp.onCreate]. */
+    val budgetAlerts = BudgetAlertWatcher(context.applicationContext, db, settings)
 
     /** Модель GigaAM: качается в filesDir; можно положить вручную в Android/data/<пакет>/files/models/gigaam. */
     val models = ModelManager(
@@ -102,5 +122,10 @@ class AppContainer(
 
     fun seedIfEmpty() {
         scope.launch { categories.seedIfEmpty() }
+    }
+
+    /** Ключи ИИ из старых версий (открытым текстом) шифруются при первом запуске. */
+    fun protectSecrets() {
+        scope.launch { runCatching { settings.upgradeStoredSecrets() } }
     }
 }

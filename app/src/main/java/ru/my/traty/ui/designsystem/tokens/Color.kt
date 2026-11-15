@@ -41,6 +41,8 @@ object TratyPalette {
     val CoralRose = Color(0xFFF43F5E)      // Расходы / Внимание
     val CoralRoseLight = Color(0xFFFFF1F2)
     val CoralRoseDark = Color(0xFF4C0519)
+    val CoralRose700 = Color(0xFFBE123C)   // Расходы текстом на светлом фоне (6.3:1)
+    val CoralRose400 = Color(0xFFFB7185)   // Расходы текстом на тёмном фоне (6.6:1)
 
     val MintGreen = Color(0xFF10B981)      // Доходы / Экономия
     val MintGreenLight = Color(0xFFECFDF5)
@@ -48,9 +50,11 @@ object TratyPalette {
 
     val AmberWarning = Color(0xFFF59E0B)   // Превышение лимита
     val AmberLight = Color(0xFFFFFBEB)
+    val Amber700 = Color(0xFFB45309)       // Предупреждение текстом на светлом фоне (5:1)
 
     val SkyInfo = Color(0xFF0EA5E9)        // Аналитика / Подсказки
     val SkyLight = Color(0xFFF0F9FF)
+    val Sky700 = Color(0xFF0369A1)         // Подсказки текстом на светлом фоне (5.9:1)
 
     // Пастельные цвета для бэйджей категорий
     val CategoryColors = listOf(
@@ -85,8 +89,11 @@ data class TratyColors(
     val surfaceContainer: Color,
     val surfaceContainerHigh: Color,
 
+    /** Тонкие рамки карточек и разделители, чисто декоративные. */
     val border: Color,
     val borderSubtle: Color,
+    /** Рамки, которые надо увидеть: поля ввода, контурные кнопки (не ниже 3:1 к фону). */
+    val outline: Color,
 
     val expense: Color,
     val expenseContainer: Color,
@@ -98,8 +105,12 @@ data class TratyColors(
     val isDark: Boolean,
 )
 
+/**
+ * Светлая тема: цвета текста и сумм подобраны с контрастом не ниже 4.5:1 к белому
+ * и к светлым подложкам (WCAG AA), чтобы суммы читались на солнце.
+ */
 val LightTratyColors = TratyColors(
-    primary = TratyPalette.Emerald600,
+    primary = TratyPalette.Emerald700,
     onPrimary = Color.White,
     primaryContainer = TratyPalette.Emerald50,
     onPrimaryContainer = TratyPalette.Emerald900,
@@ -110,19 +121,20 @@ val LightTratyColors = TratyColors(
     surface = Color.White,
     onSurface = TratyPalette.Slate900,
     surfaceVariant = TratyPalette.Slate100,
-    onSurfaceVariant = TratyPalette.Slate500,
+    onSurfaceVariant = TratyPalette.Slate600,
     surfaceContainer = TratyPalette.Slate100,
     surfaceContainerHigh = TratyPalette.Slate200,
 
     border = TratyPalette.Slate200,
     borderSubtle = TratyPalette.Slate100,
+    outline = TratyPalette.Slate500,
 
-    expense = TratyPalette.CoralRose,
+    expense = TratyPalette.CoralRose700,
     expenseContainer = TratyPalette.CoralRoseLight,
-    income = TratyPalette.MintGreen,
+    income = TratyPalette.Emerald700,
     incomeContainer = TratyPalette.MintGreenLight,
-    warning = TratyPalette.AmberWarning,
-    info = TratyPalette.SkyInfo,
+    warning = TratyPalette.Amber700,
+    info = TratyPalette.Sky700,
 
     isDark = false,
 )
@@ -145,8 +157,9 @@ val DarkTratyColors = TratyColors(
 
     border = TratyPalette.Slate800,
     borderSubtle = TratyPalette.Slate900,
+    outline = TratyPalette.Slate500,
 
-    expense = TratyPalette.CoralRose,
+    expense = TratyPalette.CoralRose400,
     expenseContainer = TratyPalette.CoralRoseDark,
     income = TratyPalette.MintGreen,
     incomeContainer = TratyPalette.MintGreenDark,

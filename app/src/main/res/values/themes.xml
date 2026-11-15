@@ -1,5 +1,8 @@
 <resources>
-    <style name="Theme.Traty" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Фон окна до первого кадра Compose (и заставки Android 12+) совпадает с фоном приложения -->
+    <style name="Theme.Traty" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/traty_window_background</item>
+    </style>
 
     <!-- Прозрачная панель быстрой записи поверх других приложений -->
     <style name="Theme.Traty.Capture" parent="android:Theme.Material.Light.NoActionBar">

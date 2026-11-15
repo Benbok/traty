@@ -133,20 +133,28 @@ object PlanProgresses {
     /** Порог «почти исчерпан», в процентах. */
     const val NEAR_PERCENT = 80
 
-    fun of(plan: Budget, spent: Long, period: BillingPeriod, today: LocalDate): PlanProgress {
+    /** Состояние, «в день» и прогноз для плана [planned] при потраченных [spent]. */
+    data class Pace(val status: PlanStatus, val perDay: Long?, val forecast: Long?)
+
+    fun pace(planned: Long, spent: Long, period: BillingPeriod, today: LocalDate): Pace {
         val pace = SpendingPaces.of(period, today, spent)
         val running = pace != null && pace.forecast != null
         val forecast = pace?.forecast?.takeIf { pace.daysPassed >= MIN_DAYS_FOR_FORECAST }
-        val remaining = plan.amountKopecks - spent
+        val remaining = planned - spent
         val daysWithToday = if (pace != null && running) pace.daysLeft + 1 else 0
         val perDay = if (running && remaining > 0 && daysWithToday > 0) remaining / daysWithToday else null
         val status = when {
-            spent > plan.amountKopecks -> PlanStatus.OVER
-            forecast != null && forecast > plan.amountKopecks && spent < plan.amountKopecks -> PlanStatus.AT_RISK
-            spent * 100 >= plan.amountKopecks * NEAR_PERCENT -> PlanStatus.NEAR
+            spent > planned -> PlanStatus.OVER
+            forecast != null && forecast > planned && spent < planned -> PlanStatus.AT_RISK
+            spent * 100 >= planned * NEAR_PERCENT -> PlanStatus.NEAR
             else -> PlanStatus.OK
         }
-        return PlanProgress(plan, spent, status, perDay, forecast)
+        return Pace(status, perDay, forecast)
+    }
+
+    fun of(plan: Budget, spent: Long, period: BillingPeriod, today: LocalDate): PlanProgress {
+        val p = pace(plan.amountKopecks, spent, period, today)
+        return PlanProgress(plan, spent, p.status, p.perDay, p.forecast)
     }
 
     /** Прогресс по всем [plans] периода; сначала самые тревожные, потом по доле потраченного. */
