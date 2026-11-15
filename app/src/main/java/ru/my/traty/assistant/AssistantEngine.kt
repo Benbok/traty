@@ -127,7 +127,7 @@ object AssistantEngine {
         if (q.intent == Intents.SET_PLAN && filter.names.isEmpty() && filter.unknownNames.isNotEmpty()) {
             return setPlanNewSub(q, ctx, period, spending, filter.unknownNames.first())
         }
-        if (filter.unknownNames.isNotEmpty() && filter.names.isEmpty()) {
+        if (filter.unknownNames.isNotEmpty() && filter.names.isEmpty() && filter.terms.isEmpty()) {
             val known = spending.map { it.categoryName }.distinct().sorted().joinToString(", ")
             return AssistantData(
                 facts = header(ctx) + "Категорий «${filter.unknownNames.joinToString("», «")}» в записях нет. Есть категории: $known.",
