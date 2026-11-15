@@ -33,6 +33,7 @@ class VoiceEngineSettingTest {
             assertEquals(VoiceEngine.GIGAAM, settings.current().voiceEngine)
         } finally {
             settings.setVoiceEngine(VoiceEngine.GIGAAM)
+            settings.setPeriodStartDay(1)
         }
     }
 }
