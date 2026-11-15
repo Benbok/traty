@@ -81,6 +81,19 @@ jobs:
       - name: Переименовать APK
         run: cp app/build/outputs/apk/release/app-release.apk "traty-${VERSION}.apk"
 
+      # Если тег аннотированный и в его сообщении есть текст — это описание релиза
+      # (его кладёт scripts/release.ps1). Иначе (ручной запуск, лёгкий тег) — автоописание из коммитов.
+      - name: Описание релиза
+        if: github.event_name == 'push'
+        run: |
+          git fetch --force origin "+refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}" || true
+          if [ "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}" 2>/dev/null)" = "tag" ]; then
+            git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(contents)' > "$RUNNER_TEMP/release-notes.md"
+            if [ -s "$RUNNER_TEMP/release-notes.md" ] && grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md"; then
+              echo "NOTES_FILE=$RUNNER_TEMP/release-notes.md" >> "$GITHUB_ENV"
+            fi
+          fi
+
       - name: Опубликовать релиз
         uses: softprops/action-gh-release@v2
         with:
@@ -89,4 +102,5 @@ jobs:
           name: Traty ${{ env.VERSION }}
           prerelease: ${{ inputs.prerelease == true }}
           files: traty-${{ env.VERSION }}.apk
-          generate_release_notes: true
+          body_path: ${{ env.NOTES_FILE }}
+          generate_release_notes: ${{ env.NOTES_FILE == '' }}
