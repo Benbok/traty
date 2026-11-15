@@ -170,3 +170,18 @@ fun BudgetAlertsCard(enabled: Boolean, hasPlans: Boolean, onChange: (Boolean) ->
         }
     }
 }
+
+/** Вход в «Задания на неделю» с экрана плана. */
+@Composable
+fun WeeklyTasksEntryCard(onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    TratyCard(modifier.fillMaxWidth(), onClick = onOpen) {
+        Column(Modifier.padding(TratyTheme.spacing.md)) {
+            Text("Задания на неделю", style = TratyTheme.typography.titleSmall)
+            Text(
+                "1–3 небольших задания из ваших трат, итог в воскресенье и серия выполненных недель.",
+                style = TratyTheme.typography.bodySmall,
+                color = TratyTheme.colors.onSurfaceVariant,
+            )
+        }
+    }
+}
