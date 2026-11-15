@@ -17,10 +17,12 @@ import java.time.LocalDate
  * - подкатегория не повторяет категорию, а известная подкатегория подтягивает свою категорию вместо «Прочее»;
  * - заметка не начинается с места и не пропадает, если ИИ её не вернул;
  * - «вчера», «позавчера» в фразе с одной тратой считаются правилом, а не ИИ;
- * - «аванс за холодильник», «доплата» — трата, даже если ИИ решил, что деньги пришли.
+ * - «аванс за холодильник», «доплата» — трата, даже если ИИ решил, что деньги пришли;
+ * - список покупок в одном магазине — одна трата с товарами в заметке ([ShoppingListCleanup]).
  */
 object EntryCleanup {
-    fun apply(entries: List<ParsedEntry>, rawText: String, categories: List<CategoryWithSubs>, today: LocalDate): List<ParsedEntry> {
+    fun apply(entries0: List<ParsedEntry>, rawText: String, categories: List<CategoryWithSubs>, today: LocalDate): List<ParsedEntry> {
+        val entries = ShoppingListCleanup.apply(entries0, rawText)
         val single = entries.size == 1
         return entries.map { e0 ->
             val e = if (single) paymentNotIncome(e0, rawText, categories, today) else e0

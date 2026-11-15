@@ -93,4 +93,27 @@ class OfflineParserTest {
         assertNull(parse("кофе 250").date)
         assertEquals("кофе", parse("кофе 250").note)
     }
+
+    @Test
+    fun groceryListIsOneExpenseWithItemsInNote() {
+        val e = parse("в продуктовом на 2500 купил рыбу, консерву, ещё что-то")
+        assertEquals(2500.0, e.amount, 0.0)
+        assertEquals("Продукты", e.category)
+        assertEquals("Супермаркет", e.subcategory)
+        assertEquals("рыбу, консерву", e.note)
+    }
+
+    @Test
+    fun groceryTotalWinsOverFirstPrice() {
+        val e = parse("продуктовый рыба 500, хлеб 80, всего 2500")
+        assertEquals(2500.0, e.amount, 0.0)
+        assertEquals("рыба 500 ₽, хлеб 80 ₽", e.note)
+    }
+
+    @Test
+    fun groceryWithoutCommasStillDropsFillerWords() {
+        val e = parse("в продуктовом на 2500 купил рыбу консерву")
+        assertEquals(2500.0, e.amount, 0.0)
+        assertEquals("рыбу консерву", e.note)
+    }
 }
