@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -188,7 +187,6 @@ fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
     }
 
     editing?.let { initial ->
-        // Форма платежа открывается поверх списка на весь экран
         Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
             EditRecurringScreen(
                 initial = initial,
@@ -199,6 +197,12 @@ fun RecurringScreen(onBack: () -> Unit, vm: RecurringViewModel = viewModel()) {
                     vm.save(it)
                     editing = null
                 },
+                onDelete = if (initial.id != 0L) {
+                    {
+                        vm.remove(initial)
+                        editing = null
+                    }
+                } else null,
             )
         }
     }
