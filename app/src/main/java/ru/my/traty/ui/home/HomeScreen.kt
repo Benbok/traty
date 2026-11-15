@@ -88,6 +88,7 @@ fun HomeScreen(
     val settings by vm.settings.collectAsStateWithLifecycle()
     val selectedDate by vm.selectedDate.collectAsStateWithLifecycle()
     val plans by vm.plans.collectAsStateWithLifecycle()
+    val totalLimit by vm.totalLimit.collectAsStateWithLifecycle()
     val observations by vm.observations.collectAsStateWithLifecycle()
     val zone = remember { ZoneId.systemDefault() }
 
@@ -312,10 +313,11 @@ fun HomeScreen(
                 }
             }
             // План трат — за весь период, поэтому при фильтре по дню или поиске не показываем
-            if (plans.isNotEmpty() && selectedDate == null && searchQuery.isBlank()) {
+            if ((plans.isNotEmpty() || totalLimit != null) && selectedDate == null && searchQuery.isBlank()) {
                 item(key = "plan", contentType = "plan") {
                     PlanSummaryCard(
                         items = plans,
+                        total = totalLimit,
                         period = period,
                         onOpen = onOpenBudget,
                         compact = true,

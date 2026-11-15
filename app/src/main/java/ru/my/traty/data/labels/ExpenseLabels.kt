@@ -57,6 +57,8 @@ object ExpenseLabeler {
     /**
      * @param subscriptionExpenseIds траты, похожие на подписку (см. [subscriptionExpenseIds]).
      * @param impulsiveCategories названия категорий с флажком «импульсивная»: ⚡ ставится только в них.
+     * @param overPlan траты сверх плана трат с пояснением ([ru.my.traty.data.budget.PlanOverruns]):
+     *   в импульсивных категориях такая трата тоже получает ⚡.
      * @return id траты → метки; у трат без меток записи нет.
      */
     fun label(
@@ -64,6 +66,7 @@ object ExpenseLabeler {
         subscriptionExpenseIds: Set<Long> = emptySet(),
         zone: ZoneId = ZoneId.systemDefault(),
         impulsiveCategories: Collection<String> = DefaultCategories.IMPULSIVE,
+        overPlan: Map<Long, String> = emptyMap(),
     ): Map<Long, List<ExpenseLabelHit>> {
         val rows = expenses
             .filter { it.expense.source != ExpenseSource.RECONCILE }
@@ -118,18 +121,15 @@ object ExpenseLabeler {
                 val hour = Instant.ofEpochMilli(e.timestamp).atZone(zone).hour
                 val night = hour >= NIGHT_FROM_HOUR || hour < NIGHT_TO_HOUR
                 val small = smallPerDay[Triple(e.categoryId, e.subcategoryId, dayOf(e.timestamp, zone))] ?: 0
+                val reasons = mutableListOf<String>()
                 if (night) {
                     val time = Instant.ofEpochMilli(e.timestamp).atZone(zone).toLocalTime()
-                    hits += ExpenseLabelHit(
-                        ExpenseLabel.IMPULSIVE,
-                        "Покупка поздно вечером или ночью (%02d:%02d) в категории «${r.categoryName}».".format(time.hour, time.minute),
-                    )
+                    reasons += "Покупка поздно вечером или ночью (%02d:%02d) в категории «${r.categoryName}».".format(time.hour, time.minute)
                 } else if (e.amountKopecks <= SMALL_KOPECKS && small >= SMALL_DAY_COUNT) {
-                    hits += ExpenseLabelHit(
-                        ExpenseLabel.IMPULSIVE,
-                        "$small ${plural(small, "мелкая трата", "мелкие траты", "мелких трат")} в «${groupName(r)}» за один день.",
-                    )
+                    reasons += "$small ${plural(small, "мелкая трата", "мелкие траты", "мелких трат")} в «${groupName(r)}» за один день."
                 }
+                overPlan[e.id]?.let { reasons += it }
+                if (reasons.isNotEmpty()) hits += ExpenseLabelHit(ExpenseLabel.IMPULSIVE, reasons.joinToString(" "))
             }
 
             if (hasHistory) {
