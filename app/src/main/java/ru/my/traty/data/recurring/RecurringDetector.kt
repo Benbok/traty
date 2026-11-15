@@ -75,7 +75,8 @@ object RecurringDetector {
         relaxedCategoryIds: Set<Long> = emptySet(),
     ): List<RecurringCandidate> {
         val groups = expenses
-            .filter { it.expense.source != ExpenseSource.RECONCILE }
+            // Сверка и платежи по покупкам частями — не подписки (у рассрочки свой график)
+            .filter { it.expense.source != ExpenseSource.RECONCILE && it.expense.source != ExpenseSource.DEBT }
             .groupBy { keyOf(it.expense.categoryId, it.expense.place, it.expense.note) }
         val result = mutableListOf<RecurringCandidate>()
         for ((key, items) in groups) {
