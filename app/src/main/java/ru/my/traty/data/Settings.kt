@@ -8,11 +8,16 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import ru.my.traty.data.period.MAX_PERIOD_START_DAY
 import ru.my.traty.data.period.MIN_PERIOD_START_DAY
+import ru.my.traty.data.secure.AesGcmSecretCipher
+import ru.my.traty.data.secure.KeystoreKeys
+import ru.my.traty.data.secure.SecretCodec
 
 enum class ThemeMode(val title: String) {
     SYSTEM("Системная"),
@@ -65,13 +70,16 @@ internal fun decodeLines(raw: String?): List<String> =
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
-/**
- * Ключи хранятся в приватном хранилище приложения (другим приложениям недоступно,
- * allowBackup=false). Для личного APK этого достаточно.
- */
 private const val MAX_DISMISSED = 60
 
-class SettingsRepository(private val context: Context) {
+/**
+ * API-ключи ИИ хранятся зашифрованными ключом Android Keystore ([SecretCodec]);
+ * сам файл настроек лежит в приватной папке приложения и исключён из резервных копий и переноса.
+ */
+class SettingsRepository(
+    private val context: Context,
+    private val secrets: SecretCodec = SecretCodec(AesGcmSecretCipher(KeystoreKeys::secretsKey)),
+) {
     private object K {
         val themeMode = stringPreferencesKey("theme_mode")
         val provider = stringPreferencesKey("provider")
@@ -95,9 +103,9 @@ class SettingsRepository(private val context: Context) {
         AppSettings(
             themeMode = p[K.themeMode]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: d.themeMode,
             provider = p[K.provider]?.let { runCatching { LlmProvider.valueOf(it) }.getOrNull() } ?: d.provider,
-            deepseekKey = p[K.dsKey] ?: "",
+            deepseekKey = secrets.open(p[K.dsKey]),
             deepseekModel = p[K.dsModel] ?: d.deepseekModel,
-            yandexKey = p[K.yaKey] ?: "",
+            yandexKey = secrets.open(p[K.yaKey]),
             yandexFolderId = p[K.yaFolder] ?: "",
             yandexModel = p[K.yaModel] ?: d.yandexModel,
             periodStartDay = (p[K.periodStartDay] ?: d.periodStartDay)
@@ -111,6 +119,8 @@ class SettingsRepository(private val context: Context) {
             homePlanExpanded = p[K.homePlanExpanded] ?: d.homePlanExpanded,
         )
     }
+        // Расшифровка ключей обращается к Keystore — не на главном потоке
+        .flowOn(Dispatchers.Default)
 
     suspend fun current(): AppSettings = flow.first()
 
@@ -118,12 +128,22 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { p ->
             p[K.themeMode] = s.themeMode.name
             p[K.provider] = s.provider.name
-            p[K.dsKey] = s.deepseekKey.trim()
+            p[K.dsKey] = secrets.seal(s.deepseekKey.trim())
             p[K.dsModel] = s.deepseekModel.trim()
-            p[K.yaKey] = s.yandexKey.trim()
+            p[K.yaKey] = secrets.seal(s.yandexKey.trim())
             p[K.yaFolder] = s.yandexFolderId.trim()
             p[K.yaModel] = s.yandexModel.trim()
             p[K.periodStartDay] = s.periodStartDay.coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY)
+        }
+    }
+
+    /** Перешифровывает ключи, сохранённые старыми версиями открытым текстом. */
+    suspend fun upgradeStoredSecrets() {
+        context.dataStore.edit { p ->
+            for (key in listOf(K.dsKey, K.yaKey)) {
+                val stored = p[key]
+                if (secrets.needsUpgrade(stored)) p[key] = secrets.seal(stored!!)
+            }
         }
     }
 
