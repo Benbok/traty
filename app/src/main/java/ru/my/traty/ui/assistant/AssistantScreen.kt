@@ -98,7 +98,12 @@ private val SUGGESTIONS = listOf(
 
 /** Вкладка «ИИ»: вопросы о тратах текстом или голосом, ответы по данным на телефоне. */
 @Composable
-fun AssistantScreen(vm: AssistantViewModel = viewModel(), onOpenBudget: () -> Unit = {}, onOpenRecurring: () -> Unit = {}) {
+fun AssistantScreen(
+    vm: AssistantViewModel = viewModel(),
+    onOpenBudget: () -> Unit = {},
+    onOpenRecurring: () -> Unit = {},
+    onOpenExpense: (ExpenseWithCategory) -> Unit = {},
+) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var input by rememberSaveable { mutableStateOf("") }
@@ -177,7 +182,16 @@ fun AssistantScreen(vm: AssistantViewModel = viewModel(), onOpenBudget: () -> Un
         )
     }
 
-    vm.sheetRows?.let { rows -> ExpensesSheet(rows, onDismiss = vm::closeSheet) }
+    vm.sheetRows?.let { rows ->
+        ExpensesSheet(
+            rows,
+            onOpenExpense = {
+                vm.closeSheet()
+                onOpenExpense(it)
+            },
+            onDismiss = vm::closeSheet,
+        )
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -516,7 +530,7 @@ private fun InputBar(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ExpensesSheet(rows: List<ExpenseWithCategory>, onDismiss: () -> Unit) {
+private fun ExpensesSheet(rows: List<ExpenseWithCategory>, onOpenExpense: (ExpenseWithCategory) -> Unit, onDismiss: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
@@ -528,7 +542,7 @@ private fun ExpensesSheet(rows: List<ExpenseWithCategory>, onDismiss: () -> Unit
             Text("Записей: ${rows.size}", style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
         }
         LazyColumn(Modifier.fillMaxWidth()) {
-            items(rows, key = { it.expense.id }) { r -> ExpenseRow(r, onClick = {}) }
+            items(rows, key = { it.expense.id }) { r -> ExpenseRow(r, onClick = { onOpenExpense(r) }) }
             item { Spacer(Modifier.height(TratyTheme.spacing.lg)) }
         }
     }
