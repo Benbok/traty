@@ -63,6 +63,7 @@ fun BudgetScreen(onBack: () -> Unit, onOpenWeekly: () -> Unit = {}, vm: BudgetVi
     val plans by vm.items.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
     val total by vm.total.collectAsStateWithLifecycle()
+    val promised by vm.promised.collectAsStateWithLifecycle()
     val alertsOn by vm.alertsEnabled.collectAsStateWithLifecycle()
     val categoryTotals = remember(plans) { planTotals(plans) }
     // С общим лимитом шапка показывает его и все траты месяца, без него — сумму планов категорий
@@ -115,6 +116,7 @@ fun BudgetScreen(onBack: () -> Unit, onOpenWeekly: () -> Unit = {}, vm: BudgetVi
             item {
                 TotalLimitCard(
                     total = total,
+                    promised = promised,
                     categoriesPlanned = categoryTotals.planned,
                     period = period,
                     onClick = { editingTotal = true },

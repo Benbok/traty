@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import ru.my.traty.data.budget.PlanMonth
+import ru.my.traty.data.budget.Promised
 import ru.my.traty.data.budget.TotalProgress
 import ru.my.traty.data.period.BillingPeriod
 import ru.my.traty.data.recurring.canNotify
@@ -44,7 +45,7 @@ import ru.my.traty.ui.formatRub
  * Нет лимита — короткое приглашение задать его.
  */
 @Composable
-fun TotalLimitCard(total: TotalProgress?, categoriesPlanned: Long, period: BillingPeriod, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun TotalLimitCard(total: TotalProgress?, promised: Promised, categoriesPlanned: Long, period: BillingPeriod, onClick: () -> Unit, modifier: Modifier = Modifier) {
     TratyCard(modifier.fillMaxWidth(), onClick = onClick) {
         Column(Modifier.padding(TratyTheme.spacing.md)) {
             Text("Общий лимит на месяц", style = TratyTheme.typography.titleSmall)
@@ -68,6 +69,7 @@ fun TotalLimitCard(total: TotalProgress?, categoriesPlanned: Long, period: Billi
                 style = TratyTheme.typography.bodySmall,
                 color = if (total.remaining < 0) TratyTheme.colors.expense else TratyTheme.colors.onSurfaceVariant,
             )
+            PromisedBlock(promised, remaining = total.remaining, period = period)
             if (categoriesPlanned > total.planned) {
                 Text(
                     "Планы категорий в сумме ${formatRub(categoriesPlanned)}, это больше общего лимита.",
