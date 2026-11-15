@@ -25,6 +25,8 @@ data class AssistantQuery(
     val relative: Boolean = false,
     /** Для trend: month, week, weekday или day ([GroupBy]). */
     val groupBy: String? = null,
+    /** «эти», «их», «все»: действие относится ко всему, что было в прошлом ответе. */
+    val all: Boolean = false,
 )
 
 object Intents {
@@ -50,9 +52,12 @@ object Intents {
     const val TREND = "trend"
     const val LIST = "list"
     const val DEBTS = "debts"
+    const val DELETE_DEBT = "delete_debt"
+    const val CLOSE_DEBT = "close_debt"
+    const val CANCEL_DEBT = "cancel_debt"
     const val UNKNOWN = "unknown"
 
-    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, PLAN, BALANCE, SUGGEST_PLAN, SET_PLAN, REMOVE_PLAN, CANCEL_SUB, PAUSE_SUB, RESUME_SUB, EDIT_SUB, TREND, LIST, DEBTS, UNKNOWN)
+    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, PLAN, BALANCE, SUGGEST_PLAN, SET_PLAN, REMOVE_PLAN, CANCEL_SUB, PAUSE_SUB, RESUME_SUB, EDIT_SUB, TREND, LIST, DEBTS, DELETE_DEBT, CLOSE_DEBT, CANCEL_DEBT, UNKNOWN)
 }
 
 object AssistantQueries {
@@ -88,8 +93,9 @@ object AssistantQueries {
      * Команды про план и подписки модель иногда принимает за вопрос («поставь лимит на кафе 2500» → afford/plan).
      * Явные формулировки распознаём сами: так кнопка подтверждения появляется всегда.
      */
-    fun correct(question: String, q: AssistantQuery): AssistantQuery {
+    fun correct(question: String, q: AssistantQuery, previous: AssistantQuery? = null): AssistantQuery {
         val text = question.lowercase().replace('ё', 'е')
+        DebtCommands.detect(text, q, previous)?.let { return it }
         val sub = subWordRe.containsMatchIn(text)
         // «сколько я должен», «когда платёж по рассрочке» модель иногда принимает за total или subscriptions
         // «сколько я потратил на кредит» и вопрос про категорию «Долги и кредиты» остаются тратами

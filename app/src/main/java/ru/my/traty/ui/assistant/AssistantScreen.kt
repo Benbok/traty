@@ -48,6 +48,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import ru.my.traty.assistant.PlanProposal
+import ru.my.traty.assistant.DebtChange
 import ru.my.traty.assistant.SubscriptionChange
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -93,6 +94,7 @@ fun AssistantScreen(
     vm: AssistantViewModel = viewModel(),
     onOpenBudget: () -> Unit = {},
     onOpenRecurring: () -> Unit = {},
+    onOpenDebts: () -> Unit = {},
     onOpenExpense: (ExpenseWithCategory) -> Unit = {},
 ) {
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -154,8 +156,10 @@ fun AssistantScreen(
                     onShowExpenses = { vm.showExpenses(m.expenseIds) },
                     onApplyPlan = { vm.applyPlan(m.id, it) },
                     onApplySubscriptions = { vm.applySubscriptions(m.id, it) },
+                    onApplyDebts = { vm.applyDebts(m.id, it) },
                     onOpenBudget = onOpenBudget,
                     onOpenRecurring = onOpenRecurring,
+                    onOpenDebts = onOpenDebts,
                 )
             }
             if (vm.busy) {
@@ -236,8 +240,10 @@ private fun AssistantBubble(
     onShowExpenses: () -> Unit,
     onApplyPlan: (List<PlanProposal>) -> Unit,
     onApplySubscriptions: (List<SubscriptionChange>) -> Unit,
+    onApplyDebts: (List<DebtChange>) -> Unit,
     onOpenBudget: () -> Unit,
     onOpenRecurring: () -> Unit,
+    onOpenDebts: () -> Unit,
 ) {
     var showFacts by rememberSaveable(m.id) { mutableStateOf(false) }
     TratyCard(
@@ -264,6 +270,10 @@ private fun AssistantBubble(
             if (m.subscriptionChanges.isNotEmpty()) {
                 Spacer(Modifier.height(TratyTheme.spacing.sm))
                 SubscriptionChanges(m, onApply = onApplySubscriptions, onOpenRecurring = onOpenRecurring)
+            }
+            if (m.debtChanges.isNotEmpty()) {
+                Spacer(Modifier.height(TratyTheme.spacing.sm))
+                DebtChanges(m, onApply = onApplyDebts, onOpenDebts = onOpenDebts)
             }
             if (m.expenseIds.isNotEmpty() || m.sentFacts != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {

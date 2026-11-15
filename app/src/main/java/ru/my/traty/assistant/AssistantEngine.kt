@@ -70,6 +70,8 @@ data class AssistantData(
     val planMonth: Int? = null,
     /** Отмена, пауза, возобновление и правка подписок: тоже только по кнопке. */
     val subscriptionChanges: List<SubscriptionChange> = emptyList(),
+    /** Удаление, закрытие и отмена покупок частями: только по кнопке. */
+    val debtChanges: List<DebtChange> = emptyList(),
 )
 
 /** Предложенная строка плана трат. Сумму считает приложение, ИИ её не меняет. */
@@ -121,6 +123,7 @@ object AssistantEngine {
         val spending = ctx.expenses.filter { it.expense.source != ExpenseSource.RECONCILE }
         subscriptionAction(q.intent)?.let { return changeSubscription(q, ctx, it) }
         if (q.intent == Intents.DEBTS) return AssistantDebts.answer(q, ctx)
+        AssistantDebtChanges.action(q.intent)?.let { return AssistantDebtChanges.propose(q, ctx, it) }
         val period = BillingPeriod.containing(ctx.today, ctx.startDay)
         val (asked, to) = range(q.from, q.to, AssistantTrends.defaultFrom(q, ctx.today) ?: period.startDate, ctx.today)
         // «за всё время» — с первой записи, а не с условной даты

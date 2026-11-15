@@ -189,6 +189,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                     TratyNavTab.ASSISTANT -> AssistantScreen(
                         onOpenBudget = { showBudget = true },
                         onOpenRecurring = { showRecurring = true },
+                        onOpenDebts = { showDebtsList = true },
                         onOpenExpense = { vm.editing = it },
                     )
                     TratyNavTab.SETTINGS -> SettingsScreen(
