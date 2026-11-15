@@ -40,6 +40,9 @@ import ru.my.traty.ui.home.EditExpenseScreen
 import ru.my.traty.ui.home.HomeScreen
 import ru.my.traty.ui.navigation.TratyNavLabel
 import ru.my.traty.ui.navigation.TratyNavTab
+import ru.my.traty.ui.onboarding.OnboardingScreen
+import ru.my.traty.ui.onboarding.OnboardingViewModel
+import ru.my.traty.data.onboarding.OnboardingExit
 import ru.my.traty.ui.reconcile.ReconcileMode
 import ru.my.traty.ui.reconcile.ReconcileScreen
 import ru.my.traty.ui.recurring.RecurringScreen
@@ -63,6 +66,11 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     // null - экран сверки закрыт
     var reconcileMode by rememberSaveable { mutableStateOf<ReconcileMode?>(null) }
     val snackbar = remember { SnackbarHostState() }
+    val onboarding: OnboardingViewModel = viewModel()
+    val onboardingVisible by onboarding.visible.collectAsStateWithLifecycle()
+    val onboardingPeriodStart by onboarding.periodStartDay.collectAsStateWithLifecycle()
+    // «Записать первую трату» из знакомства: лента включит микрофон и сбросит флаг
+    var startRecording by remember { mutableStateOf(false) }
     val categories by vm.categories.collectAsStateWithLifecycle()
     val labels by vm.labels.collectAsStateWithLifecycle()
 
@@ -150,6 +158,8 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         vm,
                         onOpenReconcile = { reconcileMode = ReconcileMode.NORMAL },
                         onOpenBudget = { showBudget = true },
+                        startRecording = startRecording,
+                        onStartRecordingHandled = { startRecording = false },
                         onOpenWeekly = { showWeekly = true },
                     )
                     TratyNavTab.CHARTS -> ChartsScreen()
@@ -164,6 +174,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onOpenRecurring = { showRecurring = true },
                         onOpenBudget = { showBudget = true },
                         onOpenAi = { showAiSettings = true },
+                        onOpenOnboarding = onboarding::show,
                     )
                 }
             }
@@ -228,6 +239,29 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
                 ReconcileScreen(mode = mode, onBack = { reconcileMode = null })
             }
+        }
+
+        // Знакомство поверх всего. Пока проверяем, показывать ли его, — пустой фон, чтобы лента не мелькнула
+        when (onboardingVisible) {
+            null -> Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {}
+            true -> Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                OnboardingScreen(
+                    periodStartDay = onboardingPeriodStart,
+                    onPeriodStart = onboarding::setPeriodStart,
+                    onFinish = { exit ->
+                        onboarding.finish()
+                        when (exit) {
+                            OnboardingExit.RECORD -> {
+                                tab = TratyNavTab.HOME
+                                startRecording = true
+                            }
+                            OnboardingExit.CONNECT_AI -> showAiSettings = true
+                            OnboardingExit.BROWSE -> Unit
+                        }
+                    },
+                )
+            }
+            false -> Unit
         }
     }
 

@@ -21,6 +21,7 @@ import ru.my.traty.data.ReconciliationRepository
 import ru.my.traty.data.budget.BudgetAlertWatcher
 import ru.my.traty.data.budget.BudgetRepository
 import ru.my.traty.data.digest.DailyDigestWork
+import ru.my.traty.data.onboarding.OnboardingRepository
 import ru.my.traty.data.weekly.WeeklyTaskRepository
 import ru.my.traty.data.weekly.WeeklyTaskWork
 import ru.my.traty.data.recurring.RecurringReminderWork
@@ -94,6 +95,7 @@ class AppContainer(
     val settings = SettingsRepository(context)
     val categories = CategoryRepository(db)
     val reconciliations = ReconciliationRepository(db, categories)
+    val onboarding = OnboardingRepository(db, settings)
     val quickEntry = QuickEntry(db, categories, settings, clientProvider = llm)
     val budgets = BudgetRepository(db)
     val weeklyTasks = WeeklyTaskRepository(db)

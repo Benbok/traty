@@ -1,9 +1,5 @@
 package ru.my.traty.ui.home
 
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,7 +24,6 @@ import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,9 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,12 +40,8 @@ import ru.my.traty.ui.reconcile.ReconcileCard
 import ru.my.traty.ui.reconcile.ReconcilePromptViewModel
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.PendingStatus
-import ru.my.traty.speech.SpeechEngines
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.capture.MicButton
-import ru.my.traty.ui.capture.ChimeRecordCues
-import ru.my.traty.ui.capture.RecordController
-import ru.my.traty.ui.capture.RecordState
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyEmptyState
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
@@ -80,6 +69,8 @@ fun HomeScreen(
     onOpenReconcile: () -> Unit,
     prompt: ReconcilePromptViewModel = viewModel(),
     onOpenBudget: () -> Unit = {},
+    startRecording: Boolean = false,
+    onStartRecordingHandled: () -> Unit = {},
     onOpenWeekly: () -> Unit = {},
 ) {
     val showReconcileCard by prompt.showCard.collectAsStateWithLifecycle()
@@ -130,16 +121,13 @@ fun HomeScreen(
     val totalExpense = remember(displayedExpenses) { displayedExpenses.sumOf { it.expense.amountKopecks } }
     val totalIncome = remember(displayedIncomes) { displayedIncomes.sumOf { it.amountKopecks } }
 
-    val context = LocalContext.current
-    val recorder = remember { RecordController({ SpeechEngines.create(context, vm.settings.value) }, ChimeRecordCues()) { vm.onSpokenText(it) } }
-    DisposableEffect(recorder) { onDispose { recorder.cancel() } }
-    val recordState by recorder.state.collectAsStateWithLifecycle()
-    // Под компактной кнопкой нет текста, поэтому ошибку записи показываем всплывающим сообщением
-    LaunchedEffect(recordState) {
-        (recordState as? RecordState.Error)?.let { vm.message = it.message }
-    }
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) recorder.toggle() else vm.message = "Нужен доступ к микрофону"
+    val mic = rememberHomeMic(vm)
+    // «Записать первую трату» из знакомства: включить микрофон, как только открылась лента
+    LaunchedEffect(startRecording) {
+        if (startRecording) {
+            mic.start()
+            onStartRecordingHandled()
+        }
     }
     val pending by vm.pending.collectAsStateWithLifecycle()
     val waitingCount = remember(pending) { pending.count { it.status == PendingStatus.WAITING } }
@@ -392,15 +380,10 @@ fun HomeScreen(
         }
 
         MicButton(
-            state = recordState,
+            state = mic.state,
             busy = vm.busy,
             compact = true,
-            onClick = {
-                val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-                    PackageManager.PERMISSION_GRANTED
-                if (recordState is RecordState.Listening || granted) recorder.toggle()
-                else micPermission.launch(Manifest.permission.RECORD_AUDIO)
-            },
+            onClick = mic::onClick,
         )
     }
 
