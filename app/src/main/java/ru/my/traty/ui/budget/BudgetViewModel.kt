@@ -27,6 +27,7 @@ import ru.my.traty.data.budget.PlanMonth
 import ru.my.traty.data.budget.PlanProgress
 import ru.my.traty.data.budget.PlanProgresses
 import ru.my.traty.data.budget.PlanSpend
+import ru.my.traty.data.budget.Promised
 import ru.my.traty.data.period.BillingPeriod
 import ru.my.traty.data.selectable
 import java.time.Instant
@@ -126,6 +127,11 @@ class BudgetViewModel(app: Application) : AndroidViewModel(app) {
         combine(totalRows, period, periodExpenses) { r, p, e -> totalProgress(r, p, e) }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Что ещё спишется до конца периода: показывается в карточке общего лимита. */
+    val promised: StateFlow<Promised> = promisedFlow(c, period, zone)
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, Promised())
 
     val alertsEnabled: StateFlow<Boolean> = c.settings.flow.map { it.budgetAlertsEnabled }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
