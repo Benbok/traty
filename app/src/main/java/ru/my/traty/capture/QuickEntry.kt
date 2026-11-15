@@ -34,6 +34,9 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
+/** Сколько трат за дни фразы просматривать в поиске повторов: больше за пару дней не бывает. */
+private const val DUPLICATE_SCAN_LIMIT = 1_000
+
 /** Предложение создать правило «место → категория» после сохранения траты. */
 data class RuleOffer(val place: String, val categoryId: Long, val subcategoryId: Long?, val categoryName: String)
 
@@ -147,12 +150,29 @@ class QuickEntry(
         val ruled = RuleMatcher.apply(cleaned, rules, cats)
         ruled.mapNotNull { it.matchedRule }.forEach { db.rules().incrementHits(it.id) }
 
-        val rows = ruled.map { EntryRow.fromParsed(it.entry, cats, spokenDay) }
+        val rows = markDuplicates(ruled.map { EntryRow.fromParsed(it.entry, cats, spokenDay) }, spokenAt)
         val draft = if (rows.isEmpty()) emptyDraft(origin, text) else EntryDraft(rows, text, origin)
-        if (forceConfirm || ParsePolicy.decide(ruled) != EntryDecision.AUTO_SAVE) {
+        // Похожая трата уже есть — молча не сохраняем даже по правилу: спросим «повтор или новая?»
+        val hasDuplicate = rows.any { it.duplicate != null }
+        if (forceConfirm || hasDuplicate || ParsePolicy.decide(ruled) != EntryDecision.AUTO_SAVE) {
             return EntryOutcome.NeedsConfirm(draft, notice)
         }
         return EntryOutcome.AutoSaved(save(draft), draft)
+    }
+
+    /** Помечает строки, похожие на уже записанные траты тех же дней ([DuplicateCheck]). */
+    private suspend fun markDuplicates(rows: List<EntryRow>, spokenAt: Long): List<EntryRow> {
+        val days = rows.filter { it.type == EntryType.EXPENSE }
+            .mapNotNull { runCatching { LocalDate.parse(it.dateText.trim()) }.getOrNull() }
+        if (days.isEmpty()) return rows
+        val from = days.min().atStartOfDay(zone).toInstant().toEpochMilli()
+        val to = days.max().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val existing = db.expenses().getRange(from, to, limit = DUPLICATE_SCAN_LIMIT).map {
+            ExistingExpense(it.expense.id, it.expense.amountKopecks, it.expense.timestamp, it.expense.place, it.expense.note, it.categoryName)
+        }
+        if (existing.isEmpty()) return rows
+        val hints = DuplicateCheck.find(rows, existing, zone, spokenAt)
+        return rows.zip(hints) { row, hint -> row.copy(duplicate = hint) }
     }
 
     private fun fallbackNotice(client: LlmClient, e: Exception) =

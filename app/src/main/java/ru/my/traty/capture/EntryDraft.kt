@@ -48,6 +48,8 @@ data class EntryRow(
     val dateText: String,
     /** Создаётся при сохранении, если пользователь оставил её выбранной. */
     val suggestedCategory: NewCategory? = null,
+    /** Похожая трата уже записана: в окне проверки спрашиваем «повтор или новая?». */
+    val duplicate: DuplicateHint? = null,
 ) {
     /** Сумма в копейках или null, если сумма некорректна или не положительна. */
     fun kopecks(): Long? = parsePositiveKopecks(amountText)

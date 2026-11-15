@@ -305,4 +305,25 @@ class QuickEntryTest {
         qe.save(EntryDraft(listOf(row), "Клод", EntryOrigin.VOICE))
         assertEquals(1, qe.recurringOffers.pending.value.size)
     }
+
+    @Test
+    fun repeatedPhraseAsksInsteadOfSavingTwice() = runTest {
+        seedWithRule("магнит", "Продукты")
+        val reply = """{"items":[{"type":"expense","amount":250,"category":"Продукты","place":"Магнит"}]}"""
+        val qe = quickEntry(FakeLlm { reply })
+        assertTrue(qe.process("сегодня магнит 250 рублей", EntryOrigin.VOICE, spokenAt) is EntryOutcome.AutoSaved)
+
+        // Та же фраза через 10 минут: правило есть, но молча второй раз не сохраняем
+        val again = qe.process("сегодня магнит 250 рублей", EntryOrigin.VOICE, spokenAt + 10 * 60_000L)
+        again as EntryOutcome.NeedsConfirm
+        val hint = requireNotNull(again.draft.rows.single().duplicate)
+        assertEquals("Магнит", hint.label)
+        assertEquals(25_000L, hint.amountKopecks)
+        assertTrue(hint.recent)
+        assertEquals(1, db.expenses().getAllWithCategory().size)
+
+        // «Новая покупка» — пользователь сохраняет строку
+        qe.save(again.draft)
+        assertEquals(2, db.expenses().getAllWithCategory().size)
+    }
 }

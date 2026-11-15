@@ -117,6 +117,14 @@ fun EntryConfirmSheet(
                                     }
                                 }
                             }
+                            row.duplicate?.let { hint ->
+                                DuplicateNotice(
+                                    hint = hint,
+                                    // Повтор единственной строки — сохранять нечего, окно закрывается
+                                    onRepeat = { if (rows.size > 1) rows = rows.filterIndexed { j, _ -> j != i } else onDismiss() },
+                                    onNew = { update(i) { it.copy(duplicate = null) } },
+                                )
+                            }
                             TratyAmountTextField(
                                 value = row.amountText,
                                 onValueChange = { v -> update(i) { it.copy(amountText = v) } },
