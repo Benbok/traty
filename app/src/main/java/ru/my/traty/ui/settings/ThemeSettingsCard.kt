@@ -69,8 +69,20 @@ fun ThemeSettingsCard(
             // Цвета из обоев есть только на Android 12 и новее
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 Spacer(Modifier.height(TratyTheme.spacing.md))
-                DynamicColorRow(checked = saved.dynamicColor, onChange = vm::setDynamicColor)
+                SwitchRow(
+                    title = "Цвета из обоев",
+                    hint = "Приложение подстроится под обои телефона. Расходы останутся красными, доходы зелёными.",
+                    checked = saved.dynamicColor,
+                    onChange = vm::setDynamicColor,
+                )
             }
+            Spacer(Modifier.height(TratyTheme.spacing.md))
+            SwitchRow(
+                title = "Праздничное оформление",
+                hint = "В Новый год, 23 Февраля, 8 Марта, 1 и 9 Мая меняется цвет и значок в шапке.",
+                checked = saved.holidayDecor,
+                onChange = vm::setHolidayDecor,
+            )
         }
     }
 }
@@ -117,7 +129,7 @@ private fun ThemeModeOption(
 }
 
 @Composable
-private fun DynamicColorRow(checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun SwitchRow(title: String, hint: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -125,10 +137,10 @@ private fun DynamicColorRow(checked: Boolean, onChange: (Boolean) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text("Цвета из обоев", style = TratyTheme.typography.bodyLarge)
+            Text(title, style = TratyTheme.typography.bodyLarge)
             Spacer(Modifier.height(TratyTheme.spacing.xs))
             Text(
-                "Приложение подстроится под обои телефона. Расходы останутся красными, доходы зелёными.",
+                hint,
                 style = TratyTheme.typography.bodySmall,
                 color = TratyTheme.colors.onSurfaceVariant,
             )

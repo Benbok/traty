@@ -22,9 +22,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import ru.my.traty.ui.designsystem.theme.LocalTratyHoliday
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 /**
@@ -75,20 +78,7 @@ fun TratyHeaderCard(
                     )
                     Spacer(Modifier.width(TratyTheme.spacing.sm))
                 } else if (icon != null) {
-                    Surface(
-                        modifier = Modifier.size(40.dp),
-                        shape = TratyTheme.shapes.medium,
-                        color = TratyTheme.colors.primaryContainer,
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = TratyTheme.colors.primary,
-                                modifier = Modifier.size(22.dp),
-                            )
-                        }
-                    }
+                    HeaderIconBadge(icon)
                     Spacer(Modifier.width(TratyTheme.spacing.sm))
                 }
 
@@ -132,6 +122,34 @@ fun TratyHeaderCard(
             if (content != null) {
                 Spacer(Modifier.height(TratyTheme.spacing.sm))
                 content()
+            }
+        }
+    }
+}
+
+/** Значок вкладки в шапке. В праздник вместо него показывается праздничный эмодзи. */
+@Composable
+private fun HeaderIconBadge(icon: ImageVector) {
+    val holiday = LocalTratyHoliday.current
+    Surface(
+        modifier = Modifier.size(40.dp),
+        shape = TratyTheme.shapes.medium,
+        color = TratyTheme.colors.primaryContainer,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            if (holiday != null) {
+                Text(
+                    text = holiday.emoji,
+                    style = TratyTheme.typography.titleMedium,
+                    modifier = Modifier.semantics { contentDescription = holiday.greeting },
+                )
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = TratyTheme.colors.primary,
+                    modifier = Modifier.size(22.dp),
+                )
             }
         }
     }

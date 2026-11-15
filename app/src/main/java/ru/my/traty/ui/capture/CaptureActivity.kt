@@ -29,7 +29,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import ru.my.traty.speech.SpeechEngines
 import ru.my.traty.ui.designsystem.theme.TratyTheme
+import ru.my.traty.ui.designsystem.theme.holidayOn
 import ru.my.traty.ui.designsystem.theme.isDark
+import java.time.LocalDate
 
 /**
  * Лёгкая прозрачная панель записи поверх любого приложения: запускается плиткой в шторке и виджетом,
@@ -43,7 +45,13 @@ class CaptureActivity : ComponentActivity() {
             val vm: CaptureViewModel = viewModel()
             val settings by vm.settings.collectAsStateWithLifecycle()
             val dark = settings.themeMode.isDark()
-            TratyTheme(darkTheme = dark, dynamicColor = settings.dynamicColor) {
+            // Праздник проверяется при открытии экрана
+            val todayHoliday = remember { holidayOn(LocalDate.now()) }
+            TratyTheme(
+                darkTheme = dark,
+                dynamicColor = settings.dynamicColor,
+                holiday = todayHoliday.takeIf { settings.holidayDecor },
+            ) {
                 CaptureScreen(vm, onFinish = ::finish)
             }
         }

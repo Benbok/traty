@@ -21,4 +21,6 @@ class AppearanceViewModel(app: Application) : AndroidViewModel(app) {
     fun setThemeMode(mode: ThemeMode) = viewModelScope.launch { settingsRepo.setThemeMode(mode) }
 
     fun setDynamicColor(enabled: Boolean) = viewModelScope.launch { settingsRepo.setDynamicColor(enabled) }
+
+    fun setHolidayDecor(enabled: Boolean) = viewModelScope.launch { settingsRepo.setHolidayDecor(enabled) }
 }

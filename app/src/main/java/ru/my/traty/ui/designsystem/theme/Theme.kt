@@ -54,11 +54,14 @@ object TratyTheme {
 /**
  * Тема приложения. [dynamicColor] включает цвета из обоев на Android 12+;
  * на более старых телефонах остаётся палитра Traty.
+ * [holiday] — праздничный акцент и значок в шапке. При цветах из обоев акцент
+ * не меняется (иначе он спорит с фоном из обоев), остаётся только значок.
  */
 @Composable
 fun TratyTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
+    holiday: Holiday? = null,
     content: @Composable () -> Unit,
 ) {
     val baseColors = if (darkTheme) DarkTratyColors else LightTratyColors
@@ -73,7 +76,11 @@ fun TratyTheme(
         null
     }
     // Экраны берут цвета из TratyTheme.colors, поэтому цвета обоев переносятся и туда
-    val tratyColors = systemScheme?.let { baseColors.withSystemColors(it) } ?: baseColors
+    val tratyColors = when {
+        systemScheme != null -> baseColors.withSystemColors(systemScheme)
+        holiday != null -> baseColors.withHoliday(holiday)
+        else -> baseColors
+    }
     val m3ColorScheme = systemScheme?.copy(error = tratyColors.expense) ?: tratyColorScheme(tratyColors, darkTheme)
 
     CompositionLocalProvider(
@@ -81,6 +88,7 @@ fun TratyTheme(
         LocalTratyTypography provides tratyTypography,
         LocalTratySpacing provides tratySpacing,
         LocalTratyShapes provides tratyShapes,
+        LocalTratyHoliday provides holiday,
     ) {
         MaterialTheme(
             colorScheme = m3ColorScheme,

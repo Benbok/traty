@@ -40,6 +40,8 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     /** Android 12+: цвета приложения подбираются под обои. Цвета трат и доходов не меняются. */
     val dynamicColor: Boolean = false,
+    /** Праздничное оформление в Новый год, 23 Февраля, 8 Марта, 1 и 9 Мая. */
+    val holidayDecor: Boolean = true,
     val provider: LlmProvider = LlmProvider.DEEPSEEK,
     val deepseekKey: String = "",
     val deepseekModel: String = "deepseek-chat",
@@ -85,6 +87,7 @@ class SettingsRepository(
     private object K {
         val themeMode = stringPreferencesKey("theme_mode")
         val dynamicColor = booleanPreferencesKey("dynamic_color")
+        val holidayDecor = booleanPreferencesKey("holiday_decor")
         val provider = stringPreferencesKey("provider")
         val dsKey = stringPreferencesKey("deepseek_key")
         val dsModel = stringPreferencesKey("deepseek_model")
@@ -106,6 +109,7 @@ class SettingsRepository(
         AppSettings(
             themeMode = p[K.themeMode]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: d.themeMode,
             dynamicColor = p[K.dynamicColor] ?: d.dynamicColor,
+            holidayDecor = p[K.holidayDecor] ?: d.holidayDecor,
             provider = p[K.provider]?.let { runCatching { LlmProvider.valueOf(it) }.getOrNull() } ?: d.provider,
             deepseekKey = secrets.open(p[K.dsKey]),
             deepseekModel = p[K.dsModel] ?: d.deepseekModel,
@@ -197,5 +201,9 @@ class SettingsRepository(
 
     suspend fun setDynamicColor(enabled: Boolean) {
         context.dataStore.edit { p -> p[K.dynamicColor] = enabled }
+    }
+
+    suspend fun setHolidayDecor(enabled: Boolean) {
+        context.dataStore.edit { p -> p[K.holidayDecor] = enabled }
     }
 }
