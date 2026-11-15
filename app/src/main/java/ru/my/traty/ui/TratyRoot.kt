@@ -30,6 +30,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import ru.my.traty.ui.budget.BudgetScreen
+import ru.my.traty.ui.weekly.WeeklyTasksScreen
 import ru.my.traty.ui.assistant.AssistantScreen
 import ru.my.traty.ui.charts.ChartsScreen
 import ru.my.traty.ui.designsystem.components.TratySnackbar
@@ -57,6 +58,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     var showRules by rememberSaveable { mutableStateOf(false) }
     var showRecurring by rememberSaveable { mutableStateOf(false) }
     var showBudget by rememberSaveable { mutableStateOf(false) }
+    var showWeekly by rememberSaveable { mutableStateOf(false) }
     var showAiSettings by rememberSaveable { mutableStateOf(false) }
     // null - экран сверки закрыт
     var reconcileMode by rememberSaveable { mutableStateOf<ReconcileMode?>(null) }
@@ -148,6 +150,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         vm,
                         onOpenReconcile = { reconcileMode = ReconcileMode.NORMAL },
                         onOpenBudget = { showBudget = true },
+                        onOpenWeekly = { showWeekly = true },
                     )
                     TratyNavTab.CHARTS -> ChartsScreen()
                     TratyNavTab.STATS -> StatsScreen(vm, onOpenBudget = { showBudget = true })
@@ -181,7 +184,13 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
 
         if (showBudget) {
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
-                BudgetScreen(onBack = { showBudget = false })
+                BudgetScreen(onBack = { showBudget = false }, onOpenWeekly = { showWeekly = true })
+            }
+        }
+
+        if (showWeekly) {
+            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                WeeklyTasksScreen(onBack = { showWeekly = false })
             }
         }
 
