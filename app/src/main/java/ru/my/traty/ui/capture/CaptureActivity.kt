@@ -12,7 +12,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -28,9 +27,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
-import ru.my.traty.data.ThemeMode
 import ru.my.traty.speech.SpeechEngines
 import ru.my.traty.ui.designsystem.theme.TratyTheme
+import ru.my.traty.ui.designsystem.theme.holidayOn
+import ru.my.traty.ui.designsystem.theme.isDark
+import java.time.LocalDate
 
 /**
  * Лёгкая прозрачная панель записи поверх любого приложения: запускается плиткой в шторке и виджетом,
@@ -43,12 +44,14 @@ class CaptureActivity : ComponentActivity() {
         setContent {
             val vm: CaptureViewModel = viewModel()
             val settings by vm.settings.collectAsStateWithLifecycle()
-            val dark = when (settings.themeMode) {
-                ThemeMode.SYSTEM -> isSystemInDarkTheme()
-                ThemeMode.LIGHT -> false
-                ThemeMode.DARK -> true
-            }
-            TratyTheme(darkTheme = dark) {
+            val dark = settings.themeMode.isDark()
+            // Праздник проверяется при открытии экрана
+            val todayHoliday = remember { holidayOn(LocalDate.now()) }
+            TratyTheme(
+                darkTheme = dark,
+                dynamicColor = settings.dynamicColor,
+                holiday = todayHoliday.takeIf { settings.holidayDecor },
+            ) {
                 CaptureScreen(vm, onFinish = ::finish)
             }
         }

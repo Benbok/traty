@@ -36,7 +36,6 @@ import ru.my.traty.speech.ModelState
 import ru.my.traty.backup.CsvBackup
 import ru.my.traty.backup.CsvImporter
 import ru.my.traty.data.AppSettings
-import ru.my.traty.data.ThemeMode
 import ru.my.traty.data.CategoryTotal
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.Expense
@@ -427,10 +426,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             editing = null
             message = "Трата обновлена"
         }
-    }
-
-    fun setThemeMode(mode: ThemeMode) = viewModelScope.launch {
-        c.settings.setThemeMode(mode)
     }
 
     /** Состояние модели распознавания речи GigaAM. */
