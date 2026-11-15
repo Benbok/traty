@@ -159,7 +159,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                             )
                             Spacer(Modifier.width(TratyTheme.spacing.xs))
                             Text(
-                                text = "Структура расходов (Кредит)",
+                                text = "На что ушли деньги",
                                 style = TratyTheme.typography.titleMedium,
                             )
                         }
@@ -258,7 +258,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                 ) {
                     Column(Modifier.padding(TratyTheme.spacing.md)) {
                         Text(
-                            text = "Поступления периода (Дебет)",
+                            text = "Доходы за период",
                             style = TratyTheme.typography.titleMedium,
                         )
                         Spacer(Modifier.height(TratyTheme.spacing.sm))

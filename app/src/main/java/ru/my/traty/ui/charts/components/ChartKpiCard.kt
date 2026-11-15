@@ -24,9 +24,10 @@ import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatRub
 import ru.my.traty.ui.formatRubSigned
+import ru.my.traty.ui.pluralRu
 
 /**
- * Блок сводных финансовых метрик: Сальдо (Баланс), Дебет (Доходы), Кредит (Траты), норма сбережений.
+ * Блок сводных метрик: баланс, доходы, траты, норма сбережений.
  */
 @Composable
 fun ChartKpiCard(
@@ -60,7 +61,7 @@ fun ChartKpiCard(
                         )
                         Spacer(Modifier.size(TratyTheme.spacing.xs))
                         Text(
-                            text = "Баланс за период (Сальдо)",
+                            text = "Баланс за период",
                             style = TratyTheme.typography.titleSmall,
                             color = TratyTheme.colors.onSurfaceVariant,
                         )
@@ -86,14 +87,14 @@ fun ChartKpiCard(
                 )
 
                 Text(
-                    text = "Дебет ${formatRub(summary.totalDebitKopecks)} − Кредит ${formatRub(summary.totalCreditKopecks)}",
+                    text = "Доходы ${formatRub(summary.totalDebitKopecks)} − траты ${formatRub(summary.totalCreditKopecks)}",
                     style = TratyTheme.typography.bodySmall,
                     color = TratyTheme.colors.onSurfaceVariant,
                 )
             }
         }
 
-        // Две карточки рядом: Дебет (Доходы) и Кредит (Траты)
+        // Две карточки рядом: доходы и траты
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
@@ -114,7 +115,7 @@ fun ChartKpiCard(
                         )
                         Spacer(Modifier.size(4.dp))
                         Text(
-                            text = "Дебет (Доходы)",
+                            text = "Доходы",
                             style = TratyTheme.typography.labelMedium,
                             color = TratyTheme.colors.onSurfaceVariant,
                         )
@@ -127,7 +128,7 @@ fun ChartKpiCard(
                         color = TratyTheme.colors.income,
                     )
                     Text(
-                        text = "${summary.incomeCount} операций",
+                        text = "${summary.incomeCount} ${pluralRu(summary.incomeCount.toLong(), "поступление", "поступления", "поступлений")}",
                         style = TratyTheme.typography.bodySmall,
                         color = TratyTheme.colors.onSurfaceVariant,
                     )
@@ -150,7 +151,7 @@ fun ChartKpiCard(
                         )
                         Spacer(Modifier.size(4.dp))
                         Text(
-                            text = "Кредит (Траты)",
+                            text = "Траты",
                             style = TratyTheme.typography.labelMedium,
                             color = TratyTheme.colors.onSurfaceVariant,
                         )
@@ -163,7 +164,7 @@ fun ChartKpiCard(
                         color = TratyTheme.colors.expense,
                     )
                     Text(
-                        text = "${summary.expenseCount} трат · в день ~${formatRub(summary.dailyAvgCreditKopecks)}",
+                        text = "${summary.expenseCount} ${pluralRu(summary.expenseCount.toLong(), "трата", "траты", "трат")} · в день ~${formatRub(summary.dailyAvgCreditKopecks)}",
                         style = TratyTheme.typography.bodySmall,
                         color = TratyTheme.colors.onSurfaceVariant,
                     )
