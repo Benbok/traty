@@ -45,6 +45,7 @@ import ru.my.traty.ui.home.EditExpenseScreen
 import ru.my.traty.ui.home.HomeScreen
 import ru.my.traty.ui.navigation.TratyNavLabel
 import ru.my.traty.ui.navigation.TratyNavTab
+import ru.my.traty.ui.help.HelpScreen
 import ru.my.traty.ui.onboarding.OnboardingScreen
 import ru.my.traty.ui.onboarding.OnboardingViewModel
 import ru.my.traty.data.onboarding.OnboardingExit
@@ -68,6 +69,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     var showRules by rememberSaveable { mutableStateOf(false) }
     var showRecurring by rememberSaveable { mutableStateOf(false) }
     var showDebtsList by rememberSaveable { mutableStateOf(false) }
+    var showHelp by rememberSaveable { mutableStateOf(false) }
     var selectedDebtId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showBudget by rememberSaveable { mutableStateOf(false) }
     var showWeekly by rememberSaveable { mutableStateOf(false) }
@@ -194,6 +196,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onOpenBudget = { showBudget = true },
                         onOpenAi = { showAiSettings = true },
                         onOpenOnboarding = onboarding::show,
+                        onOpenHelp = { showHelp = true },
                         onOpenFeedback = { showFeedback = true },
                     )
                 }
@@ -260,6 +263,18 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         vm.editing = null
                     },
                     onSetCategoryImpulsive = vm::setCategoryImpulsive,
+                )
+            }
+        }
+
+        if (showHelp) {
+            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                HelpScreen(
+                    onBack = { showHelp = false },
+                    onOpenOnboarding = {
+                        showHelp = false
+                        onboarding.show()
+                    },
                 )
             }
         }
