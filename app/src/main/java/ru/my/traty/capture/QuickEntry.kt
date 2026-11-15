@@ -36,12 +36,16 @@ import java.time.ZoneId
 /** Предложение создать правило «место → категория» после сохранения траты. */
 data class RuleOffer(val place: String, val categoryId: Long, val subcategoryId: Long?, val categoryName: String)
 
-/** [recurringAdded] — названия платежей, которые сами добавились в «Подписки». */
+/**
+ * [recurringAdded] — названия платежей, которые сами добавились в «Подписки».
+ * [newSubcategories] — созданные при сохранении подкатегории, «Питомцы › Зоомагазин».
+ */
 data class SaveResult(
     val saved: SavedEntries,
     val ruleOffer: RuleOffer?,
     val newCategories: List<String>,
     val recurringAdded: List<String> = emptyList(),
+    val newSubcategories: List<String> = emptyList(),
 )
 
 sealed interface EntryOutcome {
@@ -114,7 +118,7 @@ class QuickEntry(
         var notice: String? = null
         val parsed: List<ParsedEntry> = if (client == null) {
             forceConfirm = true
-            OfflineEntryParser.parse(text, cats)
+            OfflineEntryParser.parse(text, cats, spokenDay)
         } else {
             try {
                 EntryParsing.parse(client, text, cats, rules, spokenDay)
@@ -123,7 +127,7 @@ class QuickEntry(
             } catch (e: LlmHttpException) {
                 forceConfirm = true
                 notice = fallbackNotice(client, e)
-                OfflineEntryParser.parse(text, cats)
+                OfflineEntryParser.parse(text, cats, spokenDay)
             } catch (e: IOException) {
                 if (!allowQueue) return null
                 val id = db.pendingPhrases().insert(PendingPhrase(text = text, createdAt = spokenAt))
@@ -131,11 +135,12 @@ class QuickEntry(
             } catch (e: Exception) {
                 forceConfirm = true
                 notice = fallbackNotice(client, e)
-                OfflineEntryParser.parse(text, cats)
+                OfflineEntryParser.parse(text, cats, spokenDay)
             }
         }
 
-        val ruled = RuleMatcher.apply(parsed, rules, cats)
+        val cleaned = EntryCleanup.apply(parsed, text, cats, spokenDay)
+        val ruled = RuleMatcher.apply(cleaned, rules, cats)
         ruled.mapNotNull { it.matchedRule }.forEach { db.rules().incrementHits(it.id) }
 
         val rows = ruled.map { EntryRow.fromParsed(it.entry, cats, spokenDay) }
@@ -161,6 +166,7 @@ class QuickEntry(
         val expenseIds = mutableListOf<Long>()
         val incomeIds = mutableListOf<Long>()
         val recurringAdded = mutableListOf<String>()
+        val newSubcategories = mutableListOf<String>()
         var ruleOffer: RuleOffer? = null
         db.withTransaction {
             val knownPlaces = db.expenses().distinctPlaces().toMutableList()
@@ -186,6 +192,7 @@ class QuickEntry(
                         newCategoryEmoji = row.suggestedCategory?.takeIf { it.name == row.category }?.emoji,
                         subcategoryName = row.subcategory.ifBlank { null },
                     )
+                    ids.createdSubcategory?.let { newSubcategories += "${normalizeName(row.category)} › $it" }
                     // «пятерочка» → «Пятёрочка», если так магазин уже записан: в статистике это один магазин
                     val place = Places.canonical(row.place, knownPlaces)?.also { if (it !in knownPlaces) knownPlaces += it }
                     val expense = Expense(
@@ -211,7 +218,7 @@ class QuickEntry(
             .map { normalizeName(it) }
             .distinct()
         _changes.tryEmit(Unit)
-        return SaveResult(SavedEntries(expenseIds, incomeIds), ruleOffer, created, recurringAdded)
+        return SaveResult(SavedEntries(expenseIds, incomeIds), ruleOffer, created, recurringAdded, newSubcategories.distinct())
     }
 
     /** Черновик из уже сохранённых записей — для «Изменить» после автосохранения. */

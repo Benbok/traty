@@ -51,7 +51,7 @@ object EntryPrompt {
         appendLine("Источники пополнений: ${IncomeSources.ALL.joinToString(", ") { it.first }}.")
         appendLine()
         appendLine(
-            """Формат ответа: {"items":[{"type":"expense" или "income","amount":число в рублях,"category":"название из списка или новая категория (для expense)","emoji":"один эмодзи для новой категории или null","subcategory":"из списка или null","place":"магазин/место или null","note":"что куплено, кратко, или null","source":"источник из списка (для income) или null","date":"YYYY-MM-DD или null"}]}"""
+            """Формат ответа: {"items":[{"type":"expense" или "income","amount":число в рублях,"category":"название из списка или новая категория (для expense)","emoji":"один эмодзи для новой категории или null","subcategory":"из списка или новая подкатегория или null","place":"магазин/место или null","note":"что куплено и для кого, словами из фразы, или null","source":"источник из списка (для income) или null","date":"YYYY-MM-DD или null"}]}"""
         )
         appendLine("Правила:")
         appendLine("- type = income, если деньги пришли: зарплата, аванс, дежурства, подработка, перевод мне, вернули долг, кэшбэк. Всё остальное — expense.")
@@ -63,13 +63,20 @@ object EntryPrompt {
         appendLine("- Если покупка явно совершена на маркетплейсе, используй категорию «Маркетплейсы» независимо от вида товара; для новой категории emoji = «📦». Площадку укажи одновременно в subcategory и place, а сам товар — кратко в note.")
         appendLine("- Нормализуй названия площадок: Ozon/Озон → «Ozon»; Wildberries/WB/ВБ/Вайлдберриз → «Wildberries»; AliExpress/Алиэкспресс → «AliExpress»; Яндекс Маркет → «Яндекс Маркет»; Мегамаркет/СберМегаМаркет → «Мегамаркет».")
         appendLine("- Применяй правило маркетплейсов только если из фразы ясно, что это площадка покупки, а не просто упоминание бренда или названия в другом смысле. Если площадка не распознана однозначно — не выдумывай её и используй обычную категорию по товару.")
-        appendLine("- Тип магазина подсказывает категорию: продуктовый — «Продукты», строительный — ремонт/дом, аптека — «Здоровье».")
+        appendLine("- Тип магазина подсказывает категорию: продуктовый — «Продукты», строительный — ремонт/дом, аптека — «Здоровье», зоомагазин и ветклиника — «Питомцы».")
+        appendLine("- Вид магазина без собственного названия («зоомагазин», «аптека», «продуктовый», «заправка») — это не place, place = null. Используй его для category и subcategory.")
         appendLine("- «вчера», «позавчера», «в понедельник» переводи в дату относительно сегодняшней; если дата не названа — null.")
         appendLine("- Для expense категорию по возможности бери из списка (название пиши точно как в списке, emoji = null).")
         appendLine("- Если ни одна категория явно не подходит — предложи новую: короткое общее название (1–2 слова, с заглавной буквы, во множественном числе, как в списке) и подходящий emoji. Не создавай новую категорию, если подходит существующая.")
+        appendLine("- subcategory — уточнение внутри выбранной категории: вид магазина или вид траты. Бери из подкатегорий этой категории (точно как в списке). Если подходящей нет, а из фразы уточнение понятно — предложи новую: 1–2 слова, с заглавной буквы, как в списке («Зоомагазин», «Ветаптека»). Не повторяй в subcategory название категории. Подкатегорию из другой категории не бери.")
+        appendLine("- Если подходит новая подкатегория, но ни одна категория не подходит ей по смыслу — предложи новую категорию, а не «${DefaultCategories.OTHER}».")
+        appendLine("- note — всё, что сказано о покупке, кроме суммы, даты, места и вида магазина. Сохраняй слова из фразы и имена как сказаны, не сокращай и не пересказывай: «лекарство для кошки Чуни от блох». Не добавляй в note название места или категории. Если о покупке больше ничего не сказано — null.")
         appendLine("- Если непонятно, на что потрачено, — «${DefaultCategories.OTHER}».")
         appendLine("- Для income поле source — строго одно из списка источников; если непонятно, откуда деньги, — «${IncomeSources.DEFAULT}».")
         appendLine("- Никакого текста, кроме JSON.")
+        appendLine()
+        appendLine("Пример: «зоомагазин вчера 731 лекарство для кошки Чуни от блох» → ")
+        appendLine("""{"items":[{"type":"expense","amount":731,"category":"Питомцы","emoji":null,"subcategory":"Зоомагазин","place":null,"note":"лекарство для кошки Чуни от блох","source":null,"date":"${today.minusDays(1)}"}]}""")
         if (rules.isNotEmpty()) {
             appendLine()
             appendLine("Выученные правила (место/слово → категория; применяй если совпало):")
@@ -115,13 +122,14 @@ object EntryParsing {
 object OfflineEntryParser {
     private val incomeWords = Regex("""зарплат|аванс|дежур|пришл|вернул|возврат|подработ|кэшбэк|кешбэк""")
 
-    fun parse(text: String, categories: List<CategoryWithSubs>): List<ParsedEntry> {
+    fun parse(text: String, categories: List<CategoryWithSubs>, today: LocalDate = LocalDate.now()): List<ParsedEntry> {
         if (incomeWords.containsMatchIn(text.lowercase())) {
+            val day = SpokenDateParser.find(text, today)?.date?.toString()
             return OfflineIncomeParser.parse(text).map {
-                ParsedEntry(type = "income", amount = it.amount, source = it.source, note = it.note, date = it.date)
+                ParsedEntry(type = "income", amount = it.amount, source = it.source, note = it.note, date = it.date ?: day)
             }
         }
-        return OfflineParser.parse(text, categories).map {
+        return OfflineParser.parse(text, categories, today).map {
             ParsedEntry(
                 type = "expense", amount = it.amount, category = it.category, emoji = it.emoji,
                 subcategory = it.subcategory, place = it.place, note = it.note, date = it.date,

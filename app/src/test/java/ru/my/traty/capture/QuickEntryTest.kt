@@ -232,4 +232,42 @@ class QuickEntryTest {
         qe.process("пятёрочка", EntryOrigin.VOICE, spokenAt)
         assertTrue(emitted)
     }
+
+    @Test
+    fun petShopPhraseCreatesSubcategoryAndKeepsNote() = runTest {
+        app.container.categories.seedIfEmpty()
+        val reply = """{"items":[{"type":"expense","amount":731,"category":"Питомцы","subcategory":"Зоомагазин","place":null,"note":"лекарство для кошки Чуни от блох","date":"2023-11-13"}]}"""
+        val outcome = quickEntry(FakeLlm { reply })
+            .process("зоомагазин вчера 731 лекарство для кошки Чуни от блох", EntryOrigin.VOICE, spokenAt)
+        outcome as EntryOutcome.NeedsConfirm
+        val row = outcome.draft.rows.single()
+        assertEquals("Питомцы", row.category)
+        assertEquals("Зоомагазин", row.subcategory)
+        assertEquals("лекарство для кошки Чуни от блох", row.note)
+        // spokenAt = 2023-11-14 (UTC), «вчера» — 13-е
+        assertEquals("2023-11-13", row.dateText)
+
+        val result = quickEntry(null).save(outcome.draft)
+        assertEquals(listOf("Питомцы › Зоомагазин"), result.newSubcategories)
+        val saved = db.expenses().getAllWithCategory().single()
+        assertEquals("Питомцы", saved.categoryName)
+        assertEquals("Зоомагазин", saved.subcategoryName)
+        assertEquals("лекарство для кошки Чуни от блох", saved.expense.note)
+        assertEquals(null, saved.expense.place)
+    }
+
+    @Test
+    fun offlinePetShopPhraseCreatesMissingCategory() = runTest {
+        // Категорий нет совсем: «Питомцы» и «Зоомагазин» создадутся при сохранении
+        val outcome = quickEntry(null).process("зоомагазин вчера 731 лекарство для кошки Чуни от блох", EntryOrigin.VOICE, spokenAt)
+        outcome as EntryOutcome.NeedsConfirm
+        val row = outcome.draft.rows.single()
+        assertEquals("Питомцы", row.category)
+        assertEquals(NewCategory("Питомцы", "🐾"), row.suggestedCategory)
+        val result = quickEntry(null).save(outcome.draft)
+        assertEquals(listOf("Питомцы"), result.newCategories)
+        val saved = db.expenses().getAllWithCategory().single()
+        assertEquals("Зоомагазин", saved.subcategoryName)
+        assertEquals("лекарство для кошки Чуни от блох", saved.expense.note)
+    }
 }
