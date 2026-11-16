@@ -171,7 +171,9 @@ class QuickEntry(
             forceConfirm = true
             notice = (listOfNotNull(notice) + sanity.problems).joinToString(" ")
         }
-        val ruled = RuleMatcher.apply(cleaned, rules, cats)
+        // Ошибки распознавания речи в названии магазина: берём привычное написание из базы
+        val snapped = PlaceSnap.apply(cleaned, db.expenses().distinctPlaces())
+        val ruled = RuleMatcher.apply(snapped, rules, cats)
         ruled.mapNotNull { it.matchedRule }.forEach { db.rules().incrementHits(it.id) }
 
         val rows = markDuplicates(ruled.map { EntryRow.fromParsed(it.entry, cats, spokenDay) }, spokenAt)
