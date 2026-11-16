@@ -13,6 +13,7 @@ import ru.my.traty.ai.LlmClient
 import ru.my.traty.ai.clientFor
 import ru.my.traty.capture.PendingParseWork
 import ru.my.traty.capture.QuickEntry
+import ru.my.traty.capture.ReceiptScanner
 import ru.my.traty.capture.debugEntryLog
 import ru.my.traty.data.search.SearchRepository
 import ru.my.traty.data.AppDatabase
@@ -112,6 +113,9 @@ class AppContainer(
     val quickEntry = QuickEntry(db, categories, settings, debugLog = debugEntryLog(context), clientProvider = llm)
     val debts = DebtRepository(db)
     val expenseItems = ExpenseItemRepository(db)
+
+    /** Фото чека → черновик траты с товарами. Только Яндекс, независимо от выбранного ИИ для голоса. */
+    val receipts = ReceiptScanner(db, settings)
     val debtRemoval = DebtPaymentRemoval(db)
     val expenseEdits = ExpenseEdits(db, debtRemoval)
     val budgets = BudgetRepository(db)

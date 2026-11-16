@@ -62,6 +62,7 @@ import ru.my.traty.ui.settings.RulesScreen
 import ru.my.traty.ui.settings.SettingsScreen
 import ru.my.traty.ui.stats.StatsScreen
 import ru.my.traty.ui.items.ItemsScreen
+import ru.my.traty.ui.receipt.ReceiptOverlay
 import java.time.LocalDate
 
 /**
@@ -323,6 +324,9 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                 ReconcileScreen(mode = mode, onBack = { reconcileMode = null })
             }
         }
+
+        // Чек по фото: ожидание разбора и обязательная проверка перед сохранением
+        ReceiptOverlay(categories = categories, onSave = { vm.saveEntry(it) })
 
         // Знакомство поверх всего. Пока проверяем, показывать ли его, — пустой фон, чтобы лента не мелькнула
         when (onboardingVisible) {

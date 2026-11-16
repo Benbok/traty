@@ -20,18 +20,22 @@ import kotlin.math.roundToLong
 data class NewCategory(val name: String, val emoji: String)
 
 enum class EntryOrigin {
-    VOICE, TEXT, MANUAL;
+    VOICE, TEXT, MANUAL,
+
+    /** Чек с фотографии: всегда проходит экран проверки чека. */
+    PHOTO;
 
     fun toExpenseSource(): String = when (this) {
         VOICE -> ExpenseSource.VOICE
         TEXT -> ExpenseSource.TEXT
         MANUAL -> ExpenseSource.MANUAL
+        PHOTO -> ExpenseSource.PHOTO
     }
 
     fun toIncomeOrigin(): String = when (this) {
         VOICE -> IncomeOrigin.VOICE
         TEXT -> IncomeOrigin.TEXT
-        MANUAL -> IncomeOrigin.MANUAL
+        MANUAL, PHOTO -> IncomeOrigin.MANUAL
     }
 }
 

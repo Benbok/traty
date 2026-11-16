@@ -11,6 +11,8 @@ object ExpenseSource {
     const val RECURRING = "recurring"
     /** Платёж по покупке частями (аванс, доплата, рассрочка, кредит). */
     const val DEBT = "debt"
+    /** Чек, распознанный с фотографии. */
+    const val PHOTO = "photo"
 }
 
 /** Откуда пришло пополнение. */
