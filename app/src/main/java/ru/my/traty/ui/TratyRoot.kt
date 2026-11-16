@@ -15,7 +15,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,11 +36,13 @@ import ru.my.traty.ui.charts.ChartsScreen
 import ru.my.traty.ui.designsystem.components.TratySnackbar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.capture.EntryConfirmSheet
+import ru.my.traty.ui.capture.RuleOfferDialog
 import ru.my.traty.ui.capture.PurchaseOfferHost
 import ru.my.traty.ui.capture.RecurringOfferHost
 import ru.my.traty.ui.capture.RecurringOfferViewModel
 import ru.my.traty.ui.feedback.FeedbackScreen
-import ru.my.traty.ui.home.EditExpenseScreen
+import ru.my.traty.ui.home.EditExpenseOverlay
+import ru.my.traty.ui.home.ExpenseItemsViewModel
 import ru.my.traty.ui.home.HomeScreen
 import ru.my.traty.ui.navigation.TratyNavLabel
 import ru.my.traty.ui.navigation.TratyNavTab
@@ -60,6 +61,8 @@ import ru.my.traty.ui.settings.AiSettingsScreen
 import ru.my.traty.ui.settings.RulesScreen
 import ru.my.traty.ui.settings.SettingsScreen
 import ru.my.traty.ui.stats.StatsScreen
+import ru.my.traty.ui.items.ItemsScreen
+import java.time.LocalDate
 
 /**
  * Корневой контейнер приложения Traty с нижней навигацией: Траты, Графики, Статистика, ИИ, Настройки.
@@ -81,10 +84,13 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     var showWeekly by rememberSaveable { mutableStateOf(false) }
     var showAiSettings by rememberSaveable { mutableStateOf(false) }
     var showFeedback by rememberSaveable { mutableStateOf(false) }
+    // Даты экрана «Товары» (из «Статистики»); null — экран закрыт
+    var itemsWindow by rememberSaveable { mutableStateOf<Pair<LocalDate, LocalDate>?>(null) }
     // null - экран сверки закрыт
     var reconcileMode by rememberSaveable { mutableStateOf<ReconcileMode?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val onboarding: OnboardingViewModel = viewModel()
+    val itemsVm: ExpenseItemsViewModel = viewModel()
     val onboardingVisible by onboarding.visible.collectAsStateWithLifecycle()
     val onboardingPeriodStart by onboarding.periodStartDay.collectAsStateWithLifecycle()
     // «Записать первую трату» из знакомства: лента включит микрофон и сбросит флаг
@@ -190,6 +196,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onOpenBudget = { showBudget = true },
                         onOpenDebts = { showDebtsList = true },
                         onOpenDebt = { selectedDebtId = it },
+                        onOpenItems = { from, to -> itemsWindow = from to to },
                     )
                     TratyNavTab.ASSISTANT -> AssistantScreen(
                         onOpenBudget = { showBudget = true },
@@ -252,6 +259,12 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             }
         }
 
+        itemsWindow?.let { (from, to) ->
+            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                ItemsScreen(from = from, to = to, onBack = { itemsWindow = null })
+            }
+        }
+
         if (showFeedback) {
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
                 FeedbackScreen(onBack = { showFeedback = false })
@@ -260,23 +273,14 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
 
         // Редактирование траты — отдельный экран поверх вкладок, как «Подписки»
         vm.editing?.let { item ->
-            val linkedDebt by vm.observeDebtForExpense(item.expense.id).collectAsStateWithLifecycle(initialValue = null)
-            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
-                EditExpenseScreen(
-                    item = item,
-                    categories = categories,
-                    labels = labels[item.expense.id].orEmpty(),
-                    linkedDebt = linkedDebt,
-                    onOpenDebt = { debtId -> selectedDebtId = debtId },
-                    onDismiss = { vm.editing = null },
-                    onSave = { fields -> vm.updateExpense(item, fields) },
-                    onDelete = {
-                        vm.delete(item.expense)
-                        vm.editing = null
-                    },
-                    onSetCategoryImpulsive = vm::setCategoryImpulsive,
-                )
-            }
+            EditExpenseOverlay(
+                item = item,
+                vm = vm,
+                itemsVm = itemsVm,
+                categories = categories,
+                labels = labels[item.expense.id].orEmpty(),
+                onOpenDebt = { debtId -> selectedDebtId = debtId },
+            )
         }
 
         if (showHelp) {
@@ -374,35 +378,13 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     PurchaseOfferHost(visible = vm.confirm == null && vm.ruleOffer == null && recurringOffer == null)
 
     vm.ruleOffer?.let { offer ->
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { vm.ruleOffer = null },
-            shape = TratyTheme.shapes.large,
-            containerColor = TratyTheme.colors.surface,
-            title = {
-                Text(
-                    "Запомнить правило?",
-                    style = TratyTheme.typography.titleMedium,
-                )
+        RuleOfferDialog(
+            offer = offer,
+            onRemember = {
+                vm.addRule(offer.place, offer.categoryId, offer.subcategoryId)
+                vm.ruleOffer = null
             },
-            text = {
-                Text(
-                    "Всегда относить «${offer.place}» к категории «${offer.categoryName}»?",
-                    style = TratyTheme.typography.bodyMedium,
-                )
-            },
-            confirmButton = {
-                ru.my.traty.ui.designsystem.components.TratyButton(
-                    onClick = {
-                        vm.addRule(offer.place, offer.categoryId, offer.subcategoryId)
-                        vm.ruleOffer = null
-                    },
-                ) { Text("Запомнить") }
-            },
-            dismissButton = {
-                ru.my.traty.ui.designsystem.components.TratyTextButton(
-                    onClick = { vm.ruleOffer = null },
-                ) { Text("Нет") }
-            },
+            onDismiss = { vm.ruleOffer = null },
         )
     }
 }
