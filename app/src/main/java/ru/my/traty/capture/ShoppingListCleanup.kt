@@ -3,6 +3,7 @@ package ru.my.traty.capture
 import ru.my.traty.ai.EntryType
 import ru.my.traty.ai.ListedItem
 import ru.my.traty.ai.ParsedEntry
+import ru.my.traty.ai.ParsedItem
 import ru.my.traty.ai.PurchasePayment
 import ru.my.traty.ai.PurchaseTermsParser
 import ru.my.traty.ai.ShoppingList
@@ -16,7 +17,8 @@ import ru.my.traty.data.sameName
  * 2500 ₽, заметка «рыбу, консерву, хлеб». Правила поверх ответа ИИ:
  * - ИИ разбил покупку на трату за каждый товар — склеиваем обратно (одна категория, одно место, один день);
  * - итог берётся из названной суммы («на 2500», «всего 2500»), а без неё — сложением цен (считает приложение);
- * - цены товаров не теряются: они остаются в заметке («рыбу 500 ₽, хлеб 80 ₽»).
+ * - цены товаров не теряются: они остаются в заметке («рыбу 500 ₽, хлеб 80 ₽») и в позициях траты
+ *   (товар, цена) — по ним потом считаются траты на каждый товар. Позиции — от двух товаров.
  * Несколько магазинов («Пятёрочка 1200, Магнит 800») и разные категории остаются отдельными тратами.
  */
 object ShoppingListCleanup {
@@ -43,7 +45,21 @@ object ShoppingListCleanup {
             list.hasPrices && e.note.none(Char::isDigit) -> list.note()
             else -> e.note
         }
-        return e.copy(amount = amount, note = note)
+        return e.copy(amount = amount, note = note, items = itemsOf(e.items, list))
+    }
+
+    /**
+     * Позиции траты: от ИИ, если он их дал; товары из самой фразы, если ИИ их не дал или потерял названные цены.
+     * Меньше двух товаров — позиций нет, хватит заметки.
+     */
+    internal fun itemsOf(fromAi: List<ParsedItem>?, list: ShoppingList?): List<ParsedItem>? {
+        val ai = fromAi?.takeIf { it.size >= 2 }
+        val phrase = list?.items?.map { ParsedItem(name = it.name, price = it.price) }?.takeIf { it.size >= 2 }
+        return when {
+            ai == null -> phrase
+            phrase != null && list?.hasPrices == true && ai.none { it.price != null } -> phrase
+            else -> ai
+        }
     }
 
     private fun canMerge(entries: List<ParsedEntry>, places: List<String>, list: ShoppingList?, total: Double?): Boolean {
@@ -64,12 +80,17 @@ object ShoppingListCleanup {
             ?: ShoppingListFormat.note(entries.map { e ->
                 ListedItem(e.note?.takeIf { it.isNotBlank() } ?: e.subcategory ?: e.category, e.amount.takeIf { total == null })
             })
+        val fromEntries = entries.map { e ->
+            ParsedItem(name = e.note?.takeIf { it.isNotBlank() } ?: e.subcategory ?: e.category, price = e.amount.takeIf { total == null })
+        }
         return first.copy(
             amount = total ?: sum,
             place = place,
             subcategory = entries.firstNotNullOfOrNull { it.subcategory },
             emoji = entries.firstNotNullOfOrNull { it.emoji },
             note = note,
+            // Как и с заметкой: товары из самой фразы надёжнее, чем разбивка ИИ
+            items = itemsOf(null, list) ?: fromEntries.takeIf { it.size >= 2 },
         )
     }
 }

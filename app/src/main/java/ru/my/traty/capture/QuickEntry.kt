@@ -27,6 +27,7 @@ import ru.my.traty.data.SettingsRepository
 import ru.my.traty.data.debt.Debt
 import ru.my.traty.data.debt.DebtPaymentRemoval
 import ru.my.traty.data.debt.DebtRepository
+import ru.my.traty.data.items.ExpenseItemRepository
 import ru.my.traty.data.recurring.RecurringRepository
 import ru.my.traty.data.entryTimestamp
 import ru.my.traty.data.normalizeName
@@ -85,6 +86,7 @@ class QuickEntry(
     val recurringOffers = RecurringOffers(recurring)
     private val debts = DebtRepository(db)
     private val debtRemoval = DebtPaymentRemoval(db)
+    private val items = ExpenseItemRepository(db)
 
     /** Вопросы «Доплата за покупку?» и «Покупка частями?», ждущие ответа пользователя. */
     val purchaseOffers = PurchaseOfferQueue(debts, zone)
@@ -267,6 +269,7 @@ class QuickEntry(
                     )
                     val expenseId = db.expenses().insert(expense)
                     expenseIds += expenseId
+                    if (row.items.isNotEmpty()) items.replace(expenseId, row.items.map(DraftItem::toExpenseItem))
                     val purchase = purchaseOffer(row, expense.copy(id = expenseId), day, openDebts)
                     // Платёж по рассрочке или кредиту — не подписка: у покупки свой график
                     if (purchase != null) purchases += purchase
@@ -326,12 +329,14 @@ class QuickEntry(
 
     /** Черновик из уже сохранённых записей — для «Изменить» после автосохранения. */
     suspend fun draftFor(saved: SavedEntries, rawText: String, origin: EntryOrigin): EntryDraft {
+        val savedItems = items.getForAll(saved.expenseIds)
         val expenseRows = db.expenses().getByIds(saved.expenseIds).map { e ->
             EntryRow(
                 type = EntryType.EXPENSE, amountText = kopecksToText(e.expense.amountKopecks),
                 category = e.categoryName, subcategory = e.subcategoryName.orEmpty(),
                 place = e.expense.place.orEmpty(), note = e.expense.note.orEmpty(),
                 source = "", dateText = dayOf(e.expense.timestamp),
+                items = savedItems[e.expense.id].orEmpty().map(DraftItem::fromSaved),
             )
         }
         val incomeRows = db.incomes().getByIds(saved.incomeIds).map { i ->
