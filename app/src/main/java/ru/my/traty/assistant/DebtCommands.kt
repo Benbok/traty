@@ -6,7 +6,7 @@ package ru.my.traty.assistant
  * так кнопка подтверждения появляется всегда, а «эти» берутся из прошлого ответа.
  */
 internal object DebtCommands {
-    private val DEBT_INTENTS = setOf(Intents.DEBTS, Intents.DELETE_DEBT, Intents.CLOSE_DEBT, Intents.CANCEL_DEBT)
+    private val DEBT_INTENTS = IntentRegistry.inGroup(IntentRegistry.DEBT)
 
     private val debtWordRe = Regex("""(?<![\p{L}])(долг\S*|кредит\S*|рассрочк\S*|частями|долями)""")
     private val paymentWordRe = Regex("""платеж\S*|покупк\S*""")
@@ -42,7 +42,7 @@ internal object DebtCommands {
             repaidRe.containsMatchIn(text) -> Intents.CLOSE_DEBT
             cancelRe.containsMatchIn(text) -> Intents.CANCEL_DEBT
             closeRe.containsMatchIn(text) -> Intents.CLOSE_DEBT
-            q.intent in setOf(Intents.DELETE_DEBT, Intents.CLOSE_DEBT, Intents.CANCEL_DEBT) -> q.intent
+            q.intent in DEBT_INTENTS - Intents.DEBTS -> q.intent
             else -> return null
         }
         val back = refersBack(text)

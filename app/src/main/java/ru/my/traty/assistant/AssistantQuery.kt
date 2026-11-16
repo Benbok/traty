@@ -70,7 +70,7 @@ object Intents {
     const val MOVE_EXPENSE = "move_expense"
     const val UNKNOWN = "unknown"
 
-    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, PLAN, BALANCE, SUGGEST_PLAN, SET_PLAN, REMOVE_PLAN, CANCEL_SUB, PAUSE_SUB, RESUME_SUB, EDIT_SUB, TREND, LIST, DEBTS, DELETE_DEBT, CLOSE_DEBT, CANCEL_DEBT, DELETE_EXPENSE, MOVE_EXPENSE, UNKNOWN)
+    val ALL: List<String> = IntentRegistry.ALL.map { it.key }
 }
 
 object AssistantQueries {
