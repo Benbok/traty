@@ -54,10 +54,13 @@ fun formatPeriod(p: BillingPeriod, startDay: Int): String {
 
 /** Короткий отрезок дат «10 окт — 9 ноя»; год добавляется, только если отрезок переходит через год. */
 fun formatDateSpan(start: LocalDate, end: LocalDate): String {
-    fun short(d: LocalDate) = "${d.dayOfMonth} ${SHORT_MONTHS[d.monthValue - 1]}"
+    fun short(d: LocalDate) = formatShortDate(d)
     val year = if (start.year != end.year) " ${end.year}" else ""
     return "${short(start)} — ${short(end)}$year"
 }
+
+/** Короткая дата без года: «1 дек». */
+fun formatShortDate(d: LocalDate): String = "${d.dayOfMonth} ${SHORT_MONTHS[d.monthValue - 1]}"
 
 fun formatDate(d: LocalDate): String =
     "${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.FULL, RU)} ${d.year}"
