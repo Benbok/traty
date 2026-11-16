@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Income
+import ru.my.traty.data.items.ExpenseItem
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatPeriod
@@ -29,6 +30,10 @@ fun LazyListScope.searchElsewhere(
     currentEmpty: Boolean,
     onExpenseClick: (ExpenseWithCategory) -> Unit,
     onIncomeClick: (Income) -> Unit,
+    /** Товары покупок и запрос: показать под найденной тратой нужные товары. */
+    itemsByExpense: Map<Long, List<ExpenseItem>> = emptyMap(),
+    query: String = "",
+    itemCounts: Map<Long, Int> = emptyMap(),
 ) {
     if (groups.isEmpty()) return
     item(key = "elsewhere-banner", contentType = "elsewhere-banner") {
@@ -40,7 +45,12 @@ fun LazyListScope.searchElsewhere(
         }
         items(buildFeed(g.expenses, g.incomes), key = { "elsewhere-${it.id}" }, contentType = { it.contentType }) { item ->
             when (item) {
-                is FeedItem.ExpenseItem -> ExpenseRow(row = item.data, onClick = { onExpenseClick(item.data) })
+                is FeedItem.ExpenseItem -> ExpenseRowWithMatches(
+                    row = item.data,
+                    onClick = { onExpenseClick(item.data) },
+                    matched = FeedSearch.matchedItems(itemsByExpense[item.data.expense.id].orEmpty(), query),
+                    itemCount = itemCounts[item.data.expense.id] ?: 0,
+                )
                 is FeedItem.IncomeItem -> IncomeRow(income = item.data, onClick = { onIncomeClick(item.data) })
             }
             HorizontalDivider(

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import ru.my.traty.TratyApp
+import ru.my.traty.data.items.ExpenseItem
 import ru.my.traty.data.period.BillingPeriod
 import java.time.ZoneId
 
@@ -38,19 +39,27 @@ class FeedSearchViewModel(app: Application) : AndroidViewModel(app) {
         this.period.value = period
     }
 
-    val elsewhere: StateFlow<List<PeriodMatches>> = combine(
-        // Очистка поиска убирает найденное сразу, набор текста ждёт паузы
-        query.debounce { if (it.isEmpty()) 0L else QUERY_DEBOUNCE_MS }.distinctUntilChanged(),
-        period,
-    ) { q, p -> q to p }
+    // Очистка поиска убирает найденное сразу, набор текста ждёт паузы
+    private val settledQuery = query.debounce { if (it.isEmpty()) 0L else QUERY_DEBOUNCE_MS }.distinctUntilChanged()
+
+    val elsewhere: StateFlow<List<PeriodMatches>> = combine(settledQuery, period) { q, p -> q to p }
         .flatMapLatest { (q, p) ->
             if (q.isEmpty() || p == null) flowOf(emptyList())
-            else combine(c.search.observeExpenses(), c.search.observeIncomes(), c.settings.flow) { e, i, s ->
-                SearchElsewhere.find(e, i, q, p, s.periodStartDay, zone)
+            else combine(c.search.observeExpenses(), c.search.observeIncomes(), c.settings.flow, c.search.observeItems()) { e, i, s, items ->
+                SearchElsewhere.find(e, i, q, p, s.periodStartDay, zone, items)
             }
         }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Товары покупок по номеру траты, пока в поиске есть текст (без поиска таблица товаров не читается).
+     * По ним лента отображает найденные товары и находит покупки в открытом периоде.
+     */
+    val items: StateFlow<Map<Long, List<ExpenseItem>>> = settledQuery
+        .flatMapLatest { q -> if (q.isEmpty()) flowOf(emptyMap()) else c.search.observeItems() }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     private companion object {
         const val QUERY_DEBOUNCE_MS = 250L

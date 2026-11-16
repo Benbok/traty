@@ -7,6 +7,7 @@ import org.junit.Test
 import ru.my.traty.data.Expense
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Income
+import ru.my.traty.data.items.ExpenseItem
 
 class FeedSearchTest {
     private val phrase = "такси 180 продукты 2.500 бензин 2.160"
@@ -91,6 +92,66 @@ class FeedSearchTest {
     @Test
     fun `одни знаки без букв и цифр ничего не находят`() {
         assertEquals(emptyList<Long>(), find("₽"))
+    }
+
+    private fun item(name: String, kopecks: Long? = null) = ExpenseItem(name = name, priceKopecks = kopecks)
+
+    // Покупка в магазине из нескольких товаров, как при диктовке списком
+    private val shop = expense(7, "Продукты", "Супермаркет", 798_44, place = "Магнит")
+    private val goods = listOf(
+        item("яблоки Гала", 184_59),
+        item("шоколад Alpen Gold", 209_97),
+        item("масло подсолнечное «Слобода»", 139_00),
+    )
+
+    private fun hits(q: String) = FeedSearch.matchedItems(goods, q).map { it.name }
+
+    @Test
+    fun `покупка находится по товару внутри неё и показывает только найденный`() {
+        assertTrue(FeedSearch.matches(shop, "шоколад", goods))
+        assertEquals(listOf("шоколад Alpen Gold"), hits("шоколад"))
+        // Товара в покупке нет — покупка не находится
+        assertFalse(FeedSearch.matches(shop, "носки", goods))
+        assertEquals(emptyList<String>(), hits("носки"))
+    }
+
+    @Test
+    fun `запрос списком ищет любое из слов среди товаров`() {
+        assertTrue(FeedSearch.matches(shop, "шоколад масло", goods))
+        assertEquals(listOf("шоколад Alpen Gold", "масло подсолнечное «Слобода»"), hits("шоколад масло"))
+        // Достаточно одного из слов: «чай» в покупке нет, но шоколад есть
+        assertTrue(FeedSearch.matches(shop, "шоколад чай", goods))
+        assertEquals(listOf("шоколад Alpen Gold"), hits("шоколад чай"))
+        // И через запятую, как говорит человек: «шоколад, масло»
+        assertEquals(2, hits("шоколад, масло").size)
+    }
+
+    @Test
+    fun `слово из записи вместе с товаром считается как все слова вместе`() {
+        // «магнит» — место покупки, «шоколад» — товар: покупка найдена, в строке показан только товар
+        assertTrue(FeedSearch.matches(shop, "магнит шоколад", goods))
+        assertEquals(listOf("шоколад Alpen Gold"), hits("магнит шоколад"))
+        // Слова одного и того же текста без товаров дальше требуют всех слов, как раньше
+        val pills = expense(5, "Питомцы", "Ветаптека", 640_00, note = "лекарство для кошки Чуни от блох")
+        assertTrue(FeedSearch.matches(pills, "лекарство кошке"))
+        assertFalse(FeedSearch.matches(pills, "лекарство собаке"))
+    }
+
+    @Test
+    fun `числа и стоп-слова не считаются найденными товарами`() {
+        assertEquals(emptyList<String>(), hits("799"))
+        assertEquals(emptyList<String>(), hits(""))
+        assertEquals(emptyList<String>(), hits("№"))
+        // Сумма по-прежнему ищется по трате
+        assertTrue(FeedSearch.matches(shop, "798,44", goods))
+    }
+
+    @Test
+    fun `без позиций поиск работает как раньше`() {
+        // Траты до версии 0.2.1 без разложения на товары: ищем по заметке
+        val old = expense(8, "Продукты", "Супермаркет", 500_00, note = "шоколад 150 ₽, молоко 90 ₽")
+        assertTrue(FeedSearch.matches(old, "шоколад"))
+        assertTrue(FeedSearch.matches(old, "шоколад молоко"))
     }
 
     @Test

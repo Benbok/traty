@@ -2,6 +2,7 @@ package ru.my.traty.ui.home
 
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Income
+import ru.my.traty.data.items.ExpenseItem
 import ru.my.traty.data.period.BillingPeriod
 import java.time.Instant
 import java.time.ZoneId
@@ -30,10 +31,12 @@ object SearchElsewhere {
         current: BillingPeriod,
         startDay: Int,
         zone: ZoneId,
+        /** Товары покупок по номеру траты: искать можно и по ним. */
+        items: Map<Long, List<ExpenseItem>> = emptyMap(),
     ): List<PeriodMatches> {
         if (query.isBlank()) return emptyList()
         fun periodOf(ts: Long) = BillingPeriod.containing(Instant.ofEpochMilli(ts).atZone(zone).toLocalDate(), startDay)
-        val foundExpenses = expenses.filter { FeedSearch.matches(it, query) }
+        val foundExpenses = expenses.filter { FeedSearch.matches(it, query, items[it.expense.id].orEmpty()) }
             .groupBy { periodOf(it.expense.timestamp) }
         val foundIncomes = incomes.filter { FeedSearch.matches(it, query) }
             .groupBy { periodOf(it.timestamp) }

@@ -6,6 +6,7 @@ import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Income
 import ru.my.traty.data.PeriodComparison
 import ru.my.traty.data.Recurring
+import ru.my.traty.data.items.ExpenseItem
 import ru.my.traty.data.RecurringState
 import ru.my.traty.data.budget.Budget
 import ru.my.traty.data.budget.BudgetPlans
@@ -47,6 +48,12 @@ class AssistantContext(
     val balance: Balance? = null,
     /** Покупки частями, рассрочки и кредиты ([AssistantDebts]). */
     val debts: List<DebtWithPaid> = emptyList(),
+    /**
+     * Позиции (товары) внутри покупок: expenseId → список позиций.
+     * Используются, когда вопрос про конкретный товар («сколько на шоколад») —
+     * тогда суммируются только прайсы совпавших позиций, а не вся сумма покупки.
+     */
+    val expenseItems: Map<Long, List<ExpenseItem>> = emptyMap(),
 )
 
 /** План одной категории (подкатегории) с прогрессом. */
@@ -132,21 +139,26 @@ object AssistantEngine {
         // «за всё время» — с первой записи, а не с условной даты
         val from = if (asked == QuestionDates.ALL_TIME) spending.minOfOrNull { day(it.expense.timestamp, ctx.zone) } ?: asked else asked
 
-        val filter = Filter.of(q, spending, ctx.categories)
+        val filter = Filter.of(q, spending, ctx.categories, ctx.expenseItems)
         if (q.intent == Intents.SET_PLAN && filter.names.isEmpty() && filter.unknownNames.isNotEmpty()) {
             return setPlanNewSub(q, ctx, period, spending, filter.unknownNames.first())
         }
-        if (filter.unknownNames.isNotEmpty() && filter.names.isEmpty() && filter.terms.isEmpty()) {
+        if (filter.unknownNames.isNotEmpty() && filter.names.isEmpty() && filter.terms.isEmpty() && filter.itemTerms.isEmpty()) {
             val known = spending.map { it.categoryName }.distinct().sorted().joinToString(", ")
             return AssistantData(
                 facts = header(ctx) + "Категорий «${filter.unknownNames.joinToString("», «")}» в записях нет. Есть категории: $known.",
             )
         }
 
+        fun itemsFor(r: ExpenseWithCategory) = ctx.expenseItems[r.expense.id] ?: emptyList()
+
         fun rowsIn(a: LocalDate, b: LocalDate) = spending.filter { r ->
             val d = day(r.expense.timestamp, ctx.zone)
-            !d.isBefore(a) && !d.isAfter(b) && filter.matches(r)
+            !d.isBefore(a) && !d.isAfter(b) && filter.matches(r, itemsFor(r))
         }
+
+        /** Сумма для строки с учётом товарного фильтра: только прайс совпавших позиций или вся транзакция. */
+        fun amountOf(r: ExpenseWithCategory) = filter.amountOf(r, itemsFor(r))
 
         val rows = rowsIn(from, to)
         val span = span(from, to)
@@ -155,10 +167,13 @@ object AssistantEngine {
 
         return when (q.intent) {
             Intents.TOTAL -> {
-                val sum = rows.sumOf { it.expense.amountKopecks }
+                val sum = rows.sumOf { amountOf(it) }
+                val itemNote = if (filter.itemTerms.isNotEmpty() && rows.any { ctx.expenseItems[it.expense.id]?.isNotEmpty() == true })
+                    " (только стоимость товаров ${filter.itemTerms.joinToString(", ") { "«$it»" }} из списков покупок)" else ""
+                val countLabel = if (filter.itemTerms.isNotEmpty()) "покупок с таким товаром" else "покупок"
                 val facts = buildString {
                     append(base)
-                    appendLine("Потрачено за $span${subject?.let { " ($it)" }.orEmpty()}: ${formatRub(sum)}, покупок: ${rows.size}.")
+                    appendLine("Потрачено за $span${subject?.let { " ($it)" }.orEmpty()}: ${formatRub(sum)}, $countLabel: ${rows.size}.$itemNote")
                     if (filter.isEmpty && rows.isNotEmpty()) {
                         appendLine("Больше всего:")
                         byCategory(rows).take(5).forEach { (name, s) -> appendLine("- $name: ${formatRub(s)} (${share(s, sum)})") }
@@ -181,12 +196,12 @@ object AssistantEngine {
             }
 
             Intents.BREAKDOWN -> {
-                val sum = rows.sumOf { it.expense.amountKopecks }
+                val sum = rows.sumOf { amountOf(it) }
                 // По одной категории разбиваем на подкатегории, иначе по категориям
                 val bySub = filter.names.size == 1
                 val groups = if (bySub) rows.groupBy { it.subcategoryName ?: "без подкатегории" }
-                    .map { (k, v) -> k to v.sumOf { it.expense.amountKopecks } }.sortedByDescending { it.second }
-                else byCategory(rows)
+                    .map { (k, v) -> k to v.sumOf { amountOf(it) } }.sortedByDescending { it.second }
+                else byCategory(rows).map { (k, _) -> k to rows.filter { r -> r.categoryName == k }.sumOf { amountOf(it) } }
                 val facts = buildString {
                     append(base)
                     appendLine("Траты за $span${subject?.let { " ($it)" }.orEmpty()} по ${if (bySub) "подкатегориям" else "категориям"}, всего ${formatRub(sum)}:")
@@ -222,8 +237,8 @@ object AssistantEngine {
             Intents.COMPARE -> {
                 val (cFrom, cTo) = compareRange(q, from, to, period, ctx)
                 val other = rowsIn(cFrom, cTo)
-                val cur = rows.sumOf { it.expense.amountKopecks }
-                val prev = other.sumOf { it.expense.amountKopecks }
+                val cur = rows.sumOf { amountOf(it) }
+                val prev = other.sumOf { amountOf(it) }
                 val diff = cur - prev
                 val changes = PeriodComparison.changes(totals(rows), totals(other)).take(5)
                 val facts = buildString {
@@ -242,7 +257,7 @@ object AssistantEngine {
 
             Intents.AVERAGE -> {
                 val days = (ChronoUnit.DAYS.between(from, to) + 1).toInt()
-                val sum = rows.sumOf { it.expense.amountKopecks }
+                val sum = rows.sumOf { amountOf(it) }
                 val perDay = sum / days
                 val facts = buildString {
                     append(base)

@@ -27,22 +27,34 @@ interface RecordCues {
 /**
  * Два мягких «колокольчика», синтезируются в коде (файлов со звуками нет): начало — две ноты вверх, конец — две вниз.
  * Громкость идёт по каналу «звуки интерфейса», то есть уважает беззвучный режим.
+ *
+ * PCM и AudioTrack готовятся в фоновом потоке, чтобы не задерживать главный поток и не обрезать начало звука.
  */
 class ChimeRecordCues : RecordCues {
     private val main = Handler(Looper.getMainLooper())
 
     override fun playStart(onDone: () -> Unit) {
-        val ok = play(START_NOTES)
-        // Если звук не удалось проиграть, не задерживаем запись
-        main.postDelayed(onDone, if (ok) START_NOTES.sumOf { it.second } + TAIL_MS else 0L)
+        Thread {
+            val pcm = synth(START_NOTES)
+            val track = buildTrack(pcm)
+            if (track != null) {
+                track.play()
+                val delayMs = START_NOTES.sumOf { it.second } + TAIL_MS
+                main.postDelayed(onDone, delayMs)
+            } else {
+                main.post(onDone)
+            }
+        }.start()
     }
 
     override fun playEnd() {
-        play(END_NOTES)
+        Thread {
+            val pcm = synth(END_NOTES)
+            buildTrack(pcm)?.play()
+        }.start()
     }
 
-    private fun play(notes: List<Pair<Double, Long>>): Boolean = runCatching {
-        val pcm = synth(notes)
+    private fun buildTrack(pcm: ShortArray): AudioTrack? = runCatching {
         val track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -66,9 +78,8 @@ class ChimeRecordCues : RecordCues {
             override fun onMarkerReached(t: AudioTrack) = t.release()
             override fun onPeriodicNotification(t: AudioTrack) = Unit
         }, main)
-        track.play()
-        true
-    }.getOrDefault(false)
+        track
+    }.getOrNull()
 
     private fun synth(notes: List<Pair<Double, Long>>): ShortArray {
         val out = ArrayList<Short>()

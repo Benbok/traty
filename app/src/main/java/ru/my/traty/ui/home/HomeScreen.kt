@@ -41,7 +41,9 @@ import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Income
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.ui.MainViewModel
+import ru.my.traty.ui.rememberKeyboardOpen
 import ru.my.traty.ui.capture.MicButton
+import ru.my.traty.ui.capture.RecordState
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyMonthPicker
@@ -78,7 +80,10 @@ fun HomeScreen(
     incomeVm: IncomeViewModel = viewModel(),
     searchVm: FeedSearchViewModel = viewModel(),
     updateVm: UpdateViewModel = viewModel(),
+    itemsVm: FeedItemsViewModel = viewModel(),
 ) {
+    // Сколько товаров в покупках: в строке ленты «5 товаров» вместо длинного списка в заметке
+    val itemCounts by itemsVm.counts.collectAsStateWithLifecycle()
     val update by updateVm.available.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
     val showReconcileCard by prompt.showCard.collectAsStateWithLifecycle()
@@ -112,7 +117,9 @@ fun HomeScreen(
         searchQuery = ""
     }
 
-    val displayedExpenses = remember(expenses, selectedDate, searchQuery) {
+    // Товары покупок: пока в поиске есть текст, ищем и по ним, и показываем найденные под строкой
+    val searchItems by searchVm.items.collectAsStateWithLifecycle()
+    val displayedExpenses = remember(expenses, selectedDate, searchQuery, searchItems) {
         val base = if (selectedDate == null) {
             expenses
         } else {
@@ -123,7 +130,7 @@ fun HomeScreen(
                 expenseDate == selectedDate
             }
         }
-        base.filter { FeedSearch.matches(it, searchQuery) }
+        base.filter { FeedSearch.matches(it, searchQuery, searchItems[it.expense.id].orEmpty()) }
     }
 
     // Фильтрация доходов по дате и поиску
@@ -151,6 +158,8 @@ fun HomeScreen(
     val totalIncome = remember(displayedIncomes) { displayedIncomes.sumOf { it.amountKopecks } }
 
     val mic = rememberHomeMic(vm)
+    // Голосовой ввод запроса в поиск (без ИИ): текст попадает в строку поиска
+    val searchMic = rememberSearchMic(settings = { settings }, onQuery = { searchQuery = it }, onError = { vm.message = it })
     // «Записать первую трату» из знакомства: включить микрофон, как только открылась лента
     LaunchedEffect(startRecording) {
         if (startRecording) {
@@ -178,7 +187,14 @@ fun HomeScreen(
                 )
             },
             content = if (searchActive) {
-                { FeedSearchField(query = searchQuery, onQueryChange = { searchQuery = it }) }
+                {
+                    FeedSearchField(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        mic = searchMic,
+                        micEnabled = mic.state is RecordState.Idle && !vm.busy,
+                    )
+                }
             } else null,
         )
 
@@ -319,6 +335,8 @@ fun HomeScreen(
                         SwipeableExpenseRow(
                             item = item.data,
                             labels = labels[item.data.expense.id].orEmpty(),
+                            matchedItems = FeedSearch.matchedItems(searchItems[item.data.expense.id].orEmpty(), searchQuery),
+                            itemCount = itemCounts[item.data.expense.id] ?: 0,
                             onClick = { vm.editing = item.data },
                             onDelete = { expenseToDelete = item.data },
                             modifier = Modifier.animateItem(),
@@ -344,15 +362,23 @@ fun HomeScreen(
                 currentEmpty = feed.isEmpty(),
                 onExpenseClick = { vm.editing = it },
                 onIncomeClick = { incomeOpened = it },
+                itemsByExpense = searchItems,
+                query = searchQuery,
+                itemCounts = itemCounts,
             )
         }
 
-        MicButton(
-            state = mic.state,
-            busy = vm.busy,
-            compact = true,
-            onClick = mic::onClick,
-        )
+        // Пока на экране клавиатура (поиск, ввод текста), вторую кнопку записи не показываем: микрофон есть в поле ввода.
+        // Если запись или разбор уже идут, кнопку оставляем, чтобы её можно было остановить.
+        val keyboardOpen by rememberKeyboardOpen()
+        if (!keyboardOpen || mic.state !is RecordState.Idle || vm.busy) {
+            MicButton(
+                state = mic.state,
+                busy = vm.busy,
+                compact = true,
+                onClick = mic::onClick,
+            )
+        }
     }
 
     if (showDatePicker) {

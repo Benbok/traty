@@ -32,6 +32,9 @@ data class ExpenseItem(
     val unit: String? = null,
 )
 
+/** Сколько товаров в одной покупке (трате с позициями). */
+data class ItemCount(val expenseId: Long, val count: Int)
+
 /**
  * Позиция вместе с данными её траты: для подсчёта по товарам за период и внутри магазина.
  * Читается одним запросом ([ExpenseItemDao.getSales]).

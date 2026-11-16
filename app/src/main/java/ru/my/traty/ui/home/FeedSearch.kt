@@ -2,6 +2,7 @@ package ru.my.traty.ui.home
 
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Income
+import ru.my.traty.data.items.ExpenseItem
 import ru.my.traty.data.search.SearchText
 import ru.my.traty.ui.RU
 import ru.my.traty.ui.formatRub
@@ -16,8 +17,26 @@ import ru.my.traty.ui.formatRub
  */
 object FeedSearch {
 
-    fun matches(e: ExpenseWithCategory, query: String): Boolean =
-        matches(query, e.expense.amountKopecks, listOf(e.categoryName, e.subcategoryName, e.expense.place, e.expense.note))
+    /**
+     * [items] — товары этой траты (пусто, если разложения нет). Трата находится, если все слова запроса нашлись
+     * среди её текстов и названий товаров, или хотя бы одно слово запроса нашлось среди товаров
+     * («шоколад масло» ищет покупки, где есть хотя бы один из этих товаров).
+     */
+    fun matches(e: ExpenseWithCategory, query: String, items: List<ExpenseItem> = emptyList()): Boolean {
+        val texts = listOf(e.categoryName, e.subcategoryName, e.expense.place, e.expense.note) + items.map { it.name }
+        return matches(query, e.expense.amountKopecks, texts) || matchedItems(items, query).isNotEmpty()
+    }
+
+    /**
+     * Товары покупки, найденные запросом: любое значимое слово запроса есть в названии товара. Числа товарами не считаются
+     * (это сумма). В строке ленты показываются только они.
+     */
+    fun matchedItems(items: List<ExpenseItem>, query: String): List<ExpenseItem> {
+        if (items.isEmpty()) return emptyList()
+        val words = SearchText.queryWords(query).filterNot { w -> w.all { it.isDigit() } }
+        if (words.isEmpty()) return emptyList()
+        return items.filter { item -> words.any { SearchText.matchesWords(listOf(it), listOf(item.name)) } }
+    }
 
     fun matches(i: Income, query: String): Boolean =
         matches(query, i.amountKopecks, listOf(i.source, i.note))

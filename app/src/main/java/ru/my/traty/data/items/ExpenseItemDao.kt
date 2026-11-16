@@ -28,6 +28,14 @@ interface ExpenseItemDao {
     @Query("SELECT * FROM expense_items WHERE expenseId = :expenseId ORDER BY position, id")
     fun observeFor(expenseId: Long): Flow<List<ExpenseItem>>
 
+    /** Все позиции всех трат: поиск по ленте ищет товары внутри покупок, в том числе прошлых периодов. */
+    @Query("SELECT * FROM expense_items ORDER BY expenseId, position, id")
+    fun observeAll(): Flow<List<ExpenseItem>>
+
+    /** Сколько товаров в каждой покупке: лента показывает «5 товаров» вместо длинного списка в заметке. */
+    @Query("SELECT expenseId, COUNT(*) AS count FROM expense_items GROUP BY expenseId")
+    fun observeCounts(): Flow<List<ItemCount>>
+
     /** Траты, у которых есть позиции: значок «есть товары» в ленте. */
     @Query("SELECT DISTINCT expenseId FROM expense_items")
     fun observeExpenseIdsWithItems(): Flow<List<Long>>

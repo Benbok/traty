@@ -157,8 +157,11 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 val budgets = c.db.budgets().getAll()
                 val debts = c.debts.activeWithPayments(zone).map { (d, paid) -> DebtWithPaid(d, paid) }
                 val data = withContext(Dispatchers.Default) {
+                    val expenses = c.db.expenses().getAllWithCategory()
+                    val expenseItems = c.db.expenseItems().getForAll(expenses.map { it.expense.id })
+                        .groupBy { it.expenseId }
                     val ctx = AssistantContext(
-                        expenses = c.db.expenses().getAllWithCategory(),
+                        expenses = expenses,
                         incomes = c.db.incomes().getAll(),
                         recurring = c.db.recurring().getAll(),
                         today = today,
@@ -168,6 +171,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                         categories = categories,
                         balance = balance,
                         debts = debts,
+                        expenseItems = expenseItems,
                     )
                     AssistantEngine.run(query, ctx)
                 }

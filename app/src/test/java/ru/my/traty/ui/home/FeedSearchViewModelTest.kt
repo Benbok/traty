@@ -21,6 +21,7 @@ import ru.my.traty.TestTratyApp
 import ru.my.traty.TratyApp
 import ru.my.traty.data.Category
 import ru.my.traty.data.Expense
+import ru.my.traty.data.items.ExpenseItem
 import ru.my.traty.data.period.BillingPeriod
 import java.time.LocalDate
 import java.time.ZoneId
@@ -65,5 +66,46 @@ class FeedSearchViewModelTest {
         val found = vm.elsewhere.filter { it.isNotEmpty() }.first()
         assertEquals(1, found.size)
         assertEquals(listOf("аванс за холодильник"), found.single().expenses.map { it.expense.note })
+    }
+
+    @Test
+    fun `находит покупку по товару внутри неё в прошлом периоде и даёт товары для строки`() = runTest(timeout = 20.seconds) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.elsewhere.collect {} }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.items.collect {} }
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now()
+        val catId = app.container.db.categories().insert(Category(name = "Продукты", emoji = "🛒", sortOrder = 0))
+        val old = today.minusMonths(3).atStartOfDay(zone).toInstant().toEpochMilli()
+        // Покупка в магазине: в заметке только место, товары — позициями
+        val id = app.container.db.expenses().insert(
+            Expense(amountKopecks = 798_44, categoryId = catId, timestamp = old, place = "Магнит"),
+        )
+        app.container.expenseItems.replace(
+            id,
+            listOf(
+                ExpenseItem(name = "яблоки Гала", priceKopecks = 184_59),
+                ExpenseItem(name = "шоколад Alpen Gold", priceKopecks = 209_97),
+            ),
+        )
+
+        vm.update("шоколад масло", BillingPeriod.containing(today, 1))
+
+        val found = vm.elsewhere.filter { it.isNotEmpty() }.first()
+        assertEquals(listOf(id), found.single().expenses.map { it.expense.id })
+        val items = vm.items.filter { it.isNotEmpty() }.first()
+        // Репозиторий приводит названия к единому виду (с заглавной), поиск от регистра не зависит
+        assertEquals(listOf("Шоколад Alpen Gold"), FeedSearch.matchedItems(items[id].orEmpty(), "шоколад масло").map { it.name })
+    }
+
+    @Test
+    fun `без текста в поиске товары не читаются`() = runTest(timeout = 20.seconds) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.items.collect {} }
+        val catId = app.container.db.categories().insert(Category(name = "Продукты", emoji = "🛒", sortOrder = 0))
+        val id = app.container.db.expenses().insert(Expense(amountKopecks = 100_00, categoryId = catId, timestamp = 1L))
+        app.container.expenseItems.replace(id, listOf(ExpenseItem(name = "чай", priceKopecks = 100_00)))
+
+        vm.update("   ", BillingPeriod.containing(LocalDate.now(), 1))
+
+        assertEquals(emptyMap<Long, List<ExpenseItem>>(), vm.items.value)
     }
 }
