@@ -55,7 +55,8 @@ object SpokenTotal {
     /** Сумма вместе со словом перед ней: диапазон годится, чтобы вырезать «на 2500» из заметки. */
     fun find(text: String): SpokenAmount? {
         strong.findAll(text).toList().asReversed().forEach { m ->
-            amountAt(text, m.range.last + 1)?.let { return SpokenAmount(it.value, m.range.first..it.range.last) }
+            amountAt(text, m.range.last + 1)?.takeUnless { looksLikeQuantity(text, it) }
+                ?.let { return SpokenAmount(it.value, m.range.first..it.range.last) }
         }
         // «в продуктовом на 2500 купил рыбу, консерву»: первое число после «на», а за ним «купил» или других чисел нет
         val money = MoneyAmounts.all(text)
@@ -64,6 +65,17 @@ object SpokenTotal {
         val alone = money.size == 1
         if (!alone && !verbAfter.containsMatchIn(text.substring(first.range.last + 1))) return null
         return SpokenAmount(first.value, na.range.first..first.range.last)
+    }
+
+    private val currencyAfter = Regex("""^\s*(?:руб\p{L}*|р(?![\p{L}])|₽|тысяч\p{L}*|тыщ\p{L}*|к(?![\p{L}]))""", RegexOption.IGNORE_CASE)
+    private val wordAfter = Regex("""^\s+\p{L}""")
+
+    /** «всего 2 билета 3000»: маленькое число с предметом после него и сумма дальше по фразе — это количество, а не итог. */
+    private fun looksLikeQuantity(text: String, a: SpokenAmount): Boolean {
+        if (a.value >= 20) return false
+        val after = text.substring(a.range.last + 1)
+        if (currencyAfter.containsMatchIn(after) || !wordAfter.containsMatchIn(after)) return false
+        return MoneyAmounts.all(text).any { it.range.first > a.range.last && it.value > a.value }
     }
 
     /** Число, которое стоит сразу с позиции [from] (пробелы пропускаются). */

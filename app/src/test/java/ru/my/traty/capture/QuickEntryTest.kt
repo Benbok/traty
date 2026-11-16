@@ -190,9 +190,9 @@ class QuickEntryTest {
     fun replaceSwapsSavedEntries() = runTest {
         seedWithRule("пятёрочка", "Продукты")
         val qe = quickEntry(FakeLlm { twoMatched })
-        val auto = qe.process("пятёрочка", EntryOrigin.VOICE, spokenAt) as EntryOutcome.AutoSaved
+        val auto = qe.process("пятёрочка пятьсот и триста", EntryOrigin.VOICE, spokenAt) as EntryOutcome.AutoSaved
         val oldIds = auto.result.saved.expenseIds.toSet()
-        val draft = qe.draftFor(auto.result.saved, "пятёрочка", EntryOrigin.VOICE)
+        val draft = qe.draftFor(auto.result.saved, "пятёрочка пятьсот и триста", EntryOrigin.VOICE)
         assertEquals(auto.result.saved, draft.replaces)
         assertEquals(listOf("500", "300"), draft.rows.map { it.amountText })
         qe.save(draft.copy(rows = listOf(draft.rows[0].copy(amountText = "700"))))
@@ -239,7 +239,7 @@ class QuickEntryTest {
         val qe = quickEntry(FakeLlm { twoMatched })
         var emitted = false
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { qe.changes.collect { emitted = true } }
-        qe.process("пятёрочка", EntryOrigin.VOICE, spokenAt)
+        qe.process("пятёрочка пятьсот и триста", EntryOrigin.VOICE, spokenAt)
         assertTrue(emitted)
     }
 
@@ -328,5 +328,39 @@ class QuickEntryTest {
         // «Новая покупка» — пользователь сохраняет строку
         qe.save(again.draft)
         assertEquals(2, db.expenses().getAllWithCategory().size)
+    }
+
+    @Test
+    fun amountNotInPhraseNeverAutosavesEvenWithRule() = runTest {
+        seedWithRule("магнит", "Продукты")
+        // Модель ответила 2500, а в фразе названо 250: молча в базу это не уходит
+        val reply = """{"items":[{"type":"expense","amount":2500,"category":"Продукты","place":"Магнит"}]}"""
+        val outcome = quickEntry(FakeLlm { reply }).process("магнит 250", EntryOrigin.VOICE, spokenAt)
+        outcome as EntryOutcome.NeedsConfirm
+        assertTrue(outcome.notice!!.contains("не сходится с фразой"))
+        assertTrue(db.expenses().getAllWithCategory().isEmpty())
+    }
+
+    @Test
+    fun futureDateFromModelIsReplacedByTodayAndAsksForConfirm() = runTest {
+        seedWithRule("магнит", "Продукты")
+        val reply = """{"items":[{"type":"expense","amount":250,"category":"Продукты","place":"Магнит","date":"2023-12-31"}]}"""
+        val outcome = quickEntry(FakeLlm { reply }).process("магнит 250", EntryOrigin.VOICE, spokenAt)
+        outcome as EntryOutcome.NeedsConfirm
+        assertTrue(outcome.notice!!.contains("ещё не наступила"))
+        // spokenAt = 2023-11-14 (UTC)
+        assertEquals("2023-11-14", outcome.draft.rows.single().dateText)
+        assertTrue(db.expenses().getAllWithCategory().isEmpty())
+    }
+
+    @Test
+    fun brokenRecordInModelAnswerAsksForConfirmInsteadOfLosingIt() = runTest {
+        seedWithRule("магнит", "Продукты")
+        val reply = """{"items":[{"type":"expense","amount":250,"category":"Продукты","place":"Магнит"},{"type":"expense","amount":"много"}]}"""
+        val outcome = quickEntry(FakeLlm { reply }).process("магнит 250 и ещё что-то", EntryOrigin.VOICE, spokenAt)
+        outcome as EntryOutcome.NeedsConfirm
+        assertTrue(outcome.notice!!.contains("не удалось разобрать"))
+        assertEquals("250", outcome.draft.rows.single().amountText)
+        assertTrue(db.expenses().getAllWithCategory().isEmpty())
     }
 }

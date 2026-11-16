@@ -1,7 +1,9 @@
 package ru.my.traty.ai
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.DefaultCategories
 import ru.my.traty.data.IncomeSources
@@ -40,8 +42,14 @@ data class ParsedEntry(
         }
 }
 
-@Serializable
-private data class EntryParseResult(val items: List<ParsedEntry> = emptyList())
+/**
+ * Разобранный ответ модели. [dropped] — сколько записей из ответа отброшено как испорченные
+ * (непонятное поле, отрицательная или нереальная сумма): о них нужно сказать человеку, а не потерять молча.
+ */
+internal data class DecodedEntries(val items: List<ParsedEntry>, val dropped: Int)
+
+/** Больше этой суммы в одной трате (₽) — почти наверняка ошибка модели. */
+internal const val MAX_ENTRY_RUBLES = 100_000_000.0
 
 object EntryPrompt {
     fun system(categories: List<CategoryWithSubs>, today: LocalDate, rules: List<Rule>): String = buildString {
@@ -112,28 +120,79 @@ object EntryParsing {
         categories: List<CategoryWithSubs>,
         rules: List<Rule>,
         today: LocalDate,
-    ): List<ParsedEntry> {
+    ): List<ParsedEntry> = parseChecked(client, text, categories, rules, today).items
+
+    internal suspend fun parseChecked(
+        client: LlmClient,
+        text: String,
+        categories: List<CategoryWithSubs>,
+        rules: List<Rule>,
+        today: LocalDate,
+    ): DecodedEntries {
         val raw = client.complete(EntryPrompt.system(categories, today, rules), text, jsonMode = true)
-        return decode(raw)
+        return decodeChecked(raw)
     }
 
-    /** Модели иногда оборачивают JSON в ```json ... ``` или возвращают голый массив — обрабатываем оба случая. */
-    internal fun decode(raw: String): List<ParsedEntry> {
+    internal fun decode(raw: String): List<ParsedEntry> = decodeChecked(raw).items
+
+    /**
+     * Модели иногда оборачивают JSON в ```json ... ``` или возвращают голый массив — обрабатываем оба случая.
+     * Каждая запись разбирается отдельно: одна испорченная не отбрасывает остальные.
+     * Если из ответа не уцелело ни одной записи — ошибка, и фраза уйдёт в разбор без ИИ.
+     */
+    internal fun decodeChecked(raw: String): DecodedEntries {
         val cleaned = raw.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
         val arrStart = cleaned.indexOf('[')
         val objStart = cleaned.indexOf('{')
-        val items = if (arrStart != -1 && (objStart == -1 || arrStart < objStart)) {
-            val arr = cleaned.substring(arrStart, cleaned.lastIndexOf(']') + 1)
-            lenientJson.decodeFromString(ListSerializer(ParsedEntry.serializer()), arr)
+        if (arrStart == -1 && objStart == -1) throw IllegalStateException("ИИ вернул ответ без данных")
+        val root: JsonElement = if (arrStart != -1 && (objStart == -1 || arrStart < objStart)) {
+            lenientJson.parseToJsonElement(cleaned.substring(arrStart, cleaned.lastIndexOf(']') + 1))
         } else {
-            val obj = cleaned.substring(objStart, cleaned.lastIndexOf('}') + 1)
-            lenientJson.decodeFromString(EntryParseResult.serializer(), obj).items
+            lenientJson.parseToJsonElement(cleaned.substring(objStart, cleaned.lastIndexOf('}') + 1))
+        }
+        val elements: List<JsonElement> = when (root) {
+            is JsonArray -> root
+            is JsonObject -> when (val list = root["items"]) {
+                is JsonArray -> list
+                else -> if ("amount" in root) listOf(root) else emptyList()
+            }
+            else -> emptyList()
+        }
+        var dropped = 0
+        val decoded = elements.mapNotNull { el ->
+            val entry = runCatching { lenientJson.decodeFromJsonElement(ParsedEntry.serializer(), el) }.getOrNull()
+                ?.let(::sanitize)
+            if (entry == null) dropped++
+            entry
         }
         // Покупка в кредит без оплаты сегодня приходит с amount = 0, но с ценой: её не теряем
-        return items.filter { it.amount > 0 || (it.entryType == EntryType.EXPENSE && (it.part?.total ?: 0.0) > 0) }.map {
+        val items = decoded.filter { it.amount > 0 || (it.entryType == EntryType.EXPENSE && (it.part?.total ?: 0.0) > 0) }.map {
             if (it.entryType == EntryType.INCOME) it.copy(source = IncomeSources.normalize(it.source)) else it
         }
+        if (items.isEmpty() && dropped > 0) throw IllegalStateException("ИИ вернул записи, которые не удалось разобрать")
+        return DecodedEntries(items, dropped)
     }
+
+    /** null — запись испорчена: сумма не число, отрицательная или нереальная. Длинные тексты обрезаются. */
+    private fun sanitize(e: ParsedEntry): ParsedEntry? {
+        if (!e.amount.isFinite() || e.amount < 0 || e.amount > MAX_ENTRY_RUBLES) return null
+        val total = e.part?.total
+        if (total != null && (!total.isFinite() || total < 0 || total > MAX_ENTRY_RUBLES)) return null
+        return e.copy(
+            category = e.category.trim().take(MAX_NAME),
+            emoji = e.emoji?.take(MAX_EMOJI),
+            subcategory = e.subcategory?.trim()?.take(MAX_NAME),
+            place = e.place?.trim()?.take(MAX_NAME),
+            note = e.note?.trim()?.take(MAX_NOTE),
+            source = e.source?.trim()?.take(MAX_NAME),
+            date = e.date?.trim()?.take(MAX_DATE),
+        )
+    }
+
+    private const val MAX_NAME = 60
+    private const val MAX_EMOJI = 8
+    private const val MAX_NOTE = 500
+    private const val MAX_DATE = 20
 }
 
 /**
