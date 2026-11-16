@@ -31,7 +31,7 @@ object AssistantPrompts {
 Сегодня $today, $weekday. Текущий расчётный период: ${period.startDate} — ${period.endDate}. Прошлый: ${previous.startDate} — ${previous.endDate}.
 
 Верни только JSON-объект без пояснений:
-{"intent": "...", "categories": [], "place": null, "from": null, "to": null, "compareFrom": null, "compareTo": null, "amount": null, "limit": null, "relative": false, "groupBy": null, "all": false, "target": null}
+{"intent": "...", "categories": [], "place": null, "from": null, "to": null, "compareFrom": null, "compareTo": null, "amount": null, "limit": null, "relative": false, "groupBy": null, "all": false, "target": null, "percent": false}
 
 intent — одно из:
 - total — сколько потрачено (всего, на категорию, в месте);
@@ -54,7 +54,7 @@ intent — одно из:
 - plan — план трат (бюджет, лимиты): «как я иду по плану», «сколько осталось на кафе по плану», «где перерасход»;
 - balance — сколько денег на счёте сейчас, «какой у меня баланс»;
 - suggest_plan — «предложи / составь план трат (бюджет, лимиты)», «какой лимит поставить на кафе»: categories — если названы;
-- set_plan — «поставь план на кафе 10 000», «лимит на такси 3 тысячи»: categories — одна категория или подкатегория из списка; если такой в списке нет — напиши слово пользователя как есть («Такси»), не подменяй его категорией; amount — сумма в рублях. «Увеличь / уменьши лимит на 1000» — это set_plan с relative: true (amount отрицательный при уменьшении); «измени лимит на 5000» и «подними до 5000» — обычный set_plan с новой суммой;
+- set_plan — «поставь план на кафе 10 000», «лимит на такси 3 тысячи»: categories — одна категория или подкатегория из списка; если такой в списке нет — напиши слово пользователя как есть («Такси»), не подменяй его категорией; amount — сумма в рублях. «Увеличь / уменьши лимит на 1000» — это set_plan с relative: true (amount отрицательный при уменьшении); «измени лимит на 5000» и «подними до 5000» — обычный set_plan с новой суммой; «подними лимит на 10 процентов» — set_plan с relative: true, percent: true и amount = 10 (проценты, не рубли; при уменьшении минус);
 - remove_plan — «убери / сними / отмени лимит (план) на кафе»: categories — категория или подкатегория, с плана которой снять;
 - cancel_subscription — «отмени подписку на Яндекс Плюс», «удали подписку Netflix»: place — название подписки как сказал пользователь;
 - pause_subscription — «поставь Netflix на паузу», «приостанови подписку»: place — название;
@@ -93,6 +93,7 @@ $cats
 «поставь лимит на кафе 8 тысяч» → {"intent":"set_plan","categories":["Кафе и рестораны"],"amount":8000}
 «увеличь лимит на кафе на 1000» → {"intent":"set_plan","categories":["Кафе и рестораны"],"amount":1000,"relative":true}
 «уменьши план на продукты на 500» → {"intent":"set_plan","categories":["Продукты"],"amount":-500,"relative":true}
+«подними лимит на кафе на 10 процентов» → {"intent":"set_plan","categories":["Кафе и рестораны"],"amount":10,"relative":true,"percent":true}
 «убери лимит на кафе» → {"intent":"remove_plan","categories":["Кафе и рестораны"]}
 «отмени подписку на Яндекс Плюс» → {"intent":"cancel_subscription","place":"Яндекс Плюс"}
 «поставь Netflix на паузу» → {"intent":"pause_subscription","place":"Netflix"}
