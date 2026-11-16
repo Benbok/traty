@@ -265,6 +265,22 @@ class DatabaseUpgradeTest {
     }
 
     @Test
+    fun migrationChainReachesV15WithExpenseItems() = runTest {
+        createV3Database()
+        val db = AppDatabase.build(context, dbName)
+        try {
+            val old = db.expenses().getAllWithCategory().single().expense
+            val repo = ru.my.traty.data.items.ExpenseItemRepository(db)
+            // Старая трата без позиций, позиции добавляются к ней
+            assertTrue(repo.getFor(old.id).isEmpty())
+            repo.replace(old.id, listOf(ru.my.traty.data.items.ExpenseItem(name = "Молоко", priceKopecks = 9_000)))
+            assertEquals(9_000L, repo.getFor(old.id).single().priceKopecks)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun migrationChainReachesV9WithRecurringTable() = runTest {
         createV3Database()
         val db = AppDatabase.build(context, dbName)
