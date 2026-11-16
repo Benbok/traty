@@ -10,7 +10,14 @@ data class SpokenAmount(val value: Double, val range: IntRange)
 object SpokenAmountParser {
     // пробел, NBSP (U+00A0), узкий NBSP (U+202F)
     private const val SEP = "[   ]"
-    private val digitsRe = Regex("""\d{1,3}(?:$SEP\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?""")
+
+    /**
+     * Копейки: «83,90», «83.9» или как пишет распознавание речи «восемьдесят три девяносто» — «83—90».
+     * У тире ровно две цифры вплотную: «100-200» (диапазон), «2-3 пачки» и «300 — дорого» копейками не считаются.
+     */
+    private const val KOPECKS = """(?:[.,]\d{1,2}|[-–—]\d{2}(?!\d))"""
+    private val digitsRe = Regex("""\d{1,3}(?:$SEP\d{3})+$KOPECKS?|\d+$KOPECKS?""")
+    private val kopecksDash = Regex("""[-–—]""")
     private val wordRe = Regex("""[а-яёА-ЯЁ]+""")
     private val thousandRe = Regex("""^(тысяч\p{L}*|тыщ\p{L}*|косар\p{L}*|тыс|к)$""")
 
@@ -37,7 +44,7 @@ object SpokenAmountParser {
 
     private fun findDigits(text: String): SpokenAmount? {
         val m = digitsRe.find(text) ?: return null
-        var value = m.value.replace(Regex(SEP), "").replace(',', '.').toDoubleOrNull() ?: return null
+        var value = m.value.replace(Regex(SEP), "").replace(kopecksDash, ".").replace(',', '.').toDoubleOrNull() ?: return null
         var end = m.range.last
         // «2,5 тысячи», «3 тыс», «5к». Буква «к» — тысячи только вплотную к числу: «такси 300 к маме» — это 300
         val next = wordRe.find(text, m.range.last + 1)

@@ -63,6 +63,23 @@ class SpokenAmountTest {
     }
 
     @Test
+    fun kopecksAfterDashAsOnPriceTag() {
+        // «восемьдесят три девяносто» распознавание речи пишет через тире: это 83,90, а не два числа
+        assertEquals(83.9, value("Гречка фасованная — 83—90")!!, 1e-9)
+        assertEquals(69.9, value("сок 69-90")!!, 1e-9)
+        assertEquals(91.05, value("оливки 91–05")!!, 1e-9)
+        assertEquals(1299.9, value("чайник 1 299—90")!!, 1e-9)
+    }
+
+    @Test
+    fun dashWithoutTwoDigitsIsNotKopecks() {
+        // Диапазоны и три цифры после тире — не копейки: берётся первое число, как раньше
+        assertEquals(100.0, value("на чаевые 100-200"))
+        assertEquals(2.0, value("2-3 пачки"))
+        assertEquals(300.0, value("такси 300 — дорого"))
+    }
+
+    @Test
     fun slangThousandsInAnyForm() {
         assertEquals(2000.0, value("два косаря на подарок маме"))
         assertEquals(1200.0, value("тыщу двести за интернет"))

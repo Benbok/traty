@@ -67,7 +67,8 @@ data class EntryRow(
 
         /** Неизвестный тип считается тратой — но такую фразу политика всё равно отправит на подтверждение. */
         fun fromParsed(entry: ParsedEntry, cats: List<CategoryWithSubs>, spokenDay: LocalDate): EntryRow {
-            val amountStr = if (entry.amount % 1.0 == 0.0) entry.amount.toLong().toString() else entry.amount.toString()
+            // Через копейки: сумма из Double (склейка трат, ответ ИИ) может быть 344.70000000000005
+            val amountStr = kopecksToText((entry.amount * 100).roundToLong())
             val day = entry.date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: spokenDay
             if (entry.entryType == EntryType.INCOME) {
                 return EntryRow(

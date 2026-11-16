@@ -74,9 +74,14 @@ object ShoppingListCleanup {
     private fun merge(entries: List<ParsedEntry>, place: String?, list: ShoppingList?, total: Double?): ParsedEntry {
         val first = entries.first()
         val sum = entries.sumOf { it.amount }
-        // Список из самой фразы надёжнее. Без него берём товары от ИИ; их суммы — цены, только если итог не назван
-        // (иначе ИИ мог разделить итог между товарами сам)
-        val note = list?.note()
+        // Итог не назван — ИИ вернул каждый товар отдельной тратой с его ценой (так велит промпт). Если у каждой есть название,
+        // верим ИИ: он видит фразу целиком и понимает цены и марки там, где распознавание речи расставило
+        // запятые и точки как попало. Разбор фразы остаётся запасным.
+        val aiGoods = aiGoods(entries, total)
+        // Список из самой фразы надёжнее товаров без названий. Без него берём товары от ИИ; их суммы — цены,
+        // только если итог не назван (иначе ИИ мог разделить итог между товарами сам)
+        val note = aiGoods?.let(ShoppingListFormat::note)
+            ?: list?.note()
             ?: ShoppingListFormat.note(entries.map { e ->
                 ListedItem(e.note?.takeIf { it.isNotBlank() } ?: e.subcategory ?: e.category, e.amount.takeIf { total == null })
             })
@@ -89,8 +94,17 @@ object ShoppingListCleanup {
             subcategory = entries.firstNotNullOfOrNull { it.subcategory },
             emoji = entries.firstNotNullOfOrNull { it.emoji },
             note = note,
-            // Как и с заметкой: товары из самой фразы надёжнее, чем разбивка ИИ
-            items = itemsOf(null, list) ?: fromEntries.takeIf { it.size >= 2 },
+            // Как и с заметкой: товары ИИ с ценами, иначе из самой фразы, иначе разбивка ИИ без цен
+            items = aiGoods?.map { ParsedItem(name = it.name, price = it.price) }
+                ?: itemsOf(null, list)
+                ?: fromEntries.takeIf { it.size >= 2 },
         )
+    }
+
+    /** Товары из трат ИИ: только если итог не назван (суммы — настоящие цены) и у каждой траты есть название. */
+    private fun aiGoods(entries: List<ParsedEntry>, total: Double?): List<ListedItem>? {
+        if (total != null) return null
+        val goods = entries.mapNotNull { e -> e.note?.trim()?.takeIf { it.isNotEmpty() }?.let { ListedItem(it, e.amount) } }
+        return goods.takeIf { it.size == entries.size && it.size >= 2 }
     }
 }

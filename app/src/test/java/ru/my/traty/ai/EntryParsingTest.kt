@@ -109,6 +109,18 @@ class EntryParsingTest {
     }
 
     @Test
+    fun promptAsksToFixSpeechRecognitionErrors() {
+        val p = EntryPrompt.system(emptyList(), LocalDate.of(2026, 11, 16), emptyList())
+        assertTrue("«мооя цена» → «Моя цена»" in p)
+        assertTrue("Запятые и точки в распознанной фразе стоят как попало" in p)
+        assertTrue("«83—90» → 83.9" in p)
+        assertTrue("не меняй суммы" in p)
+        // Пример с маркой — валидный ответ, который разбирается и самим приложением
+        val example = p.lines().first { it.startsWith("{") && "Моя цена" in it }
+        assertEquals(listOf(83.9, 99.0, 69.9), EntryParsing.decode(example).map { it.amount })
+    }
+
+    @Test
     fun offlineFallbackUnderstandsDateForIncome() {
         val r = OfflineEntryParser.parse("вчера пришла зарплата 80000", emptyList(), LocalDate.of(2026, 11, 15)).single()
         assertEquals(EntryType.INCOME, r.entryType)

@@ -16,6 +16,15 @@ class EntryDraftTest {
     private val day = LocalDate.of(2026, 11, 13)
 
     @Test
+    fun amountWithKopecksHasNoFloatingPointTail() {
+        // Склейка трат складывает дробные суммы: 83,9 + 99 + 69,9 + 91,9 = 344,70000000000005 в Double
+        val row = EntryRow.fromParsed(ParsedEntry(amount = 83.9 + 99.0 + 69.9 + 91.9), cats, day)
+        assertEquals("344.7", row.amountText)
+        assertEquals(34_470L, row.kopecks())
+        assertEquals("0.1", EntryRow.fromParsed(ParsedEntry(amount = 0.1 + 0.2 - 0.2), cats, day).amountText)
+    }
+
+    @Test
     fun rowFromParsedCleansShopName() {
         val row = EntryRow.fromParsed(ParsedEntry(amount = 800.0, category = "Продукты", place = "магазин «Магнит»"), cats, day)
         assertEquals("Магнит", row.place)

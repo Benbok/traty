@@ -61,6 +61,37 @@ class ShoppingListCleanupTest {
     }
 
     @Test
+    fun mergeTrustsAiPricesAndNamesOverMessyPhrase() {
+        // Текст GigaAM с телефона: точки и запятые стоят как попало, марка отделена от товара.
+        // ИИ разобрал верно — товары и цены берутся из его ответа, а не из разбора фразы.
+        val text = "Те Национальная гречка фасованная 900 г, — 83—90. Горошек зелёный — 99 ₽. " +
+            "Фруктовый сок яблочный, мооя цена — 69,90, Оливки зелёные — 91—90"
+        val ai = listOf(
+            food(83.9, "гречка фасованная 900 г"),
+            food(99.0, "горошек зелёный"),
+            food(69.9, "сок яблочный «Моя цена»"),
+            food(91.9, "оливки зелёные"),
+        )
+        val e = clean(ai, text).single()
+        assertEquals(344.7, e.amount, 1e-9)
+        assertEquals(
+            listOf("гречка фасованная 900 г", "горошек зелёный", "сок яблочный «Моя цена»", "оливки зелёные"),
+            e.items!!.map { it.name },
+        )
+        assertEquals(listOf(83.9, 99.0, 69.9, 91.9), e.items!!.map { it.price })
+        assertEquals("гречка фасованная 900 г 83,90 ₽, горошек зелёный 99 ₽, сок яблочный «Моя цена» 69,90 ₽, оливки зелёные 91,90 ₽", e.note)
+    }
+
+    @Test
+    fun mergeFallsBackToPhraseWhenAiGaveNoNames() {
+        // У трат от ИИ нет названий товаров — товары по-прежнему берутся из самой фразы
+        val text = "в Пятёрочке хлеб 80, молоко 90"
+        val e = clean(listOf(food(80.0, null, "Пятёрочка"), food(90.0, null, "Пятёрочка")), text).single()
+        assertEquals(listOf("хлеб", "молоко"), e.items!!.map { it.name })
+        assertEquals("хлеб 80 ₽, молоко 90 ₽", e.note)
+    }
+
+    @Test
     fun lostPricesAreRestoredInNote() {
         val text = "в продуктовом рыба 500, хлеб 80, всего 2500"
         val e = clean(listOf(food(2500.0, "рыба, хлеб")), text).single()

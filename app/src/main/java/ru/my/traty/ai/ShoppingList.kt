@@ -127,7 +127,10 @@ internal object MoneyAmounts {
  * (тогда заметка остаётся как есть).
  */
 object ShoppingListParser {
-    private val separators = Regex("""\s*[,;\n]\s*""")
+    // Запятая между двумя цифрами («69,90») — десятичная, а не разделитель списка.
+    // Точка перед заглавной буквой — конец предложения: распознавание речи так делит товары
+    // («83—90. Горошек 99»). «83.90», «45 р. и молоко» и «т. д.» список не делят.
+    private val separators = Regex("""\s*(?:[;\n]|(?<!\d),|,(?!\d)|\.\s+(?=\p{Lu}))\s*""")
     private val andSplit = Regex("""\s+и\s+""", RegexOption.IGNORE_CASE)
     private val currency = Regex("""(?<![\p{L}])(?:руб(?:лей|ля|ль)?|р\.)(?![\p{L}])|₽""", RegexOption.IGNORE_CASE)
     private val fillers = setOf(
@@ -150,11 +153,31 @@ object ShoppingListParser {
         ) + places.flatMap { placeRanges(text, it) }
         val masked = mask(text, cuts)
         val pieces = masked.split(separators).let { p -> if (p.size >= 2) p.flatMap { it.split(andSplit) } else p }
-        val items = pieces.mapNotNull(::item)
+        val items = withLonePrices(pieces)
         if (items.size < 2) return null
         val money = MoneyAmounts.all(masked).size
         val covered = items.all { it.price != null } && items.size == money
         return ShoppingList(items, total?.value, pricesCoverPhrase = covered)
+    }
+
+    /**
+     * Товары по кускам. Распознавание речи иногда ставит запятую между товаром и ценой: «гречка 900 г, 83—90».
+     * Кусок из одного числа без букв — цена предыдущего товара, если у него цены ещё нет.
+     */
+    private fun withLonePrices(pieces: List<String>): List<ListedItem> {
+        val items = mutableListOf<ListedItem>()
+        for (piece in pieces) {
+            val parsed = item(piece)
+            if (parsed != null) {
+                items += parsed
+                continue
+            }
+            if (piece.any(Char::isLetter)) continue
+            val price = MoneyAmounts.all(piece).singleOrNull()?.value ?: continue
+            val last = items.lastOrNull() ?: continue
+            if (last.price == null) items[items.lastIndex] = last.copy(price = price)
+        }
+        return items
     }
 
     private fun item(piece: String): ListedItem? {
