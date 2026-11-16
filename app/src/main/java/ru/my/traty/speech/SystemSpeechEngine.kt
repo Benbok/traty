@@ -29,7 +29,9 @@ class SystemSpeechEngine(private val context: Context) : SpeechEngine {
             override fun onReadyForSpeech(params: Bundle?) {}
             override fun onBeginningOfSpeech() {}
             override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() {}
+            override fun onEndOfSpeech() {
+                this@SystemSpeechEngine.listener?.onRecognizing()
+            }
             override fun onEvent(eventType: Int, params: Bundle?) {}
 
             override fun onRmsChanged(rmsdB: Float) {

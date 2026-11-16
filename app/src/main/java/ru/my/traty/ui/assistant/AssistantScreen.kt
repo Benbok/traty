@@ -333,9 +333,12 @@ private fun InputBar(
     onMic: () -> Unit,
 ) {
     val listening = recordState as? RecordState.Listening
+    // Запись остановлена, идёт распознавание: микрофон не нажимается, чтобы не начать новую запись
+    val recognizing = recordState is RecordState.Recognizing
     Column(Modifier.fillMaxWidth().background(TratyTheme.colors.surface)) {
         HorizontalDivider(color = TratyTheme.colors.borderSubtle)
         val hint = when {
+            recognizing -> "Распознаю…"
             listening != null -> listening.partial.ifBlank { "Слушаю… нажмите ещё раз, когда закончите" }
             recordState is RecordState.Error -> recordState.message
             else -> null
@@ -368,7 +371,7 @@ private fun InputBar(
                     icon = if (listening != null) Icons.Filled.Stop else Icons.Filled.Mic,
                     contentDescription = if (listening != null) "Закончить запись" else "Спросить голосом",
                     onClick = onMic,
-                    enabled = !busy,
+                    enabled = !busy && !recognizing,
                     containerColor = TratyTheme.colors.primary,
                     tint = TratyTheme.colors.onPrimary,
                     modifier = Modifier.size(48.dp),

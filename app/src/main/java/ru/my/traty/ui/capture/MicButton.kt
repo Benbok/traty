@@ -45,9 +45,13 @@ fun MicButton(
     compact: Boolean = false,
 ) {
     val listening = state as? RecordState.Listening
+    // Запись уже остановлена, идёт распознавание: кнопка занята так же, как при разборе
+    val recognizing = state is RecordState.Recognizing
+    val working = busy || recognizing
     val level by animateFloatAsState(targetValue = listening?.level ?: 0f, label = "micLevel")
     val caption = when {
         busy -> "Разбираю…"
+        recognizing -> "Распознаю…"
         listening != null -> listening.partial.ifBlank { "Слушаю… нажмите, когда закончите" }
         state is RecordState.Error -> state.message
         else -> "Нажмите и скажите: «кофе 250 и такси 400»"
@@ -75,17 +79,18 @@ fun MicButton(
                     .shadow(if (compact) 4.dp else 6.dp, CircleShape)
                     .clip(CircleShape)
                     .background(TratyTheme.colors.primary)
-                    .clickable(enabled = !busy, role = Role.Button, onClick = onClick)
+                    .clickable(enabled = !working, role = Role.Button, onClick = onClick)
                     .semantics {
                         contentDescription = when {
                             busy -> "Разбираю трату"
+                            recognizing -> "Распознаю запись"
                             listening != null -> "Закончить запись"
                             else -> "Сказать трату"
                         }
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                if (busy) {
+                if (working) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(if (compact) 28.dp else 40.dp),
                         strokeWidth = 3.dp,

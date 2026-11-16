@@ -21,7 +21,11 @@ private class FakeEngine : SpeechEngine {
 class RecordControllerTest {
     private val texts = mutableListOf<String>()
     private val engines = mutableListOf<FakeEngine>()
-    private fun controller() = RecordController({ FakeEngine().also { engines += it } }) { texts += it }
+    /** В тестах «главный поток» выполняет сразу; там, где важен порядок, блоки копятся в очереди. */
+    private val immediate: (() -> Unit) -> Unit = { it() }
+
+    private fun controller(mainThread: (() -> Unit) -> Unit = immediate) =
+        RecordController({ FakeEngine().also { engines += it } }, mainThread = mainThread) { texts += it }
 
     @Test
     fun toggleFromIdleStartsListening() {
@@ -69,6 +73,83 @@ class RecordControllerTest {
     }
 
     @Test
+    fun stopSwitchesToRecognizingRightAway() {
+        val c = controller()
+        c.toggle()
+        engines.single().listener!!.onPartial("кофе 250")
+        c.toggle()
+        // Кнопка нажата: запись уже не идёт, ждём только итог распознавания
+        assertEquals(RecordState.Recognizing("кофе 250"), c.state.value)
+    }
+
+    @Test
+    fun tapsWhileRecognizingDoNothing() {
+        val c = controller()
+        c.toggle()
+        c.toggle()
+        c.toggle()
+        c.toggle()
+        assertEquals(1, engines.size)
+        assertEquals(1, engines.single().stopped)
+        assertTrue(c.state.value is RecordState.Recognizing)
+    }
+
+    @Test
+    fun engineEndOfSpeechAlsoMeansRecognizing() {
+        val c = controller()
+        c.toggle()
+        val l = engines.single().listener!!
+        l.onPartial("такси")
+        l.onRecognizing()
+        assertEquals(RecordState.Recognizing("такси"), c.state.value)
+        // Дораспознанный хвост обновляет текст, но не возвращает «запись»
+        l.onPartial("такси 400")
+        l.onLevel(0.7f)
+        assertEquals(RecordState.Recognizing("такси 400"), c.state.value)
+    }
+
+    @Test
+    fun cancelWhileRecognizingDropsTheResult() {
+        val c = controller()
+        c.toggle()
+        val l = engines.single().listener!!
+        c.toggle()
+        c.cancel()
+        l.onFinal("кофе 250")
+        assertEquals(RecordState.Idle, c.state.value)
+        assertTrue(texts.isEmpty())
+    }
+
+    @Test
+    fun finalIsHandedOverOnTheMainThreadInOneStep() {
+        val queue = mutableListOf<() -> Unit>()
+        val c = controller(mainThread = { queue += it })
+        c.toggle()
+        c.toggle()
+        // Движок отдал итог со своего потока: пока главный поток его не принял, кнопка не становится свободной
+        engines.single().listener!!.onFinal("кофе 250")
+        assertTrue(c.state.value is RecordState.Recognizing)
+        assertTrue(texts.isEmpty())
+        c.toggle()
+        assertEquals(1, engines.size)
+        // В одном шаге главного потока: текст уходит на разбор и только потом запись считается законченной
+        queue.removeAt(0).invoke()
+        assertEquals(listOf("кофе 250"), texts)
+        assertEquals(RecordState.Idle, c.state.value)
+    }
+
+    @Test
+    fun errorIsAlsoHandedOverOnTheMainThread() {
+        val queue = mutableListOf<() -> Unit>()
+        val c = controller(mainThread = { queue += it })
+        c.toggle()
+        engines.single().listener!!.onError(IllegalStateException("нет сервиса"))
+        assertTrue(c.state.value is RecordState.Listening)
+        queue.removeAt(0).invoke()
+        assertEquals(RecordState.Error("нет сервиса"), c.state.value)
+    }
+
+    @Test
     fun errorShowsMessageAndNextToggleStartsFreshEngine() {
         val c = controller()
         c.toggle()
@@ -113,7 +194,7 @@ class RecordControllerTest {
     @Test
     fun engineStartsOnlyAfterStartCueFinishes() {
         val cues = FakeCues()
-        val c = RecordController({ FakeEngine().also { engines += it } }, cues) { texts += it }
+        val c = RecordController({ FakeEngine().also { engines += it } }, cues, immediate) { texts += it }
         c.toggle()
         assertEquals(0, engines.single().started)
         cues.startDone!!.invoke()
@@ -123,7 +204,7 @@ class RecordControllerTest {
     @Test
     fun cancelDuringStartCueNeverStartsEngine() {
         val cues = FakeCues()
-        val c = RecordController({ FakeEngine().also { engines += it } }, cues) { texts += it }
+        val c = RecordController({ FakeEngine().also { engines += it } }, cues, immediate) { texts += it }
         c.toggle()
         c.toggle() // второе нажатие, пока играет сигнал
         cues.startDone!!.invoke()
@@ -134,7 +215,7 @@ class RecordControllerTest {
     @Test
     fun endCuePlaysOnlyWhenTextRecognized() {
         val cues = FakeCues()
-        val c = RecordController({ FakeEngine().also { engines += it } }, cues) { texts += it }
+        val c = RecordController({ FakeEngine().also { engines += it } }, cues, immediate) { texts += it }
         c.toggle(); cues.startDone!!.invoke()
         engines.last().listener!!.onFinal("кофе 250")
         assertEquals(1, cues.ended)

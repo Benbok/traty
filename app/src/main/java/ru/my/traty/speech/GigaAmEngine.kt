@@ -83,6 +83,8 @@ class GigaAmEngine(private val runtime: GigaAmRuntime) : SpeechEngine {
                 if (segmenter.onFrame(vad.isSpeechDetected(), frameMs) == VadAction.STOP) break
             }
             if (!cancelled) {
+                // Микрофон больше не слушаем; хвост длинной фразы распознаётся ещё несколько секунд
+                listener.onRecognizing()
                 vad.flush()
                 drain(vad, texts, listener)
             }
