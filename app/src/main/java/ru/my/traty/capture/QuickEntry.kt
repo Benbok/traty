@@ -193,13 +193,14 @@ class QuickEntry(
 
     /** Помечает строки, похожие на уже записанные траты тех же дней ([DuplicateCheck]). */
     private suspend fun markDuplicates(rows: List<EntryRow>, spokenAt: Long): List<EntryRow> {
-        val days = rows.filter { it.type == EntryType.EXPENSE }
-            .mapNotNull { runCatching { LocalDate.parse(it.dateText.trim()) }.getOrNull() }
+        val days = rows.mapNotNull { runCatching { LocalDate.parse(it.dateText.trim()) }.getOrNull() }
         if (days.isEmpty()) return rows
         val from = days.min().atStartOfDay(zone).toInstant().toEpochMilli()
         val to = days.max().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
         val existing = db.expenses().getRange(from, to, limit = DUPLICATE_SCAN_LIMIT).map {
             ExistingExpense(it.expense.id, it.expense.amountKopecks, it.expense.timestamp, it.expense.place, it.expense.note, it.categoryName)
+        } + if (rows.none { it.type == EntryType.INCOME }) emptyList() else db.incomes().getRange(from, to).map {
+            ExistingExpense(it.id, it.amountKopecks, it.timestamp, null, it.note, it.source, income = true)
         }
         if (existing.isEmpty()) return rows
         val hints = DuplicateCheck.find(rows, existing, zone, spokenAt)
