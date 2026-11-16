@@ -18,6 +18,9 @@ import java.time.ZoneId
 class RecurringRepository(private val db: AppDatabase) {
     private val dao get() = db.recurring()
 
+    /** Все подписки и регулярные платежи, включая отклонённые и на паузе. */
+    fun observeAll() = dao.observeAll()
+
     /** Принять предложение: платёж заводится с датой ближайшего списания. */
     suspend fun accept(candidate: RecurringCandidate, today: LocalDate = LocalDate.now()): Long =
         dao.insert(candidate.toRecurring(today))

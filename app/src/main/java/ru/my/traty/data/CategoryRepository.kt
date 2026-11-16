@@ -18,6 +18,8 @@ internal fun sameName(a: String, b: String): Boolean = normalizeName(a).lowercas
 class CategoryRepository(private val db: AppDatabase) {
     private val dao get() = db.categories()
 
+    fun observeAllWithSubs() = dao.observeAllWithSubs()
+
     suspend fun seedIfEmpty() = db.withTransaction {
         if (dao.count() > 0) return@withTransaction
         DefaultCategories.list.forEach { (cat, subs) ->

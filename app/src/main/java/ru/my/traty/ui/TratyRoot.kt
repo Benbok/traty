@@ -185,7 +185,12 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onOpenWeekly = { showWeekly = true },
                     )
                     TratyNavTab.CHARTS -> ChartsScreen()
-                    TratyNavTab.STATS -> StatsScreen(vm, onOpenBudget = { showBudget = true })
+                    TratyNavTab.STATS -> StatsScreen(
+                        vm,
+                        onOpenBudget = { showBudget = true },
+                        onOpenDebts = { showDebtsList = true },
+                        onOpenDebt = { selectedDebtId = it },
+                    )
                     TratyNavTab.ASSISTANT -> AssistantScreen(
                         onOpenBudget = { showBudget = true },
                         onOpenRecurring = { showRecurring = true },

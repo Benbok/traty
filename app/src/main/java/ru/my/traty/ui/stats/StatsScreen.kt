@@ -98,7 +98,14 @@ import kotlin.math.roundToInt
  * Экран статистики по категориям трат и комментария ИИ.
  */
 @Composable
-fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel(), onOpenBudget: () -> Unit = {}) {
+fun StatsScreen(
+    vm: MainViewModel,
+    rangeVm: StatsRangeViewModel = viewModel(),
+    debtsVm: StatsDebtsViewModel = viewModel(),
+    onOpenBudget: () -> Unit = {},
+    onOpenDebts: () -> Unit = {},
+    onOpenDebt: (Long) -> Unit = {},
+) {
     val period by vm.period.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val periodTotals by vm.totals.collectAsStateWithLifecycle()
@@ -262,6 +269,9 @@ fun StatsScreen(vm: MainViewModel, rangeVm: StatsRangeViewModel = viewModel(), o
                 }
             }
         }
+
+        // Долги по рассрочкам и кредитам считаются на сегодня и не зависят от режима
+        debtsOverviewItem(debtsVm, onOpenDebts, onOpenDebt)
 
         if (!custom && cumulative.first.points.isNotEmpty() && cumulative.second.last > 0) {
             item(key = "cumulative", contentType = "cumulative") { CumulativeCard(current = cumulative.first, previous = cumulative.second) }
