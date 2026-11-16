@@ -72,9 +72,10 @@ object QuestionRules {
         today: LocalDate,
         startDay: Int,
         previous: AssistantQuery? = null,
+        categories: List<CategoryWithSubs> = emptyList(),
     ): AssistantQuery {
         val base = fromAi?.takeIf { it.intent != Intents.UNKNOWN } ?: guessed ?: fromAi ?: AssistantQuery(intent = Intents.UNKNOWN)
-        return QuestionDates.apply(question, AssistantQueries.correct(question, base, previous), today, startDay)
+        return QuestionDates.apply(question, AssistantQueries.correct(question, base, previous, categories), today, startDay)
     }
 }
 

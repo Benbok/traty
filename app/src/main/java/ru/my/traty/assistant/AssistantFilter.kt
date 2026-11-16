@@ -72,7 +72,7 @@ internal class Filter(
         /** В этих вопросах незнакомое слово ищем в местах и заметках; в плане трат оно — новая подкатегория. */
         private val TEXT_SEARCH = setOf(
             Intents.TOTAL, Intents.TOP, Intents.BREAKDOWN, Intents.PLACES, Intents.COMPARE, Intents.AVERAGE,
-            Intents.TREND, Intents.LIST,
+            Intents.TREND, Intents.LIST, Intents.DELETE_EXPENSE, Intents.MOVE_EXPENSE,
         )
 
         fun of(q: AssistantQuery, rows: List<ExpenseWithCategory>, categories: List<CategoryWithSubs>): Filter {

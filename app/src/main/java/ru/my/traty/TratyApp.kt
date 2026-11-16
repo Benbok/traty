@@ -15,6 +15,7 @@ import ru.my.traty.capture.PendingParseWork
 import ru.my.traty.capture.QuickEntry
 import ru.my.traty.data.search.SearchRepository
 import ru.my.traty.data.AppDatabase
+import ru.my.traty.data.ExpenseEdits
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.IncomeRepository
@@ -109,6 +110,7 @@ class AppContainer(
     val quickEntry = QuickEntry(db, categories, settings, clientProvider = llm)
     val debts = DebtRepository(db)
     val debtRemoval = DebtPaymentRemoval(db)
+    val expenseEdits = ExpenseEdits(db, debtRemoval)
     val budgets = BudgetRepository(db)
     val weeklyTasks = WeeklyTaskRepository(db)
     val search = SearchRepository(db)

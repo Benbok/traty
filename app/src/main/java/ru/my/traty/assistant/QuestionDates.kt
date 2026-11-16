@@ -17,6 +17,7 @@ object QuestionDates {
     private val DATED = setOf(
         Intents.TOTAL, Intents.TOP, Intents.BREAKDOWN, Intents.PLACES, Intents.COMPARE,
         Intents.AVERAGE, Intents.INCOME, Intents.TREND, Intents.LIST,
+        Intents.DELETE_EXPENSE, Intents.MOVE_EXPENSE,
     )
 
     /** «за всё время»: дальше движок заменит эту дату первой записью. */

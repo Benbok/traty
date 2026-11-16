@@ -2,6 +2,7 @@ package ru.my.traty.assistant
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import ru.my.traty.data.CategoryWithSubs
 
 /** Что спросил пользователь — в виде запроса к данным. ИИ переводит в него вопрос, считает приложение. */
 @Serializable
@@ -27,6 +28,8 @@ data class AssistantQuery(
     val groupBy: String? = null,
     /** «эти», «их», «все»: действие относится ко всему, что было в прошлом ответе. */
     val all: Boolean = false,
+    /** Для move_expense: категория или подкатегория, в которую переносят траты. */
+    val target: String? = null,
 )
 
 object Intents {
@@ -55,9 +58,11 @@ object Intents {
     const val DELETE_DEBT = "delete_debt"
     const val CLOSE_DEBT = "close_debt"
     const val CANCEL_DEBT = "cancel_debt"
+    const val DELETE_EXPENSE = "delete_expense"
+    const val MOVE_EXPENSE = "move_expense"
     const val UNKNOWN = "unknown"
 
-    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, PLAN, BALANCE, SUGGEST_PLAN, SET_PLAN, REMOVE_PLAN, CANCEL_SUB, PAUSE_SUB, RESUME_SUB, EDIT_SUB, TREND, LIST, DEBTS, DELETE_DEBT, CLOSE_DEBT, CANCEL_DEBT, UNKNOWN)
+    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, PLAN, BALANCE, SUGGEST_PLAN, SET_PLAN, REMOVE_PLAN, CANCEL_SUB, PAUSE_SUB, RESUME_SUB, EDIT_SUB, TREND, LIST, DEBTS, DELETE_DEBT, CLOSE_DEBT, CANCEL_DEBT, DELETE_EXPENSE, MOVE_EXPENSE, UNKNOWN)
 }
 
 object AssistantQueries {
@@ -93,9 +98,15 @@ object AssistantQueries {
      * Команды про план и подписки модель иногда принимает за вопрос («поставь лимит на кафе 2500» → afford/plan).
      * Явные формулировки распознаём сами: так кнопка подтверждения появляется всегда.
      */
-    fun correct(question: String, q: AssistantQuery, previous: AssistantQuery? = null): AssistantQuery {
+    fun correct(
+        question: String,
+        q: AssistantQuery,
+        previous: AssistantQuery? = null,
+        categories: List<CategoryWithSubs> = emptyList(),
+    ): AssistantQuery {
         val text = question.lowercase().replace('ё', 'е')
         DebtCommands.detect(text, q, previous)?.let { return it }
+        ExpenseCommands.detect(text, q, previous, categories)?.let { return it }
         val sub = subWordRe.containsMatchIn(text)
         // «сколько я должен», «когда платёж по рассрочке» модель иногда принимает за total или subscriptions
         // «сколько я потратил на кредит» и вопрос про категорию «Долги и кредиты» остаются тратами
