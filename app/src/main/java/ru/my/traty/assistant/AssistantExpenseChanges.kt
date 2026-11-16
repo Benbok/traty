@@ -42,7 +42,9 @@ internal object AssistantExpenseChanges {
         fun reply(text: String) = AssistantData(header(ctx) + text)
         val spending = ctx.expenses.filter { it.expense.isUserEditable }
         val filter = Filter.of(q, spending, ctx.categories)
-        if (filter.unknownNames.isNotEmpty() && filter.names.isEmpty() && filter.terms.isEmpty()) {
+        // «Удали их» после ответа со списком: берём ровно показанные траты
+        val shownBefore = q.ids.toSet()
+        if (shownBefore.isEmpty() && filter.unknownNames.isNotEmpty() && filter.names.isEmpty() && filter.terms.isEmpty()) {
             return reply("Категорий или слов «${filter.unknownNames.joinToString("», «")}» в записях нет, ничего не нашлось.")
         }
         val target = if (action == ExpenseAction.MOVE) targetOf(q.target, ctx) else null
@@ -57,14 +59,17 @@ internal object AssistantExpenseChanges {
         val dated = q.from != null || q.to != null
         val (from, to) = range(q.from, q.to, QuestionDates.ALL_TIME, ctx.today)
         val found = spending
-            .filter { r -> day(r.expense.timestamp, ctx.zone).let { d -> !d.isBefore(from) && !d.isAfter(to) } && filter.matches(r) }
+            .filter { r ->
+                if (shownBefore.isNotEmpty()) r.expense.id in shownBefore
+                else day(r.expense.timestamp, ctx.zone).let { d -> !d.isBefore(from) && !d.isAfter(to) } && filter.matches(r)
+            }
             .filter { r -> target == null || r.expense.categoryId != target.categoryId || r.expense.subcategoryId != target.subcategoryId }
             .sortedByDescending { it.expense.timestamp }
         val limit = q.limit?.coerceIn(1, MAX_CHANGES)
         // Ничего не уточнили — это «последняя трата», а не вся история
         val picked = when {
             limit != null -> found.take(limit)
-            !filter.isEmpty || dated -> found
+            shownBefore.isNotEmpty() || !filter.isEmpty || dated -> found
             else -> found.take(1)
         }
         if (picked.isEmpty()) return reply("Подходящих трат не нашлось, менять нечего.")

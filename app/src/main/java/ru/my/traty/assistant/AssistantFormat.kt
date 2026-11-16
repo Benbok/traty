@@ -21,8 +21,18 @@ internal fun incomesIn(ctx: AssistantContext, from: LocalDate, to: LocalDate) = 
     it.origin != IncomeOrigin.RECONCILE && day(it.timestamp, ctx.zone).let { d -> !d.isBefore(from) && !d.isAfter(to) }
 }
 
-internal fun describe(r: ExpenseWithCategory, zone: ZoneId): String {
-    val what = listOfNotNull(r.categoryName, r.subcategoryName, r.expense.place, r.expense.note).distinct().joinToString(", ")
+/** Заметка и место — слова самого пользователя: в одну строку и не длиннее [MAX_TEXT], чтобы они не вышли за рамки факта. */
+private const val MAX_TEXT = 60
+
+private fun oneLine(s: String?): String? = s?.replace(Regex("""\s+"""), " ")?.trim()?.take(MAX_TEXT)?.takeIf { it.isNotEmpty() }
+
+/**
+ * Строка траты для фактов. [withNote] = false: заметка не уходит в ИИ, если вопрос не про то, что куплено
+ * (в «самых крупных» хватает категории и места).
+ */
+internal fun describe(r: ExpenseWithCategory, zone: ZoneId, withNote: Boolean = true): String {
+    val what = listOfNotNull(r.categoryName, r.subcategoryName, oneLine(r.expense.place), if (withNote) oneLine(r.expense.note) else null)
+        .distinct().joinToString(", ")
     return "${date(day(r.expense.timestamp, zone))}: ${formatRub(r.expense.amountKopecks)}, $what"
 }
 
