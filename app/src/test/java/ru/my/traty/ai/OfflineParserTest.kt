@@ -116,4 +116,18 @@ class OfflineParserTest {
         assertEquals(2500.0, e.amount, 0.0)
         assertEquals("рыбу консерву", e.note)
     }
+
+    @Test
+    fun shortLabelsAndPrepositionsDoNotPickCategory() {
+        val withShort = cats + listOf(
+            CategoryWithSubs(Category(id = 5, name = "Авто", emoji = "🚗"), listOf(Subcategory(50, 5, "ТО"), Subcategory(51, 5, "Бензин"))),
+            CategoryWithSubs(Category(id = 6, name = "Связь и подписки", emoji = "📱"), listOf(Subcategory(60, 6, "Подписки"))),
+        )
+        // «торт» начинался с «то» и попадал в «Авто › ТО»
+        assertEquals("Прочее", parse("торт 800", withShort).category)
+        // предлог «под» совпадал с началом «Подписки»
+        assertEquals("Прочее", parse("коврик под мышку 500", withShort).category)
+        assertEquals("Бензин", parse("бензина 2000", withShort).subcategory)
+        assertEquals("Подписки", parse("подписка на музыку 299", withShort).subcategory)
+    }
 }

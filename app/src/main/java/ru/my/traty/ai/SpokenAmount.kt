@@ -12,7 +12,7 @@ object SpokenAmountParser {
     private const val SEP = "[   ]"
     private val digitsRe = Regex("""\d{1,3}(?:$SEP\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?""")
     private val wordRe = Regex("""[а-яёА-ЯЁ]+""")
-    private val thousandRe = Regex("""^(тысяч\p{L}*|тыщ\p{L}*|тыс|к)$""")
+    private val thousandRe = Regex("""^(тысяч\p{L}*|тыщ\p{L}*|косар\p{L}*|тыс|к)$""")
 
     private val units = mapOf(
         "ноль" to 0, "один" to 1, "одна" to 1, "одну" to 1, "два" to 2, "две" to 2, "три" to 3, "четыре" to 4,
@@ -28,7 +28,10 @@ object SpokenAmountParser {
         "сто" to 100, "двести" to 200, "триста" to 300, "четыреста" to 400, "пятьсот" to 500,
         "шестьсот" to 600, "семьсот" to 700, "восемьсот" to 800, "девятьсот" to 900,
     )
-    private val slang = mapOf("тыща" to 1000, "тыщу" to 1000, "косарь" to 1000, "пятихатка" to 500, "пятихатку" to 500, "сотка" to 100, "сотку" to 100)
+    private val slang = mapOf("пятихатка" to 500, "пятихатку" to 500, "сотка" to 100, "сотку" to 100)
+
+    /** «тысяча», «тыща», «косарь» в любой форме: «два косаря» → 2000, «тыщу двести» → 1200. */
+    private fun isThousandWord(w: String) = w.startsWith("тысяч") || w.startsWith("тыщ") || w.startsWith("косар")
 
     fun find(text: String): SpokenAmount? = findDigits(text) ?: findWords(text)
 
@@ -36,10 +39,12 @@ object SpokenAmountParser {
         val m = digitsRe.find(text) ?: return null
         var value = m.value.replace(Regex(SEP), "").replace(',', '.').toDoubleOrNull() ?: return null
         var end = m.range.last
-        // «2,5 тысячи», «3 тыс», «5к»
+        // «2,5 тысячи», «3 тыс», «5к». Буква «к» — тысячи только вплотную к числу: «такси 300 к маме» — это 300
         val next = wordRe.find(text, m.range.last + 1)
         val between = next?.let { text.substring(m.range.last + 1, it.range.first) }
-        if (next != null && between != null && between.isBlank() && thousandRe.matches(next.value.lowercase())) {
+        val word = next?.value?.lowercase()
+        val glued = word != "к" || between?.isEmpty() == true
+        if (word != null && between != null && between.isBlank() && glued && thousandRe.matches(word)) {
             value *= 1000
             end = next.range.last
         }
@@ -110,7 +115,7 @@ object SpokenAmountParser {
                     small += u
                     hasUnits = true
                 }
-                w.startsWith("тысяч") || w.startsWith("тыщ") -> {
+                isThousandWord(w) -> {
                     total += (if (small == 0) 1 else small) * 1000
                     small = 0
                     hasHundreds = false

@@ -90,9 +90,17 @@ object EntryPrompt {
         appendLine("Пример: «в продуктовом на 2500 купил рыбу, консерву, хлеб за 80» → ")
         appendLine("""{"items":[{"type":"expense","amount":2500,"category":"Продукты","emoji":null,"subcategory":"Супермаркет","place":null,"note":"рыбу, консерву, хлеб 80 ₽","source":null,"date":null}]}""")
         if (rules.isNotEmpty()) {
-            appendLine()
-            appendLine("Выученные правила (место/слово → категория; применяй если совпало):")
-            rules.forEach { r -> appendLine("- «${r.pattern}» → categoryId=${r.categoryId}") }
+            // Модель видит категории только по названиям, поэтому правило пишем названием, а не номером
+            val lines = rules.mapNotNull { r ->
+                val cat = categories.firstOrNull { it.category.id == r.categoryId } ?: return@mapNotNull null
+                val sub = r.subcategoryId?.let { id -> cat.subs.firstOrNull { it.id == id }?.name }
+                "- «${r.pattern}» → ${cat.category.name}" + (sub?.let { " › $it" } ?: "")
+            }
+            if (lines.isNotEmpty()) {
+                appendLine()
+                appendLine("Выученные правила (место/слово → категория; применяй если совпало):")
+                lines.forEach { appendLine(it) }
+            }
         }
     }
 }
@@ -134,7 +142,8 @@ object EntryParsing {
  * После него всегда нужно подтверждение.
  */
 object OfflineEntryParser {
-    private val incomeWords = Regex("""зарплат|аванс|дежур|пришл|вернул|возврат|подработ|кэшбэк|кешбэк""")
+    // «пришлось заплатить штраф» — не пришедшие деньги; «премиум» — не премия
+    private val incomeWords = Regex("""зарплат|аванс|дежур|пришл(?!ось)|преми[яюи](?![\p{L}])|вернул|возврат|подработ|кэшбэк|кешбэк""")
 
     fun parse(text: String, categories: List<CategoryWithSubs>, today: LocalDate = LocalDate.now()): List<ParsedEntry> {
         if (incomeWords.containsMatchIn(text.lowercase()) && !PurchasePayment.isPurchasePayment(text)) {

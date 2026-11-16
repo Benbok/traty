@@ -96,9 +96,16 @@ object OfflineParser {
 
     private fun words(text: String) = text.lowercase().split(Regex("""\s+""")).filter { it.length >= 3 }
 
+    /**
+     * Слово фразы начинается с первых четырёх букв названия: «бензина» → «Бензин».
+     * Короткое название («ТО», «НМО») совпадает только целиком: иначе «торт» попадал в «ТО»,
+     * а предлог «под» — в «Подписки».
+     */
     private fun hits(label: String, words: List<String>): Boolean {
-        val stem = label.lowercase().take(4)
-        return words.any { it.startsWith(stem) || stem.startsWith(it.take(4)) }
+        val name = label.lowercase()
+        if (name.length < 4) return words.any { it == name }
+        val stem = name.take(4)
+        return words.any { it.startsWith(stem) }
     }
 
     private fun guessSub(text: String, category: CategoryWithSubs): String? {

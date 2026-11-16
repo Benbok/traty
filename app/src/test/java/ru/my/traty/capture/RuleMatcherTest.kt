@@ -1,5 +1,6 @@
 package ru.my.traty.capture
 
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -65,5 +66,33 @@ class RuleMatcherTest {
     fun subcategoryFromRuleWins() {
         val r = RuleMatcher.apply(listOf(ParsedEntry(amount = 500.0, place = "пятёрочка", subcategory = "Рынок")), rules, cats).single()
         assertEquals("Супермаркет", r.entry.subcategory)
+    }
+
+    @Test
+    fun aiSubcategoryFromAnotherCategoryIsDropped() {
+        val lenta = listOf(Rule(id = 3, pattern = "лента", categoryId = 1))
+        val r = RuleMatcher.apply(
+            listOf(ParsedEntry(amount = 800.0, category = "Дом и быт", subcategory = "Бытовая химия", place = "Лента", note = "порошок")),
+            lenta, cats,
+        ).single()
+        assertEquals("Продукты", r.entry.category)
+        assertNull(r.entry.subcategory)
+    }
+
+    @Test
+    fun aiSubcategoryOfRuleCategoryIsKept() {
+        val lenta = listOf(Rule(id = 3, pattern = "лента", categoryId = 1))
+        val known = RuleMatcher.apply(listOf(ParsedEntry(amount = 800.0, category = "Прочее", subcategory = "супермаркет", place = "Лента")), lenta, cats).single()
+        assertEquals("супермаркет", known.entry.subcategory)
+        val sameCategory = RuleMatcher.apply(listOf(ParsedEntry(amount = 800.0, category = "Продукты", subcategory = "Рыба", place = "Лента")), lenta, cats).single()
+        assertEquals("Рыба", sameCategory.entry.subcategory)
+    }
+
+    @Test
+    fun ruleMatchesFromWordStartOnly() {
+        val lenta = listOf(Rule(id = 3, pattern = "лента", categoryId = 1))
+        assertFalse(RuleMatcher.apply(listOf(ParsedEntry(amount = 150.0, category = "Прочее", note = "изолента")), lenta, cats).single().ruleMatched)
+        assertTrue(RuleMatcher.apply(listOf(ParsedEntry(amount = 150.0, category = "Прочее", note = "продукты, лента у дома")), lenta, cats).single().ruleMatched)
+        assertTrue(RuleMatcher.apply(listOf(ParsedEntry(amount = 150.0, category = "Прочее", place = "Гипермаркет «Лента»")), lenta, cats).single().ruleMatched)
     }
 }

@@ -55,4 +55,18 @@ class SpokenAmountTest {
     fun noNumber() {
         assertNull(value("лекарство для кошки"))
     }
+
+    @Test
+    fun letterKIsThousandOnlyWhenGluedToNumber() {
+        assertEquals(300.0, value("такси 300 к маме"))
+        assertEquals(5000.0, value("продукты 5к"))
+    }
+
+    @Test
+    fun slangThousandsInAnyForm() {
+        assertEquals(2000.0, value("два косаря на подарок маме"))
+        assertEquals(1200.0, value("тыщу двести за интернет"))
+        assertEquals(1500.0, value("полтора косаря"))
+        assertEquals(3000.0, value("три тыщи"))
+    }
 }
