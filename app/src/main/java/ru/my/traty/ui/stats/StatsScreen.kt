@@ -82,6 +82,7 @@ import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatDateSpan
 import ru.my.traty.ui.formatRub
+import ru.my.traty.ui.items.ItemsViewModel
 import ru.my.traty.ui.formatRubSigned
 import ru.my.traty.ui.formatDateWithWeekday
 import ru.my.traty.ui.formatTime
@@ -102,9 +103,11 @@ fun StatsScreen(
     vm: MainViewModel,
     rangeVm: StatsRangeViewModel = viewModel(),
     debtsVm: StatsDebtsViewModel = viewModel(),
+    itemsVm: ItemsViewModel = viewModel(key = "stats-items"),
     onOpenBudget: () -> Unit = {},
     onOpenDebts: () -> Unit = {},
     onOpenDebt: (Long) -> Unit = {},
+    onOpenItems: (LocalDate, LocalDate) -> Unit = { _, _ -> },
 ) {
     val period by vm.period.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -183,15 +186,7 @@ fun StatsScreen(
         )
     }
 
-    val deltaDescription = if (prevSum > 0) {
-        val label = when (spanOf(range)) {
-            StatsSpan.PERIOD -> "Прошлый период"
-            StatsSpan.DAY -> "Предыдущий день"
-            StatsSpan.WEEK -> "Прошлая неделя"
-            StatsSpan.DATES -> "Предыдущие такие же даты"
-        }
-        "$label: ${formatRub(prevSum)} (${deltaText(sum, prevSum)})"
-    } else null
+    val deltaDescription = deltaDescriptionText(spanOf(range), sum, prevSum)
 
     Column(Modifier.fillMaxSize()) {
         TratyHeaderCard(
@@ -272,6 +267,7 @@ fun StatsScreen(
 
         // Долги по рассрочкам и кредитам считаются на сегодня и не зависят от режима
         debtsOverviewItem(debtsVm, onOpenDebts, onOpenDebt)
+        itemsOverviewItem(itemsVm, heatStart, heatEnd) { onOpenItems(heatStart, heatEnd) }
 
         if (!custom && cumulative.first.points.isNotEmpty() && cumulative.second.last > 0) {
             item(key = "cumulative", contentType = "cumulative") { CumulativeCard(current = cumulative.first, previous = cumulative.second) }
@@ -1095,23 +1091,4 @@ private fun BreakdownExpenseRow(e: ExpenseWithCategory, showPlace: Boolean, modi
         }
         TratyAmountText(amountKopecks = e.expense.amountKopecks, size = AmountSize.SMALL)
     }
-}
-
-/** 1 покупка, 3 покупки, 5 покупок. */
-internal fun purchases(n: Int): String {
-    val m100 = n % 100
-    val m10 = n % 10
-    val word = when {
-        m100 in 11..14 -> "покупок"
-        m10 == 1 -> "покупка"
-        m10 in 2..4 -> "покупки"
-        else -> "покупок"
-    }
-    return "$n $word"
-}
-
-private fun deltaText(cur: Long, prev: Long): String {
-    if (prev == 0L) return "—"
-    val pct = ((cur - prev) * 100.0 / prev).roundToInt()
-    return if (pct >= 0) "+$pct%" else "$pct%"
 }
