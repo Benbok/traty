@@ -1,5 +1,9 @@
 package ru.my.traty.ai
 
+import ru.my.traty.data.Subcategory
+import ru.my.traty.data.Rule
+import ru.my.traty.data.CategoryWithSubs
+import ru.my.traty.data.Category
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -109,5 +113,30 @@ class EntryParsingTest {
         val r = OfflineEntryParser.parse("вчера пришла зарплата 80000", emptyList(), LocalDate.of(2026, 11, 15)).single()
         assertEquals(EntryType.INCOME, r.entryType)
         assertEquals("2026-11-14", r.date)
+    }
+
+    @Test
+    fun offlineForcedPaymentIsNotIncomeButBonusIs() {
+        assertEquals(EntryType.EXPENSE, OfflineEntryParser.parse("пришлось заплатить штраф 500", emptyList()).single().entryType)
+        assertEquals(EntryType.EXPENSE, OfflineEntryParser.parse("премиум подписка 399", emptyList()).single().entryType)
+        assertEquals(EntryType.INCOME, OfflineEntryParser.parse("премия двадцать тысяч", emptyList()).single().entryType)
+    }
+
+    @Test
+    fun promptShowsLearnedRulesByCategoryName() {
+        val cats = listOf(
+            CategoryWithSubs(Category(id = 7, name = "Продукты", emoji = "🛒"), listOf(Subcategory(70, 7, "Супермаркет"))),
+        )
+        val rules = listOf(
+            Rule(id = 1, pattern = "лента", categoryId = 7),
+            Rule(id = 2, pattern = "пятёрочка", categoryId = 7, subcategoryId = 70),
+            Rule(id = 3, pattern = "старое", categoryId = 999),
+        )
+        val p = EntryPrompt.system(cats, LocalDate.of(2026, 11, 15), rules)
+        assertTrue("«лента» → Продукты" in p)
+        assertTrue("«пятёрочка» → Продукты › Супермаркет" in p)
+        // номер категории модели ничего не говорит, а правило на удалённую категорию не показываем
+        assertTrue("categoryId" !in p)
+        assertTrue("старое" !in p)
     }
 }
