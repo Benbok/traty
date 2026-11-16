@@ -35,14 +35,29 @@ internal val lenientJson = Json { ignoreUnknownKeys = true; isLenient = true; co
 
 private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
-private fun postJson(url: String, body: JsonObject, headers: Map<String, String>): JsonObject {
+private fun postJson(
+    url: String,
+    body: JsonObject,
+    headers: Map<String, String>,
+    timeoutSeconds: Long = LlmRetry.DEFAULT_TIMEOUT_SECONDS,
+): JsonObject {
+    val client = if (timeoutSeconds == LlmRetry.DEFAULT_TIMEOUT_SECONDS) http
+    else http.newBuilder().callTimeout(timeoutSeconds, TimeUnit.SECONDS).build()
     val req = Request.Builder().url(url).apply {
         headers.forEach { (k, v) -> header(k, v) }
     }.post(body.toString().toRequestBody(JSON_MEDIA)).build()
-    http.newCall(req).execute().use { r ->
-        val text = r.body?.string().orEmpty()
-        if (!r.isSuccessful) throw LlmHttpException(r.code, httpErrorText(r.code, text))
-        return lenientJson.parseToJsonElement(text).jsonObject
+    var attempt = 0
+    while (true) {
+        val pause = client.newCall(req).execute().use { r ->
+            val text = r.body?.string().orEmpty()
+            if (r.isSuccessful) return lenientJson.parseToJsonElement(text).jsonObject
+            if (attempt >= LlmRetry.RETRIES || !LlmRetry.shouldRetry(r.code)) {
+                throw LlmHttpException(r.code, httpErrorText(r.code, text))
+            }
+            LlmRetry.delayMillis(r.header("Retry-After"))
+        }
+        attempt++
+        Thread.sleep(pause)
     }
 }
 
@@ -60,7 +75,11 @@ private fun JsonObject.textAt(provider: String, read: (JsonObject) -> String?): 
         ?: throw IllegalStateException("$provider вернул ответ неожиданного формата")
 
 /** DeepSeek — OpenAI-совместимый API. */
-class DeepSeekClient(private val apiKey: String, private val model: String) : LlmClient {
+class DeepSeekClient(
+    private val apiKey: String,
+    private val model: String,
+    private val timeoutSeconds: Long = LlmRetry.DEFAULT_TIMEOUT_SECONDS,
+) : LlmClient {
     override val name = "DeepSeek"
 
     override suspend fun complete(system: String, user: String, jsonMode: Boolean): String =
@@ -79,6 +98,7 @@ class DeepSeekClient(private val apiKey: String, private val model: String) : Ll
                 "https://api.deepseek.com/chat/completions",
                 body,
                 mapOf("Authorization" to "Bearer $apiKey"),
+                timeoutSeconds,
             )
             resp.textAt(name) { it["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.get("message")?.jsonObject?.get("content")?.jsonPrimitive?.content }
         }
@@ -89,6 +109,7 @@ class YandexGptClient(
     private val apiKey: String,
     private val folderId: String,
     private val model: String,
+    private val timeoutSeconds: Long = LlmRetry.DEFAULT_TIMEOUT_SECONDS,
 ) : LlmClient {
     override val name = "YandexGPT"
 
@@ -113,6 +134,7 @@ class YandexGptClient(
                 "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
                 body,
                 mapOf("Authorization" to "Api-Key $apiKey", "x-folder-id" to folderId),
+                timeoutSeconds,
             )
             resp.textAt(name) {
                 it["result"]?.jsonObject?.get("alternatives")?.jsonArray?.firstOrNull()
@@ -122,8 +144,11 @@ class YandexGptClient(
 }
 
 /** null — значит выбран режим без ИИ. */
-fun clientFor(s: AppSettings): LlmClient? = when (s.provider) {
-    LlmProvider.DEEPSEEK -> DeepSeekClient(s.deepseekKey, s.deepseekModel)
-    LlmProvider.YANDEX -> YandexGptClient(s.yandexKey, s.yandexFolderId, s.yandexModel)
+fun clientFor(s: AppSettings, timeoutSeconds: Long = LlmRetry.DEFAULT_TIMEOUT_SECONDS): LlmClient? = when (s.provider) {
+    LlmProvider.DEEPSEEK -> DeepSeekClient(s.deepseekKey, s.deepseekModel, timeoutSeconds)
+    LlmProvider.YANDEX -> YandexGptClient(s.yandexKey, s.yandexFolderId, s.yandexModel, timeoutSeconds)
     LlmProvider.OFFLINE -> null
 }
+
+/** Клиент для ввода трат: ответа ждут сразу, поэтому срок короче ([LlmRetry.ENTRY_TIMEOUT_SECONDS]). */
+fun entryClientFor(s: AppSettings): LlmClient? = clientFor(s, LlmRetry.ENTRY_TIMEOUT_SECONDS)

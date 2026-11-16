@@ -35,6 +35,11 @@ class QuestionDatesTest {
     fun wordsThatLookLikeMonthsAreIgnored() {
         assertTrue(find("сколько стоил маяк и майка").isEmpty())
         assertTrue(find("сколько я трачу на кафе").isEmpty())
+        // Слова с началом, как у месяца или времени года, — это товары, а не даты
+        assertTrue(find("сколько я потратил на мартини").isEmpty())
+        assertTrue(find("сколько ушло на зимнюю куртку").isEmpty())
+        assertTrue(find("траты на летние шины и осеннюю обувь").isEmpty())
+        assertTrue(find("сколько стоил августовский билет").isEmpty())
     }
 
     @Test

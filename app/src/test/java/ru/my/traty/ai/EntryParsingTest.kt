@@ -139,4 +139,56 @@ class EntryParsingTest {
         assertTrue("categoryId" !in p)
         assertTrue("старое" !in p)
     }
+
+    @Test
+    fun oneBrokenRecordDoesNotLoseTheOthers() {
+        val r = EntryParsing.decodeChecked(
+            """{"items":[{"type":"expense","amount":"много","category":"Кафе"},{"type":"expense","amount":400,"category":"Транспорт"}]}"""
+        )
+        assertEquals(listOf(400.0), r.items.map { it.amount })
+        assertEquals(1, r.dropped)
+    }
+
+    @Test
+    fun negativeAndAbsurdAmountsAreDroppedAndCounted() {
+        val r = EntryParsing.decodeChecked(
+            """[{"type":"expense","amount":-300},{"type":"expense","amount":9999999999},{"type":"expense","amount":250,"category":"Кафе и рестораны"}]"""
+        )
+        assertEquals(listOf(250.0), r.items.map { it.amount })
+        assertEquals(2, r.dropped)
+    }
+
+    @Test
+    fun answerWithNothingUsableIsAnErrorSoPhraseGoesToOfflineParser() {
+        assertFailsWith("все записи испорчены") {
+            EntryParsing.decode("""{"items":[{"type":"expense","amount":-5}]}""")
+        }
+        assertFailsWith("нет JSON") { EntryParsing.decode("Не могу разобрать эту фразу") }
+    }
+
+    @Test
+    fun zeroAmountFillerIsNotCountedAsBroken() {
+        val r = EntryParsing.decodeChecked("""{"items":[{"amount":0},{"amount":400,"category":"Транспорт"}]}""")
+        assertEquals(0, r.dropped)
+        assertEquals(1, r.items.size)
+    }
+
+    @Test
+    fun longTextsFromModelAreCapped() {
+        val long = "а".repeat(900)
+        val e = EntryParsing.decode("""{"items":[{"amount":10,"category":"$long","note":"$long","place":"$long"}]}""").single()
+        assertEquals(60, e.category.length)
+        assertEquals(60, e.place!!.length)
+        assertEquals(500, e.note!!.length)
+    }
+
+    @Test
+    fun singleObjectWithoutItemsIsAccepted() {
+        assertEquals(300.0, EntryParsing.decode("""{"type":"expense","amount":300,"category":"Транспорт"}""").single().amount, 0.0)
+    }
+
+    private fun assertFailsWith(message: String, block: () -> Unit) {
+        val failed = runCatching(block).isFailure
+        assertTrue(message, failed)
+    }
 }

@@ -13,7 +13,7 @@ import ru.my.traty.ai.OfflineEntryParser
 import ru.my.traty.ai.ParsedEntry
 import ru.my.traty.ai.PurchaseTerms
 import ru.my.traty.ai.PurchaseTermsParser
-import ru.my.traty.ai.clientFor
+import ru.my.traty.ai.entryClientFor
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.CategoryRepository
@@ -77,7 +77,7 @@ class QuickEntry(
     private val categories: CategoryRepository,
     private val settings: SettingsRepository,
     private val zone: ZoneId = ZoneId.systemDefault(),
-    private val clientProvider: (AppSettings) -> LlmClient? = ::clientFor,
+    private val clientProvider: (AppSettings) -> LlmClient? = ::entryClientFor,
 ) {
     private val recurring = RecurringRepository(db)
 
@@ -133,12 +133,19 @@ class QuickEntry(
 
         var forceConfirm = false
         var notice: String? = null
+        var aiParsed = false
         val parsed: List<ParsedEntry> = if (client == null) {
             forceConfirm = true
             OfflineEntryParser.parse(text, cats, spokenDay)
         } else {
             try {
-                EntryParsing.parse(client, text, cats, rules, spokenDay)
+                val decoded = EntryParsing.parseChecked(client, text, cats, rules, spokenDay)
+                aiParsed = true
+                if (decoded.dropped > 0) {
+                    forceConfirm = true
+                    notice = "Часть ответа ИИ не удалось разобрать, проверьте, все ли операции из фразы на месте."
+                }
+                decoded.items
             } catch (e: CancellationException) {
                 throw e
             } catch (e: LlmHttpException) {
@@ -156,7 +163,14 @@ class QuickEntry(
             }
         }
 
-        val cleaned = withPurchaseTerms(EntryCleanup.apply(parsed, text, cats, spokenDay), text)
+        val cleaned0 = withPurchaseTerms(EntryCleanup.apply(parsed, text, cats, spokenDay), text)
+        // Сумму и дату от ИИ сверяем с фразой: не сходится — окно проверки вместо молчаливого сохранения
+        val sanity = if (aiParsed) EntrySanity.check(cleaned0, text, spokenDay) else null
+        val cleaned = sanity?.entries ?: cleaned0
+        if (sanity != null && sanity.problems.isNotEmpty()) {
+            forceConfirm = true
+            notice = (listOfNotNull(notice) + sanity.problems).joinToString(" ")
+        }
         val ruled = RuleMatcher.apply(cleaned, rules, cats)
         ruled.mapNotNull { it.matchedRule }.forEach { db.rules().incrementHits(it.id) }
 

@@ -74,7 +74,8 @@ object QuestionDates {
 
     private fun DateSpan.clampTo(today: LocalDate) = if (to.isAfter(today)) DateSpan(from, maxOf(from, today)) else this
 
-    private const val MONTH = "(январ\\p{L}*|феврал\\p{L}*|март\\p{L}*|апрел\\p{L}*|ма[йяе]|июн\\p{L}*|июл\\p{L}*|август\\p{L}*|сентябр\\p{L}*|октябр\\p{L}*|ноябр\\p{L}*|декабр\\p{L}*)"
+    /** Месяц только в своих падежах: «мартини», «майонез», «августовский» месяцами не считаются. */
+    private const val MONTH = "(январ(?:ь|я|ю|е|ём|ем)|феврал(?:ь|я|ю|е|ём|ем)|март(?:а|у|е|ом)?|апрел(?:ь|я|ю|е|ем)|ма[йяе]|июн(?:ь|я|ю|е|ем)|июл(?:ь|я|ю|е|ем)|август(?:а|у|е|ом)?|сентябр(?:ь|я|ю|е|ём|ем)|октябр(?:ь|я|ю|е|ём|ем)|ноябр(?:ь|я|ю|е|ём|ем)|декабр(?:ь|я|ю|е|ём|ем))"
     private val MONTH_STEMS = listOf("январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр")
 
     private fun monthOf(stem: String): Int = MONTH_STEMS.indexOfFirst { stem.startsWith(it) } + 1
@@ -169,8 +170,8 @@ object QuestionDates {
                 val ym = YearMonth.of(y, month)
                 DateSpan(ym.atDay(1), ym.atEndOfMonth())
             },
-            // «летом», «прошлой осенью», «зимой 2025»
-            Rule("(прошл\\S*\\s+)?(зим\\S*|весн\\S*|лето|летом|лета|летн\\S*|осен\\S*)$year") { m ->
+            // «летом», «прошлой осенью», «зимой 2025»; «зимнюю куртку» и «летние шины» — не время
+            Rule("(прошл\\S*\\s+)?(зим(?:а|у|ы|е|ой|ою)|весн(?:а|у|ы|е|ой|ою)|лето|летом|лета|лету|осен(?:ь|и|ью))$year") { m ->
                 season(m.groupValues[2], m.groupValues[1].isNotEmpty(), m.groupValues[3], today)
             },
         )

@@ -16,6 +16,12 @@ internal object DebtCommands {
     private val questionRe = Regex("""(?<![\p{L}])(когда|сколько|можно\s+ли|какой|какая|какие|если)(?![\p{L}])""")
     private val cancelRe = Regex("""(?<![\p{L}])(вернул\S*|возврат\S*|сдал\S*\s+обратно)|(отмен\S*)\s+(эту\s+|эти\s+)?(покупк|рассрочк|кредит)""")
 
+    /** «я вернул кредит» — выплатил, а не вернул покупку в магазин: это закрытие, а не отмена. */
+    private val repaidRe = Regex("""(?<![\p{L}])вернул\S*\s+(?:(?:весь|все|всё|полностью|уже|досрочно)\s+)*(?:кредит|долг|рассрочк|займ|заем)""")
+
+    /** Другие объекты для «убери все…»: без слов про долги это не команда для покупок частями. */
+    private val otherSubjectRe = Regex("""(?<![\p{L}])(?:лимит\S*|бюджет\S*|план\S*|цел[ьиею]\S*|копилк\S*|категори\S*|сбережен\S*)""")
+
     /** «эти», «их», «все» — действие про то, что было в прошлом ответе. */
     private val backRe = Regex("""(?<![\p{L}])(эти|этих|эту|этот|это|их|его|ее|они|все|всё|обе|оба)(?![\p{L}])""")
 
@@ -24,6 +30,8 @@ internal object DebtCommands {
     /** null — это не команда для покупок частями. [text] — вопрос в нижнем регистре, ё → е. */
     fun detect(text: String, q: AssistantQuery, previous: AssistantQuery?): AssistantQuery? {
         if ("подписк" in text) return null
+        // «убери все лимиты» после вопроса про долги: «все» относится к лимитам, а не к долгам
+        if (otherSubjectRe.containsMatchIn(text) && !debtWordRe.containsMatchIn(text)) return null
         val afterDebts = previous?.intent in DEBT_INTENTS
         val aboutDebts = debtWordRe.containsMatchIn(text) || (afterDebts && paymentWordRe.containsMatchIn(text)) ||
             (afterDebts && refersBack(text)) || q.intent in DEBT_INTENTS
@@ -31,6 +39,7 @@ internal object DebtCommands {
         val intent = when {
             deleteRe.containsMatchIn(text) -> Intents.DELETE_DEBT
             questionRe.containsMatchIn(text) -> return null
+            repaidRe.containsMatchIn(text) -> Intents.CLOSE_DEBT
             cancelRe.containsMatchIn(text) -> Intents.CANCEL_DEBT
             closeRe.containsMatchIn(text) -> Intents.CLOSE_DEBT
             q.intent in setOf(Intents.DELETE_DEBT, Intents.CLOSE_DEBT, Intents.CANCEL_DEBT) -> q.intent
