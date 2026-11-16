@@ -8,11 +8,14 @@ import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.budget.MonthBudget
 import ru.my.traty.data.budget.Promised
 import ru.my.traty.data.budget.PromisedPayments
+import ru.my.traty.data.debt.DebtRepository
 import ru.my.traty.data.debt.PaidPart
+import ru.my.traty.data.sameName
 import ru.my.traty.data.budget.PlanMonth
 import ru.my.traty.data.budget.TotalBudgets
 import ru.my.traty.data.budget.TotalProgress
 import ru.my.traty.data.period.BillingPeriod
+import ru.my.traty.data.recurring.RecurringRepository
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -46,14 +49,24 @@ fun totalProgress(
     return TotalProgress.of(limit, periodExpenses.sumOf { it.expense.amountKopecks }, period, today)
 }
 
-/** «Уже обещано» в показанном периоде: платежи по рассрочкам и кредитам и подписки, которые ещё спишутся. */
+/**
+ * «Уже обещано» в показанном периоде: платежи по рассрочкам и кредитам и подписки, которые ещё спишутся.
+ * Подписка, повторяющая платёж покупки, в сумму не входит.
+ */
 fun promisedFlow(c: AppContainer, period: Flow<BillingPeriod>, zone: ZoneId): Flow<Promised> =
-    combine(c.debts.observeAll(), c.debts.observePayments(), c.db.recurring().observeAll(), period) { debts, payments, recurring, p ->
+    combine(
+        c.debts.observeAll(),
+        c.debts.observePayments(),
+        RecurringRepository(c.db).observeAll(),
+        c.categories.observeAllWithSubs(),
+        period,
+    ) { debts, payments, recurring, cats, p ->
         val byDebt = payments.groupBy { it.debtId }
         val withPaid = debts.map { debt ->
             debt to byDebt[debt.id].orEmpty().map {
                 PaidPart(Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate().toEpochDay(), it.part, it.amountKopecks)
             }
         }
-        PromisedPayments.of(withPaid, recurring, p, LocalDate.now())
+        val loanCategory = cats.firstOrNull { sameName(it.category.name, DebtRepository.INTEREST_CATEGORY) }?.category?.id
+        PromisedPayments.of(withPaid, recurring, p, LocalDate.now(), loanCategory)
     }

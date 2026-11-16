@@ -69,12 +69,12 @@ object DebtOverviews {
         val trees = mine.map { DebtTree.build(it, byDebt[it.id].orEmpty(), today, zone) }
         val (open, done) = trees.partition { it.debt.state == DebtState.ACTIVE && !it.summary.isPaidOff }
         val subs = recurring.filter { it.state == RecurringState.ACTIVE }
-        val taken = mutableSetOf<Long>()
+        val dups = DebtDuplicates.matchAll(open.map { it.debt }, subs, loanCategoryId)
+        val taken = dups.values.map { it.id }.toSet()
         val lines = open.map { tree ->
             val paid = byDebt[tree.debt.id].orEmpty().map { it.toPaidPart(zone) }
             val next = DebtProgress.of(tree.debt, paid, today).next
-            val dup = DebtDuplicates.find(tree.debt, subs.filter { it.id !in taken }, loanCategoryId)?.also { taken += it.id }
-            DebtOverviewLine(tree.debt, tree.summary, leftToPay(tree), next, dup)
+            DebtOverviewLine(tree.debt, tree.summary, leftToPay(tree), next, dups[tree.debt.id])
         }
         val dueSoon = open.sumOf { tree ->
             val paid = byDebt[tree.debt.id].orEmpty().map { it.toPaidPart(zone) }

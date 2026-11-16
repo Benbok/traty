@@ -2,6 +2,7 @@ package ru.my.traty.data.debt
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.my.traty.data.Recurring
 import java.time.LocalDate
@@ -52,5 +53,20 @@ class DebtDuplicatesTest {
     fun partialPaymentHasNoDuplicate() {
         val partial = Debt(id = 2, title = "Холодильник", categoryId = 1, totalKopecks = 5_000_000)
         assertNull(DebtDuplicates.find(partial, listOf(sub("Холодильник", 1_000_000))))
+    }
+
+    @Test
+    fun matchAllGivesEachSubscriptionToOnePurchase() {
+        val second = phone.copy(id = 2, title = "Телефон жене")
+        val paused = sub("Телефон", 1_000_000).copy(id = 8, state = ru.my.traty.data.RecurringState.PAUSED)
+        val map = DebtDuplicates.matchAll(listOf(phone, second), listOf(sub("Телефон", 1_000_000), paused))
+        assertEquals(mapOf(1L to 7L), map.mapValues { it.value.id })
+    }
+
+    @Test
+    fun matchAllSkipsClosedAndOwedToMe() {
+        val subs = listOf(sub("Телефон", 1_000_000))
+        assertTrue(DebtDuplicates.matchAll(listOf(phone.copy(state = DebtState.CLOSED)), subs).isEmpty())
+        assertTrue(DebtDuplicates.matchAll(listOf(phone.copy(direction = DebtDirection.OWED_TO_ME)), subs).isEmpty())
     }
 }
