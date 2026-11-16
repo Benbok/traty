@@ -93,4 +93,12 @@ class QuestionRulesTest {
         assertTrue(text, "Потрачено: 1 000 ₽." in text)
         assertTrue(AssistantFallback.text(data, guessed = true, reason = "нет сети").startsWith("ИИ сейчас недоступен (нет сети), "))
     }
+
+    @Test
+    fun itemAfterSpentOnIsKeptWithoutAi() {
+        assertEquals(listOf("шоколадки"), QuestionRules.subjectIn("сколько я потратил на шоколадки за последний квартал"))
+        assertEquals(listOf("молоко"), QuestionRules.subjectIn("сколько ушло на молоко"))
+        assertTrue(QuestionRules.subjectIn("сколько я потратил на этой неделе").isEmpty())
+        assertTrue(QuestionRules.subjectIn("сколько я потратил в ноябре").isEmpty())
+    }
 }

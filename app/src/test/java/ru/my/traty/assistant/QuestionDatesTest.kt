@@ -122,4 +122,52 @@ class QuestionDatesTest {
         assertEquals(ok, QuestionDates.fixFuture(ok, today))
         assertNull(QuestionDates.fixFuture(AssistantQuery(intent = Intents.TOTAL), today).from)
     }
+
+    @Test
+    fun monthToMonthRanges() {
+        // Декабрь ещё не наступил: отрезок с 1 ноября по сегодня, а не с прошлого декабря
+        assertEquals(DateSpan(d(2026, 11, 1), today), one("сколько я потратил на продукты с ноября по декабрь"))
+        assertEquals(DateSpan(d(2026, 9, 1), d(2026, 10, 31)), one("с сентября по октябрь"))
+        // Через Новый год
+        assertEquals(DateSpan(d(2025, 12, 1), d(2026, 2, 28)), one("с декабря по февраль"))
+        assertEquals(DateSpan(d(2025, 11, 1), d(2025, 12, 31)), one("с ноября по декабрь прошлого года"))
+        assertEquals(DateSpan(d(2025, 11, 1), d(2025, 12, 31)), one("с ноября 2025 по декабрь 2025"))
+        assertEquals(DateSpan(d(2025, 10, 1), d(2026, 3, 31)), one("от октября 2025 до марта"))
+        assertEquals(DateSpan(d(2026, 3, 1), d(2026, 5, 31)), one("с начала марта до конца мая"))
+        assertEquals(DateSpan(d(2026, 6, 1), today), one("с июня"))
+        assertEquals(DateSpan(d(2026, 11, 1), today), one("в ноябре и декабре"))
+        assertEquals(DateSpan(d(2026, 10, 1), today), one("за октябрь и ноябрь"))
+    }
+
+    @Test
+    fun quartersAndYears() {
+        assertEquals(DateSpan(d(2026, 8, 15), today), one("за последний квартал"))
+        assertEquals(DateSpan(d(2026, 8, 15), today), one("за квартал"))
+        assertEquals(DateSpan(d(2026, 5, 15), today), one("за последние два квартала"))
+        assertEquals(DateSpan(d(2026, 10, 1), today), one("в этом квартале"))
+        assertEquals(DateSpan(d(2026, 7, 1), d(2026, 9, 30)), one("в прошлом квартале"))
+        assertEquals(DateSpan(d(2026, 1, 1), d(2026, 3, 31)), one("за первый квартал"))
+        assertEquals(DateSpan(d(2025, 4, 1), d(2025, 6, 30)), one("во 2 квартале 2025"))
+        assertEquals(DateSpan(d(2026, 10, 1), today), one("за 4 квартал"))
+        assertEquals(DateSpan(d(2025, 11, 15), today), one("сколько я потратил на шоколадки за последний год"))
+        assertEquals(DateSpan(d(2026, 1, 1), today), one("за этот год"))
+        assertEquals(DateSpan(d(2025, 1, 1), d(2025, 12, 31)), one("за прошлый год"))
+    }
+
+    @Test
+    fun compareKeepsTwoMonths() {
+        val q = QuestionDates.apply("сравни траты в сентябре и октябре", AssistantQuery(intent = Intents.COMPARE), today, 1)
+        assertEquals("2026-10-01", q.from)
+        assertEquals("2026-09-01", q.compareFrom)
+    }
+
+    @Test
+    fun itemQuestionGetsPeriodFromRules() {
+        val q = QuestionRules.resolve("сколько я потратил на шоколадки с ноября по декабрь", null,
+            QuestionRules.guess("сколько я потратил на шоколадки с ноября по декабрь", emptyList()), today, 1)
+        assertEquals(Intents.TOTAL, q.intent)
+        assertEquals(listOf("шоколадки"), q.categories)
+        assertEquals("2026-11-01", q.from)
+        assertEquals("2026-11-14", q.to)
+    }
 }

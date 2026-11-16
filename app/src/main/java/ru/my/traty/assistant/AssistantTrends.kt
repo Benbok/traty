@@ -38,21 +38,22 @@ internal object AssistantTrends {
         else -> null
     }
 
-    private class Bucket(val label: String, val from: LocalDate, val to: LocalDate, val rows: List<ExpenseWithCategory>) {
-        val sum get() = rows.sumOf { it.expense.amountKopecks }
+    private class Bucket(val label: String, val from: LocalDate, val to: LocalDate, val rows: List<ExpenseWithCategory>, amount: (ExpenseWithCategory) -> Long) {
+        val sum = rows.sumOf(amount)
     }
 
-    fun trend(q: AssistantQuery, rows: List<ExpenseWithCategory>, from: LocalDate, to: LocalDate, ctx: AssistantContext, subject: String?, base: String): AssistantData {
+    fun trend(q: AssistantQuery, p: Picked, from: LocalDate, to: LocalDate, ctx: AssistantContext, subject: String?, base: String): AssistantData {
         val days = ChronoUnit.DAYS.between(from, to) + 1
         val group: String = when (q.groupBy) {
             GroupBy.DAY -> if (days > MAX_DAYS) GroupBy.WEEK else GroupBy.DAY
             GroupBy.WEEK, GroupBy.WEEKDAY -> q.groupBy
             else -> GroupBy.MONTH
         }
-        if (group == GroupBy.WEEKDAY) return weekdays(rows, from, to, ctx, subject, base)
+        if (group == GroupBy.WEEKDAY) return weekdays(p, from, to, ctx, subject, base)
+        val rows = p.rows
         val byDay = rows.groupBy { day(it.expense.timestamp, ctx.zone) }
         val buckets = slices(group, from, to).map { (a, b, label) ->
-            Bucket(label, a, b, byDay.filterKeys { !it.isBefore(a) && !it.isAfter(b) }.values.flatten())
+            Bucket(label, a, b, byDay.filterKeys { !it.isBefore(a) && !it.isAfter(b) }.values.flatten(), p::amount)
         }
         val unit = when (group) { GroupBy.WEEK -> "неделям"; GroupBy.DAY -> "дням"; else -> "месяцам" }
         val top = buckets.maxByOrNull { it.sum }
@@ -74,6 +75,7 @@ internal object AssistantTrends {
                 }
                 if (full.isNotEmpty() && buckets.size > 1) appendLine("В среднем за полный отрезок: ${formatRub(full.sumOf { it.sum } / full.size)}.")
             }
+            p.notes().forEach(::appendLine)
         }
         return AssistantData(facts, top?.let { formatRub(it.sum) }, top?.let { "больше всего — ${it.label}" }, ids(rows))
     }
@@ -99,13 +101,13 @@ internal object AssistantTrends {
     }
 
     /** По дням недели: сколько всего и в среднем за один такой день. */
-    private fun weekdays(rows: List<ExpenseWithCategory>, from: LocalDate, to: LocalDate, ctx: AssistantContext, subject: String?, base: String): AssistantData {
+    private fun weekdays(p: Picked, from: LocalDate, to: LocalDate, ctx: AssistantContext, subject: String?, base: String): AssistantData {
         val dayCount = DayOfWeek.entries.associateWith { 0 }.toMutableMap()
         var d = from
         while (!d.isAfter(to)) { dayCount[d.dayOfWeek] = dayCount.getValue(d.dayOfWeek) + 1; d = d.plusDays(1) }
-        val byWeekday = rows.groupBy { day(it.expense.timestamp, ctx.zone).dayOfWeek }
+        val byWeekday = p.rows.groupBy { day(it.expense.timestamp, ctx.zone).dayOfWeek }
         val stats = DayOfWeek.entries.map { w ->
-            val sum = byWeekday[w].orEmpty().sumOf { it.expense.amountKopecks }
+            val sum = byWeekday[w].orEmpty().sumOf(p::amount)
             Triple(w.getDisplayName(TextStyle.FULL_STANDALONE, RU), sum, sum / dayCount.getValue(w).coerceAtLeast(1))
         }
         val top = stats.maxByOrNull { it.third }
@@ -114,16 +116,18 @@ internal object AssistantTrends {
             appendLine("Траты по дням недели за ${span(from, to)}${subject?.let { " ($it)" }.orEmpty()}:")
             stats.forEach { (name, sum, avg) -> appendLine("- $name: всего ${formatRub(sum)}, в среднем за день ${formatRub(avg)}") }
             if (top != null && top.second > 0) appendLine("Больше всего в среднем: ${top.first}.")
+            p.notes().forEach(::appendLine)
         }
-        return AssistantData(facts, top?.let { formatRub(it.third) }, top?.let { "в среднем, ${it.first}" }, ids(rows))
+        return AssistantData(facts, top?.let { formatRub(it.third) }, top?.let { "в среднем, ${it.first}" }, ids(p.rows))
     }
 
     /** «когда я последний раз…», «покажи траты в Пятёрочке», «как часто я езжу на такси». */
-    fun list(rows: List<ExpenseWithCategory>, from: LocalDate, to: LocalDate, ctx: AssistantContext, subject: String?, base: String): AssistantData {
-        val sorted = rows.sortedByDescending { it.expense.timestamp }
+    fun list(p: Picked, from: LocalDate, to: LocalDate, ctx: AssistantContext, subject: String?, base: String): AssistantData {
+        val sorted = p.rows.sortedByDescending { it.expense.timestamp }
         val facts = buildString {
             append(base)
-            appendLine("Траты за ${span(from, to)}${subject?.let { " ($it)" }.orEmpty()}: ${sorted.size} на ${formatRub(sorted.sumOf { it.expense.amountKopecks })}.")
+            appendLine("Траты за ${span(from, to)}${subject?.let { " ($it)" }.orEmpty()}: ${sorted.size} на ${formatRub(p.sum)}.")
+            p.notes().forEach(::appendLine)
             if (sorted.isEmpty()) {
                 appendLine("Таких трат не найдено.")
                 return@buildString
@@ -139,7 +143,7 @@ internal object AssistantTrends {
                 appendLine("В среднем раз в ${"%.1f".format(RU, rounded).removeSuffix(",0")} $word.")
             }
             appendLine("Последние траты:")
-            sorted.take(LIST_SHOWN).forEach { appendLine("- ${describe(it, ctx.zone)}") }
+            sorted.take(LIST_SHOWN).forEach { appendLine("- ${p.line(it)}") }
         }
         val last = sorted.firstOrNull()?.let { day(it.expense.timestamp, ctx.zone) }
         return AssistantData(

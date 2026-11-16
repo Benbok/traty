@@ -38,7 +38,7 @@ object QuestionRules {
         val intent = RULES.firstOrNull { it.regex.containsMatchIn(text) }?.intent ?: return null
         return AssistantQuery(
             intent = intent,
-            categories = categoriesIn(text, categories),
+            categories = categoriesIn(text, categories).ifEmpty { subjectIn(text) },
             amount = if (intent == Intents.AFFORD) AssistantQueries.amountIn(text) else null,
             limit = if (intent == Intents.TOP) Regex("""топ[\s-]*(\d{1,2})""").find(text)?.groupValues?.get(1)?.toIntOrNull() else null,
             groupBy = if (intent == Intents.TREND) groupIn(text) else null,
@@ -50,6 +50,18 @@ object QuestionRules {
         "по неделям" in text -> GroupBy.WEEK
         "по дням" in text -> GroupBy.DAY
         else -> GroupBy.MONTH
+    }
+
+    private val subjectRe = Regex("""(?:потрат\S*|трач\S*|ушл\S*|уход\S*|отдал\S*|заплатил\S*|вышл\S*)\s+(?:я\s+)?на\s+(\p{L}{3,})""")
+    private val notSubject = Regex("""^(?:эт|прошл|прошед|последн|текущ|недел|месяц|год|квартал|сегодн|вчера|себя|что|чт|вс[её]|январ|феврал|март|апрел|ма[йяе]|июн|июл|август|сентябр|октябр|ноябр|декабр)""")
+
+    /**
+     * Товар или слово после «потратил на», если категорий в вопросе нет: «сколько я потратил на шоколадки» → «шоколадки».
+     * Приложение поищет его в списках товаров, местах и заметках ([Filter.of]).
+     */
+    internal fun subjectIn(text: String): List<String> {
+        val word = subjectRe.find(text)?.groupValues?.get(1) ?: return emptyList()
+        return if (notSubject.containsMatchIn(word)) emptyList() else listOf(word)
     }
 
     /** Категории и подкатегории, названные в вопросе: «кафе» → «Кафе и рестораны», «такси» → «Такси». */
