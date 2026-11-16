@@ -174,7 +174,8 @@ object AssistantEngine {
                     append(base)
                     appendLine("Самые крупные траты за $span${subject?.let { " ($it)" }.orEmpty()}:")
                     if (top.isEmpty()) appendLine("трат нет")
-                    top.forEach { appendLine("- ${describe(it, ctx.zone)}") }
+                    // Заметки в ИИ не отправляем: для «самых крупных» хватает категории и места
+                    top.forEach { appendLine("- ${describe(it, ctx.zone, withNote = false)}") }
                 }
                 AssistantData(facts, top.firstOrNull()?.let { formatRub(it.expense.amountKopecks) }, "Самая крупная · $span", top.map { it.expense.id })
             }

@@ -205,7 +205,7 @@ private fun Intro(hasAi: Boolean, onPick: (String) -> Unit) {
         if (!hasAi) {
             Spacer(Modifier.height(TratyTheme.spacing.sm))
             Text(
-                "Сейчас выбран разбор без ИИ. Чтобы задавать вопросы, подключите DeepSeek или YandexGPT в Настройках → «Разбор фраз и ИИ».",
+                "Сейчас выбран разбор без ИИ: простые вопросы я понимаю по ключевым словам. Для свободных формулировок подключите DeepSeek или YandexGPT в Настройках → «Разбор фраз и ИИ».",
                 style = TratyTheme.typography.bodySmall,
                 color = TratyTheme.colors.warning,
             )
