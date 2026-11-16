@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import ru.my.traty.ai.EntryType
 import ru.my.traty.data.Places
 import ru.my.traty.data.sameName
+import ru.my.traty.data.search.SearchText
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -80,7 +81,7 @@ object DuplicateCheck {
         }
         val rowPlace = Places.key(row.place)
         val oldPlace = Places.key(e.place)
-        if (rowPlace.isNotEmpty() && oldPlace.isNotEmpty()) return rowPlace == oldPlace
+        if (rowPlace.isNotEmpty() && oldPlace.isNotEmpty()) return rowPlace == oldPlace || SearchText.sameBrand(row.place, listOf(e.place))
         if (rowPlace.isNotEmpty() || oldPlace.isNotEmpty()) return now - e.timestamp in 0..RECENT_MS && sameName(row.category, e.categoryName)
         val rowNote = noteKey(row.note)
         val oldNote = noteKey(e.note)

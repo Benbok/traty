@@ -4,6 +4,7 @@ import ru.my.traty.ai.EntryType
 import ru.my.traty.ai.ParsedEntry
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.Rule
+import ru.my.traty.data.search.SearchText
 import ru.my.traty.data.sameName
 
 /** Операция после применения правил; [matchedRule] — какое правило сработало (null — никакое). */
@@ -21,7 +22,7 @@ object RuleMatcher {
         entries.map { e ->
             if (e.entryType != EntryType.EXPENSE) return@map RuledEntry(e, null)
             val text = fold(listOfNotNull(e.place, e.note).joinToString(" "))
-            val rule = rules.firstOrNull { mentions(text, fold(it.pattern.trim())) }
+            val rule = rules.firstOrNull { mentions(text, fold(it.pattern.trim())) || SearchText.sameBrand(it.pattern, listOf(e.place, e.note)) }
                 ?: return@map RuledEntry(e, null)
             // Правило на архивную/удалённую категорию не считается совпадением: иначе трата автосохранилась бы в категорию от ИИ
             val cat = categories.firstOrNull { it.category.id == rule.categoryId }
