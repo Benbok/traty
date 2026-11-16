@@ -20,7 +20,94 @@ object AmountCheck {
     /** Записи, сумму которых во фразе подтвердить не удалось. Записи без суммы (покупка в кредит) не проверяются. */
     fun mismatches(entries: List<ParsedEntry>, rawText: String): List<ParsedEntry> {
         val named = namedAmounts(rawText)
-        return entries.filter { it.amount > 0 && !supported(it.amount, named) }
+        val plain = plainNumbers(rawText)
+        return entries.filter { entry ->
+            if (entry.amount <= 0) return@filter false
+            val known = named + pricedByAi(entry, plain, named, rawText)
+            !supported(entry.amount, known) && !itemPricesAddUp(entry, known)
+        }
+    }
+
+    /**
+     * Сумма совпадает с суммой цен товаров от ИИ, и каждая такая цена есть во фразе ([known]: дословно, с единицей
+     * или копейки двумя числами). Перебор сумм частей ([supported]) тут не нужен, и он не упирается
+     * в предел в [MAX_SUBSET_NUMBERS] чисел, когда в длинном списке покупок цен много. Одна неподтверждённая
+     * цена (ИИ что-то выдумал) — и сумма остаётся под вопросом.
+     */
+    private fun itemPricesAddUp(entry: ParsedEntry, known: List<Double>): Boolean {
+        val prices = entry.items.orEmpty().mapNotNull { it.price }
+        if (prices.size < 2 || prices.size != entry.items.orEmpty().size) return false
+        if (!prices.all { p -> known.any { close(it, p) } }) return false
+        return close(prices.sum(), entry.amount)
+    }
+
+    private val plainNumberRe = Regex("""(?<![\d.,])\d{1,7}(?:[.,]\d{1,2})?(?![\d])""")
+
+    /** Все числа цифрами, вместе с теми, что стоят перед единицей («99г», «2 шт»). */
+    private fun plainNumbers(text: String): List<Double> =
+        plainNumberRe.findAll(text).mapNotNull { it.value.replace(',', '.').toDoubleOrNull() }.toList()
+
+    /**
+     * Распознавание речи иногда пишет цену с единицей: «горошек 99г». Такое число считаем деньгами только тогда,
+     * когда ИИ сам назвал его ценой товара в этой трате, а во фразе оно стоит дословно. «900 г» у гречки
+     * (такой цены у товаров нет) остаётся весом.
+     */
+    private fun pricedByAi(entry: ParsedEntry, plain: List<Double>, named: List<Double>, text: String): List<Double> {
+        val prices = entry.items.orEmpty().mapNotNull { it.price }
+        if (prices.isEmpty()) return emptyList()
+        val withUnit = plain.filter { n -> prices.any { close(it, n) } && named.none { close(it, n) } }
+        return withUnit + prices.filter { splitIntoTwoNumbers(it, text) }
+    }
+
+    /**
+     * Цена с копейками, которую распознавание речи записало не как «231,29»: двумя числами подряд («231, 29», «129 99»)
+     * или слитно («14998» → 149,98). Рубли и две цифры копеек должны стоять во фразе рядом, через пробел, запятую,
+     * точку или тире, или слитно: только такая цена от ИИ подтверждается, выдуманная — нет.
+     * Слитная запись принимается только для цен от 100 ₽ (минимум пять цифр): «1250» — это тысяча двести
+     * пятьдесят, а не 12,50.
+     */
+    private fun splitIntoTwoNumbers(price: Double, text: String): Boolean =
+        separatedKopecks(price, text) || gluedKopecks(price, text)
+
+    /** «231, 29», «129 99», «83—90»: рубли и копейки двумя числами через разделитель — чтение однозначное. */
+    private fun separatedKopecks(price: Double, text: String): Boolean {
+        val total = Math.round(price * 100)
+        val kopecks = total % 100
+        if (kopecks == 0L) return false
+        val rubles = total / 100
+        val twoDigits = "%02d".format(kopecks)
+        return Regex("""(?<![\d.,])$rubles[\s,.\-–—]{1,3}$twoDigits(?!\d)""").containsMatchIn(text)
+    }
+
+    /** «14998» → 149,98: слитная запись — чтение получается угадыванием, одинаковое число могло быть и целыми рублями. */
+    private fun gluedKopecks(price: Double, text: String): Boolean {
+        val total = Math.round(price * 100)
+        val kopecks = total % 100
+        if (kopecks == 0L) return false
+        val glued = "${total / 100}${"%02d".format(kopecks)}"
+        return glued.length >= 5 && Regex("""(?<![\d.,])$glued(?!\d)""").containsMatchIn(text)
+    }
+
+    /**
+     * Цены товаров от ИИ, которые во фразе не стоят «как есть» и были угаданы: слитно («11490» → 114,90) или с прилипшей
+     * единицей («139л» → 139). ИИ обычно угадывает верно, но сохранять такое без проверки человеком нельзя.
+     * Цены через разделитель («231, 29», «83—90») сюда не попадают.
+     */
+    fun guessedPrices(entries: List<ParsedEntry>, rawText: String): List<Double> {
+        val named = namedAmounts(rawText)
+        val plain = plainNumbers(rawText)
+        return entries.flatMap { e -> e.items.orEmpty().mapNotNull { it.price } }.distinct().filter { p ->
+            named.none { close(it, p) } && !separatedKopecks(p, rawText) &&
+                (gluedKopecks(p, rawText) || plain.any { close(it, p) })
+        }
+    }
+
+    /** Пояснение для окна проверки про угаданные цены; null — угадывать ничего не пришлось. */
+    fun guessedPricesNotice(entries: List<ParsedEntry>, rawText: String): String? {
+        val guessed = guessedPrices(entries, rawText)
+        if (guessed.isEmpty()) return null
+        val list = guessed.joinToString(", ") { "${ShoppingListFormat.rub(it)} ₽" }
+        return "Цены по записи речи пришлось угадывать ($list). Проверьте, что они верные."
     }
 
     /** Названные суммы. К тому, что находит [MoneyAmounts], добавлены «две с половиной тысячи», «миллион», «две сотни». */

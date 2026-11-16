@@ -14,6 +14,8 @@ object EntrySanity {
     fun check(entries: List<ParsedEntry>, rawText: String, today: LocalDate): Result {
         val dates = DateCheck.apply(entries, rawText, today)
         val amount = AmountCheck.notice(AmountCheck.mismatches(dates.entries, rawText), rawText)
-        return Result(dates.entries, listOfNotNull(amount) + dates.problems + ItemsSanity.problems(dates.entries))
+        // Цены, которые пришлось угадывать по записи речи, не сохраняем без проверки человеком
+        val guessed = AmountCheck.guessedPricesNotice(dates.entries, rawText)
+        return Result(dates.entries, listOfNotNull(amount, guessed) + dates.problems + ItemsSanity.problems(dates.entries))
     }
 }
