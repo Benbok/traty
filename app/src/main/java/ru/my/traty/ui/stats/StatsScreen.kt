@@ -183,15 +183,7 @@ fun StatsScreen(
         )
     }
 
-    val deltaDescription = if (prevSum > 0) {
-        val label = when (spanOf(range)) {
-            StatsSpan.PERIOD -> "Прошлый период"
-            StatsSpan.DAY -> "Предыдущий день"
-            StatsSpan.WEEK -> "Прошлая неделя"
-            StatsSpan.DATES -> "Предыдущие такие же даты"
-        }
-        "$label: ${formatRub(prevSum)} (${deltaText(sum, prevSum)})"
-    } else null
+    val deltaDescription = deltaDescriptionText(spanOf(range), sum, prevSum)
 
     Column(Modifier.fillMaxSize()) {
         TratyHeaderCard(
@@ -1095,23 +1087,4 @@ private fun BreakdownExpenseRow(e: ExpenseWithCategory, showPlace: Boolean, modi
         }
         TratyAmountText(amountKopecks = e.expense.amountKopecks, size = AmountSize.SMALL)
     }
-}
-
-/** 1 покупка, 3 покупки, 5 покупок. */
-internal fun purchases(n: Int): String {
-    val m100 = n % 100
-    val m10 = n % 10
-    val word = when {
-        m100 in 11..14 -> "покупок"
-        m10 == 1 -> "покупка"
-        m10 in 2..4 -> "покупки"
-        else -> "покупок"
-    }
-    return "$n $word"
-}
-
-private fun deltaText(cur: Long, prev: Long): String {
-    if (prev == 0L) return "—"
-    val pct = ((cur - prev) * 100.0 / prev).roundToInt()
-    return if (pct >= 0) "+$pct%" else "$pct%"
 }

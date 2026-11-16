@@ -15,7 +15,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +36,7 @@ import ru.my.traty.ui.charts.ChartsScreen
 import ru.my.traty.ui.designsystem.components.TratySnackbar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.capture.EntryConfirmSheet
+import ru.my.traty.ui.capture.RuleOfferDialog
 import ru.my.traty.ui.capture.PurchaseOfferHost
 import ru.my.traty.ui.capture.RecurringOfferHost
 import ru.my.traty.ui.capture.RecurringOfferViewModel
@@ -367,35 +367,13 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     PurchaseOfferHost(visible = vm.confirm == null && vm.ruleOffer == null && recurringOffer == null)
 
     vm.ruleOffer?.let { offer ->
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { vm.ruleOffer = null },
-            shape = TratyTheme.shapes.large,
-            containerColor = TratyTheme.colors.surface,
-            title = {
-                Text(
-                    "Запомнить правило?",
-                    style = TratyTheme.typography.titleMedium,
-                )
+        RuleOfferDialog(
+            offer = offer,
+            onRemember = {
+                vm.addRule(offer.place, offer.categoryId, offer.subcategoryId)
+                vm.ruleOffer = null
             },
-            text = {
-                Text(
-                    "Всегда относить «${offer.place}» к категории «${offer.categoryName}»?",
-                    style = TratyTheme.typography.bodyMedium,
-                )
-            },
-            confirmButton = {
-                ru.my.traty.ui.designsystem.components.TratyButton(
-                    onClick = {
-                        vm.addRule(offer.place, offer.categoryId, offer.subcategoryId)
-                        vm.ruleOffer = null
-                    },
-                ) { Text("Запомнить") }
-            },
-            dismissButton = {
-                ru.my.traty.ui.designsystem.components.TratyTextButton(
-                    onClick = { vm.ruleOffer = null },
-                ) { Text("Нет") }
-            },
+            onDismiss = { vm.ruleOffer = null },
         )
     }
 }
