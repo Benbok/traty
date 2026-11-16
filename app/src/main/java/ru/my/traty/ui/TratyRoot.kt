@@ -41,7 +41,8 @@ import ru.my.traty.ui.capture.PurchaseOfferHost
 import ru.my.traty.ui.capture.RecurringOfferHost
 import ru.my.traty.ui.capture.RecurringOfferViewModel
 import ru.my.traty.ui.feedback.FeedbackScreen
-import ru.my.traty.ui.home.EditExpenseScreen
+import ru.my.traty.ui.home.EditExpenseOverlay
+import ru.my.traty.ui.home.ExpenseItemsViewModel
 import ru.my.traty.ui.home.HomeScreen
 import ru.my.traty.ui.navigation.TratyNavLabel
 import ru.my.traty.ui.navigation.TratyNavTab
@@ -85,6 +86,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     var reconcileMode by rememberSaveable { mutableStateOf<ReconcileMode?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val onboarding: OnboardingViewModel = viewModel()
+    val itemsVm: ExpenseItemsViewModel = viewModel()
     val onboardingVisible by onboarding.visible.collectAsStateWithLifecycle()
     val onboardingPeriodStart by onboarding.periodStartDay.collectAsStateWithLifecycle()
     // «Записать первую трату» из знакомства: лента включит микрофон и сбросит флаг
@@ -260,23 +262,14 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
 
         // Редактирование траты — отдельный экран поверх вкладок, как «Подписки»
         vm.editing?.let { item ->
-            val linkedDebt by vm.observeDebtForExpense(item.expense.id).collectAsStateWithLifecycle(initialValue = null)
-            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
-                EditExpenseScreen(
-                    item = item,
-                    categories = categories,
-                    labels = labels[item.expense.id].orEmpty(),
-                    linkedDebt = linkedDebt,
-                    onOpenDebt = { debtId -> selectedDebtId = debtId },
-                    onDismiss = { vm.editing = null },
-                    onSave = { fields -> vm.updateExpense(item, fields) },
-                    onDelete = {
-                        vm.delete(item.expense)
-                        vm.editing = null
-                    },
-                    onSetCategoryImpulsive = vm::setCategoryImpulsive,
-                )
-            }
+            EditExpenseOverlay(
+                item = item,
+                vm = vm,
+                itemsVm = itemsVm,
+                categories = categories,
+                labels = labels[item.expense.id].orEmpty(),
+                onOpenDebt = { debtId -> selectedDebtId = debtId },
+            )
         }
 
         if (showHelp) {

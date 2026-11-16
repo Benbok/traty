@@ -41,6 +41,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ru.my.traty.capture.DraftItem
+import ru.my.traty.capture.parsePositiveKopecks
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.labels.ExpenseLabelHit
@@ -68,6 +70,8 @@ data class EditFields(
     val place: String,
     val note: String,
     val dateText: String,
+    /** Товары внутри траты ([ExpenseItemsCard]). */
+    val items: List<DraftItem> = emptyList(),
 )
 
 /**
@@ -90,6 +94,8 @@ fun EditExpenseScreen(
     labels: List<ExpenseLabelHit> = emptyList(),
     linkedDebt: Debt? = null,
     onOpenDebt: ((Long) -> Unit)? = null,
+    /** Товары траты на момент открытия экрана: экран показывается, когда они уже прочитаны. */
+    items: List<DraftItem> = emptyList(),
 ) {
     val e = item.expense
     val editable = e.isUserEditable
@@ -107,6 +113,7 @@ fun EditExpenseScreen(
             place = e.place.orEmpty(),
             note = e.note.orEmpty(),
             dateText = date.toString(),
+            items = items,
         )
     }
     var fields by remember(item) { mutableStateOf(initialFields) }
@@ -234,6 +241,15 @@ fun EditExpenseScreen(
                     RowDivider()
                     InlineRow("Заметка", fields.note, "Добавить", editable) { fields = fields.copy(note = it) }
                 }
+            }
+
+            if (editable || fields.items.isNotEmpty()) {
+                ExpenseItemsCard(
+                    items = fields.items,
+                    totalKopecks = parsePositiveKopecks(fields.amountText),
+                    enabled = editable,
+                    onChange = { fields = fields.copy(items = it) },
+                )
             }
 
             // Метки с пояснениями и флажок категории, от которого зависит ⚡
