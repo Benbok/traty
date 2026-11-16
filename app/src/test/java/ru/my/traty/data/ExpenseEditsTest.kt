@@ -35,7 +35,8 @@ class ExpenseEditsTest {
         val all = db.categories().getAllWithSubs()
         food = all.first { it.category.name == "Продукты" }.category.id
         cafe = all.first { it.category.name == "Кафе и рестораны" }.category.id
-        coffee = categories.addSubcategory(cafe, "Кофе")
+        // «Кофе» уже есть в начальных категориях: берём его, а не создаём заново
+        coffee = all.first { it.category.id == cafe }.subs.first { it.name == "Кофе" }.id
         edits = ExpenseEdits(db, DebtPaymentRemoval(db))
     }
 
