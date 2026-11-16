@@ -87,4 +87,32 @@ class PromisedPaymentsTest {
         assertEquals(3, p.items.size)
         assertEquals(90_000L, p.totalKopecks)
     }
+
+    @Test
+    fun loanSubscriptionDuplicatingPurchaseCountsOnce() {
+        // Рассрочка за телефон заведена ещё и подпиской на ту же сумму 20-го числа
+        val dup = sub("Рассрочка телефон", 10_000, LocalDate.of(2026, 11, 20)).copy(id = 5)
+        val music = sub("Музыка", 199, LocalDate.of(2026, 11, 25)).copy(id = 6)
+        val p = PromisedPayments.of(listOf(phone to emptyList()), listOf(dup, music), period, today)
+        assertEquals(listOf("Телефон", "Музыка"), p.items.map { it.title })
+        assertEquals(1_000_000L + 19_900L, p.totalKopecks)
+    }
+
+    @Test
+    fun subscriptionStaysWhenPurchaseIsClosed() {
+        // Покупку закрыли, а подписка осталась: её платёж по-прежнему предстоит
+        val dup = sub("Рассрочка телефон", 10_000, LocalDate.of(2026, 11, 20)).copy(id = 5)
+        val p = PromisedPayments.of(listOf(phone.copy(state = "closed") to emptyList()), listOf(dup), period, today)
+        assertEquals(listOf("Рассрочка телефон"), p.items.map { it.title })
+    }
+
+    @Test
+    fun loanCategorySubscriptionWithOtherNameIsDuplicate() {
+        val bank = sub("Банк", 10_000, LocalDate.of(2026, 11, 20)).copy(id = 5, categoryId = 9)
+        val withLoanCategory = PromisedPayments.of(listOf(phone.copy(categoryId = 2) to emptyList()), listOf(bank), period, today, loanCategoryId = 9)
+        assertEquals(listOf("Телефон"), withLoanCategory.items.map { it.title })
+        // Без признаков, кроме суммы, подписку не трогаем
+        val unknown = PromisedPayments.of(listOf(phone.copy(categoryId = 2) to emptyList()), listOf(bank), period, today)
+        assertEquals(2, unknown.items.size)
+    }
 }

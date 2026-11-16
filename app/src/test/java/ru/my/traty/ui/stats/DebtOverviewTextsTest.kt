@@ -79,7 +79,7 @@ class DebtOverviewTextsTest {
     fun duplicateAndSubscriptionOnlyNotices() {
         val sub = Recurring(id = 9, title = "Рассрочка ТВ телевизор", amountKopecks = 1_000_000, categoryId = 1, periodUnit = "month", nextEpochDay = 0)
         val l = line(installment(today), recurring = listOf(sub))
-        assertTrue(DebtOverviewTexts.duplicate(l).orEmpty().contains("считается дважды"))
+        assertTrue(DebtOverviewTexts.duplicate(l).orEmpty().contains("учтён один раз"))
         val ipoteka = sub.copy(id = 10, title = "Ипотека")
         assertEquals(
             "Платёж «Ипотека» в «Долгах и кредитах» заведён только подпиской, поэтому его остаток здесь не виден.",

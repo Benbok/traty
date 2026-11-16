@@ -2,6 +2,7 @@ package ru.my.traty.data.budget
 
 import ru.my.traty.data.Recurring
 import ru.my.traty.data.debt.Debt
+import ru.my.traty.data.debt.DebtDuplicates
 import ru.my.traty.data.debt.DebtProgress
 import ru.my.traty.data.debt.PaidPart
 import ru.my.traty.data.period.BillingPeriod
@@ -29,7 +30,8 @@ data class Promised(val items: List<PromisedItem> = emptyList()) {
 /**
  * Считается только для текущего периода: у будущего периода обещанное зависит от того, что успеют
  * оплатить до него, а у прошедшего ничего не предстоит. Просроченные неоплаченные платежи входят:
- * их всё равно нужно внести.
+ * их всё равно нужно внести. Подписка, которая повторяет платёж покупки ([DebtDuplicates]), не считается:
+ * у покупки есть график, и он точнее.
  */
 object PromisedPayments {
     fun of(
@@ -37,9 +39,12 @@ object PromisedPayments {
         recurring: List<Recurring>,
         period: BillingPeriod,
         today: LocalDate,
+        loanCategoryId: Long? = null,
     ): Promised {
         if (today !in period) return Promised()
-        val items = debtItems(debts, period, today) + recurringItems(recurring, period, today)
+        // Кредит, заведённый и покупкой, и подпиской, считаем один раз — по графику покупки
+        val duplicates = DebtDuplicates.matchAll(debts.map { it.first }, recurring, loanCategoryId).values.map { it.id }.toSet()
+        val items = debtItems(debts, period, today) + recurringItems(recurring.filter { it.id !in duplicates }, period, today)
         return Promised(items.sortedWith(compareBy({ it.date }, { it.title })))
     }
 
