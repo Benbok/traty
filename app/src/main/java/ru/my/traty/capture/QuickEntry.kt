@@ -78,6 +78,8 @@ class QuickEntry(
     private val categories: CategoryRepository,
     private val settings: SettingsRepository,
     private val zone: ZoneId = ZoneId.systemDefault(),
+    /** Отладочный журнал разбора фразы. null в release: суммы и текст диктовки туда не пишутся. */
+    private val debugLog: ((String) -> Unit)? = null,
     private val clientProvider: (AppSettings) -> LlmClient? = ::entryClientFor,
 ) {
     private val recurring = RecurringRepository(db)
@@ -165,7 +167,9 @@ class QuickEntry(
             }
         }
 
+        debugLog?.invoke("1. фраза: «$text»; разбор ИИ=$aiParsed\n   ответ: ${describe(parsed)}")
         val cleaned0 = withPurchaseTerms(EntryCleanup.apply(parsed, text, cats, spokenDay), text)
+        debugLog?.invoke("2. после правил приложения (склейка, список покупок): ${describe(cleaned0)}")
         // Сумму и дату от ИИ сверяем с фразой: не сходится — окно проверки вместо молчаливого сохранения
         val sanity = if (aiParsed) EntrySanity.check(cleaned0, text, spokenDay) else null
         val cleaned = sanity?.entries ?: cleaned0
@@ -173,6 +177,7 @@ class QuickEntry(
             forceConfirm = true
             notice = (listOfNotNull(notice) + sanity.problems).joinToString(" ")
         }
+        debugLog?.invoke("3. проверка суммы и даты: ${sanity?.problems?.takeIf { it.isNotEmpty() } ?: "замечаний нет"}")
         // Ошибки распознавания речи в названии магазина: берём привычное написание из базы
         val snapped = PlaceSnap.apply(cleaned, db.expenses().distinctPlaces())
         val ruled = RuleMatcher.apply(snapped, rules, cats)
@@ -182,10 +187,20 @@ class QuickEntry(
         val draft = if (rows.isEmpty()) emptyDraft(origin, text) else EntryDraft(rows, text, origin)
         // Похожая трата уже есть — молча не сохраняем даже по правилу: спросим «повтор или новая?»
         val hasDuplicate = rows.any { it.duplicate != null }
-        if (forceConfirm || hasDuplicate || ParsePolicy.decide(ruled) != EntryDecision.AUTO_SAVE) {
-            return EntryOutcome.NeedsConfirm(draft, notice)
-        }
+        val needsConfirm = forceConfirm || hasDuplicate || ParsePolicy.decide(ruled) != EntryDecision.AUTO_SAVE
+        debugLog?.invoke(
+            "4. черновик: ${rows.joinToString(" | ") { r -> "${r.amountText} ₽ ${r.category}›${r.subcategory} ${r.place} товаров=${r.items.size}" }}" +
+                "; повтор=$hasDuplicate; окно проверки=$needsConfirm; пояснение=${notice ?: "-"}",
+        )
+        if (needsConfirm) return EntryOutcome.NeedsConfirm(draft, notice)
         return EntryOutcome.AutoSaved(save(draft), draft)
+    }
+
+    /** Короткое описание разобранных трат для отладочного журнала: сумма, место, товары с ценами. */
+    private fun describe(entries: List<ParsedEntry>): String = entries.joinToString(" | ") { e ->
+        val goods = e.items.orEmpty().joinToString(", ") { "${it.name}=${it.price ?: "?"}" }
+        "${e.amount} ₽ ${e.category}›${e.subcategory ?: ""} место=${e.place ?: "-"} заметка=«${e.note ?: ""}»" +
+            (if (goods.isNotEmpty()) " товары=[$goods]" else "")
     }
 
     /** ИИ не заметил «в рассрочку» или «аванс за…» в фразе с одной тратой — условия берутся правилом. */

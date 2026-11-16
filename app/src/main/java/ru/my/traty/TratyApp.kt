@@ -13,6 +13,7 @@ import ru.my.traty.ai.LlmClient
 import ru.my.traty.ai.clientFor
 import ru.my.traty.capture.PendingParseWork
 import ru.my.traty.capture.QuickEntry
+import ru.my.traty.capture.debugEntryLog
 import ru.my.traty.data.search.SearchRepository
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.ExpenseEdits
@@ -108,7 +109,7 @@ class AppContainer(
     val reconciliations = ReconciliationRepository(db, categories)
     val onboarding = OnboardingRepository(db, settings)
     val incomes = IncomeRepository(db)
-    val quickEntry = QuickEntry(db, categories, settings, clientProvider = llm)
+    val quickEntry = QuickEntry(db, categories, settings, debugLog = debugEntryLog(context), clientProvider = llm)
     val debts = DebtRepository(db)
     val expenseItems = ExpenseItemRepository(db)
     val debtRemoval = DebtPaymentRemoval(db)
