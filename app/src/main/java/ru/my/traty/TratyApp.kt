@@ -24,6 +24,7 @@ import ru.my.traty.data.ReconciliationRepository
 import ru.my.traty.data.debt.DebtPaymentRemoval
 import ru.my.traty.data.debt.DebtReminderWork
 import ru.my.traty.data.debt.DebtRepository
+import ru.my.traty.data.items.ExpenseItemRepository
 import ru.my.traty.data.budget.BudgetAlertWatcher
 import ru.my.traty.data.budget.BudgetRepository
 import ru.my.traty.data.digest.DailyDigestWork
@@ -109,6 +110,7 @@ class AppContainer(
     val incomes = IncomeRepository(db)
     val quickEntry = QuickEntry(db, categories, settings, clientProvider = llm)
     val debts = DebtRepository(db)
+    val expenseItems = ExpenseItemRepository(db)
     val debtRemoval = DebtPaymentRemoval(db)
     val expenseEdits = ExpenseEdits(db, debtRemoval)
     val budgets = BudgetRepository(db)

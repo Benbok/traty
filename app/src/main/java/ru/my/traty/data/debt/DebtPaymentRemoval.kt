@@ -4,14 +4,16 @@ import androidx.room.withTransaction
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.Expense
 import ru.my.traty.data.ExpenseSource
+import ru.my.traty.data.items.ExpenseItem
 import java.time.ZoneId
 
-/** Удалённая трата-платёж: для «Отменить» в снэкбаре. */
+/** Удалённая трата-платёж: для «Отменить» в снэкбаре. [items] — позиции удалённых трат (товары), по id траты. */
 data class RemovedPayment(
     val expenses: List<Expense>,
     val debt: Debt?,
     val parts: Map<Long, String>,
     val debtRemoved: Boolean,
+    val items: Map<Long, List<ExpenseItem>> = emptyMap(),
 )
 
 /** Удаление траты с учётом покупки частями и «Отменить». */
@@ -25,8 +27,9 @@ class DebtPaymentRemoval(private val db: AppDatabase) {
     suspend fun delete(expense: Expense, zone: ZoneId = ZoneId.systemDefault()): RemovedPayment = db.withTransaction {
         val debt = dao.getDebtByExpenseId(expense.id)
         if (debt == null) {
+            val items = itemsOf(listOf(expense))
             db.expenses().delete(expense)
-            return@withTransaction RemovedPayment(listOf(expense), null, emptyMap(), debtRemoved = false)
+            return@withTransaction RemovedPayment(listOf(expense), null, emptyMap(), debtRemoved = false, items = items)
         }
         val rows = dao.getPayments(debt.id)
         // Проценты кредита — отдельная трата того же платежа с тем же временем
@@ -35,12 +38,17 @@ class DebtPaymentRemoval(private val db: AppDatabase) {
         val removed = db.expenses().getByIds(ids.toList()).map { it.expense }
             .filter { it.id == expense.id || it.source == ExpenseSource.DEBT }
         val parts = rows.filter { r -> removed.any { it.id == r.expenseId } }.associate { it.expenseId to it.part }
+        val items = itemsOf(removed)
         removed.forEach { db.expenses().delete(it) }
         val left = rows.size - parts.size
         val orphan = DebtOrphans.isOrphan(debt, left, zone)
         if (orphan) dao.delete(debt)
-        RemovedPayment(removed, debt, parts, debtRemoved = orphan)
+        RemovedPayment(removed, debt, parts, debtRemoved = orphan, items = items)
     }
+
+    /** Позиции удаляются вместе с тратой: запоминаем их до удаления, чтобы «Отменить» вернул и их. */
+    private suspend fun itemsOf(expenses: List<Expense>): Map<Long, List<ExpenseItem>> =
+        db.expenseItems().getForAll(expenses.map { it.id }).groupBy { it.expenseId }
 
     /** «Отменить»: траты возвращаются вместе со связью с покупкой (и с самой покупкой, если её удалили). */
     suspend fun restore(removed: RemovedPayment) = db.withTransaction {
@@ -49,6 +57,9 @@ class DebtPaymentRemoval(private val db: AppDatabase) {
             val id = db.expenses().insert(e)
             val part = removed.parts[e.id]
             if (debtId != null && part != null) dao.insertPayment(DebtPayment(debtId = debtId, expenseId = id, part = part))
+            removed.items[e.id]?.takeIf { it.isNotEmpty() }?.let { items ->
+                db.expenseItems().insertAll(items.map { it.copy(id = 0, expenseId = id) })
+            }
         }
     }
 
