@@ -2,11 +2,12 @@ package ru.my.traty.data.debt
 
 import ru.my.traty.data.Places
 import ru.my.traty.data.Recurring
+import ru.my.traty.data.RecurringState
 import kotlin.math.abs
 
 /**
- * Кредит или рассрочка, заведённые ещё и подпиской: тогда платёж считается дважды
- * (в «Уже обещано» плана и в напоминаниях). Ищет приложение по сумме платежа и признакам покупки.
+ * Кредит или рассрочка, заведённые ещё и подпиской. «Уже обещано» плана такую подписку не считает,
+ * карточка долгов о ней предупреждает (напоминаний приходит два). Ищет приложение по сумме платежа и признакам покупки.
  *
  * Подписка похожа на платёж покупки, если сумма почти та же (банк округляет по-своему: допуск 2 %,
  * но не меньше 50 ₽) и совпадает хоть что-то ещё: слово в названии, магазин, категория покупки
@@ -14,6 +15,22 @@ import kotlin.math.abs
  */
 object DebtDuplicates {
     private const val MIN_TOLERANCE_KOPECKS = 5_000L
+
+    /**
+     * Дубли для всех открытых покупок «Я должен»: id покупки → её подписка-дубль. Каждая активная подписка
+     * достаётся не больше чем одной покупке. Одни и те же правила для карточки долгов и «Уже обещано».
+     */
+    fun matchAll(debts: List<Debt>, recurring: List<Recurring>, loanCategoryId: Long? = null): Map<Long, Recurring> {
+        val free = recurring.filter { it.state == RecurringState.ACTIVE }.toMutableList()
+        val result = mutableMapOf<Long, Recurring>()
+        for (debt in debts) {
+            if (debt.state != DebtState.ACTIVE || debt.direction != DebtDirection.I_OWE) continue
+            val dup = find(debt, free, loanCategoryId) ?: continue
+            result[debt.id] = dup
+            free.remove(dup)
+        }
+        return result
+    }
 
     fun find(debt: Debt, recurring: List<Recurring>, loanCategoryId: Long? = null): Recurring? {
         val payment = regularPayment(debt) ?: return null

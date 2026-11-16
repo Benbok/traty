@@ -67,8 +67,8 @@ internal object DebtOverviewTexts {
 
     fun duplicate(line: DebtOverviewLine): String? {
         val sub = line.duplicate ?: return null
-        return "«${line.debt.title}» есть и в подписках как «${sub.title}». В «Уже обещано» плана этот платёж " +
-            "считается дважды. Подписку можно убрать в «Подписках»."
+        return "«${line.debt.title}» есть и в подписках как «${sub.title}». В плане трат платёж учтён один раз, " +
+            "по графику покупки, но напоминаний приходит два. Подписку можно убрать в «Подписках»."
     }
 
     fun subscriptionOnly(items: List<Recurring>): String? {
