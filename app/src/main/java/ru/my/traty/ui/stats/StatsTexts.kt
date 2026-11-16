@@ -35,3 +35,15 @@ internal fun deltaText(cur: Long, prev: Long): String {
     val pct = ((cur - prev) * 100.0 / prev).roundToInt()
     return if (pct >= 0) "+$pct%" else "$pct%"
 }
+
+/** 1 товар, 3 товара, 5 товаров. */
+internal fun productsWord(n: Int): String {
+    val m100 = n % 100
+    val m10 = n % 10
+    return when {
+        m100 in 11..14 -> "товаров"
+        m10 == 1 -> "товар"
+        m10 in 2..4 -> "товара"
+        else -> "товаров"
+    }
+}
