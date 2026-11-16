@@ -53,6 +53,8 @@ data class EntryRow(
     val duplicate: DuplicateHint? = null,
     /** Покупка частями из фразы: после сохранения приложение спросит, завести ли её или привязать доплату. */
     val purchase: PurchaseTerms? = null,
+    /** Товары внутри покупки: сохраняются позициями траты (только для [EntryType.EXPENSE]). */
+    val items: List<DraftItem> = emptyList(),
 ) {
     /** Сумма в копейках или null, если сумма некорректна или не положительна. */
     fun kopecks(): Long? = parsePositiveKopecks(amountText)
@@ -85,6 +87,7 @@ data class EntryRow(
                 subcategory = entry.subcategory.orEmpty(), place = Places.normalize(entry.place).orEmpty(), note = entry.note.orEmpty(),
                 source = IncomeSources.DEFAULT, dateText = day.toString(), suggestedCategory = suggested,
                 purchase = entry.part,
+                items = entry.items.orEmpty().map(DraftItem::fromParsed).filter { it.name.isNotBlank() },
             )
         }
     }

@@ -164,6 +164,13 @@ fun EntryConfirmSheet(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = TratyTheme.shapes.small,
                             )
+                            if (!isIncome) {
+                                EntryItemsPreview(
+                                    items = row.items,
+                                    totalKopecks = row.kopecks(),
+                                    onRemove = { j -> update(i) { r -> r.copy(items = r.items.filterIndexed { k, _ -> k != j }) } },
+                                )
+                            }
                             DateField(
                                 dateText = row.dateText,
                                 onDateTextChange = { v -> update(i) { it.copy(dateText = v) } },

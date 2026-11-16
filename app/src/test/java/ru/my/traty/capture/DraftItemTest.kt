@@ -1,0 +1,46 @@
+package ru.my.traty.capture
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+import ru.my.traty.ai.ParsedEntry
+import ru.my.traty.ai.ParsedItem
+import ru.my.traty.data.items.ExpenseItem
+import java.time.LocalDate
+
+class DraftItemTest {
+    @Test
+    fun parsedItemBecomesTextFieldsAndBack() {
+        val d = DraftItem.fromParsed(ParsedItem("молоко", price = 179.9, qty = 2.0, unit = "л"))
+        assertEquals("179.9", d.priceText)
+        assertEquals("2", d.qtyText)
+        val e = d.toExpenseItem()
+        assertEquals(17_990L, e.priceKopecks)
+        assertEquals(2_000L, e.quantityMilli)
+        assertEquals("л", e.unit)
+    }
+
+    @Test
+    fun emptyFieldsMeanNotNamed() {
+        val e = DraftItem("хлеб").toExpenseItem()
+        assertNull(e.priceKopecks)
+        assertNull(e.quantityMilli)
+        assertNull(e.unit)
+    }
+
+    @Test
+    fun savedItemRoundTrip() {
+        val d = DraftItem.fromSaved(ExpenseItem(name = "Яблоки", priceKopecks = 15_050, quantityMilli = 1_500, unit = "кг"))
+        assertEquals("150.5", d.priceText)
+        assertEquals("1.5", d.qtyText)
+        assertEquals(1_500L, DraftItem("Яблоки", qtyText = "1,5").quantityMilli())
+    }
+
+    @Test
+    fun entryRowCarriesItemsFromParsedEntry() {
+        val entry = ParsedEntry(amount = 42000.0, category = "Прочее", items = listOf(ParsedItem("телефон", 40000.0), ParsedItem("чехол", 2000.0)))
+        val row = EntryRow.fromParsed(entry, emptyList(), LocalDate.of(2026, 11, 16))
+        assertEquals(listOf("телефон", "чехол"), row.items.map { it.name })
+        assertEquals(listOf(4_000_000L, 200_000L), row.items.map { it.priceKopecks() })
+    }
+}

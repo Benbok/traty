@@ -1,5 +1,6 @@
 package ru.my.traty.ai
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -32,6 +33,8 @@ data class ParsedEntry(
     val date: String? = null,
     /** Покупка частями: аванс, рассрочка, кредит, доплата. null — обычная трата. */
     val part: PurchaseTerms? = null,
+    /** Товары внутри одной покупки: «телефон 40 000, чехол 2 000». null — товары не перечислены. */
+    @SerialName("goods") val items: List<ParsedItem>? = null,
 ) {
     /** null — тип неизвестен (например, «goal_deposit» из будущих этапов). */
     val entryType: EntryType?
@@ -41,6 +44,18 @@ data class ParsedEntry(
             else -> null
         }
 }
+
+/**
+ * Товар из покупки. [price] — сколько заплачено за позицию целиком (₽), [qty] и [unit] — «2 шт», «1,5 кг».
+ * Всё, чего нет во фразе, — null. Суммы позиций складывает приложение, а не ИИ.
+ */
+@Serializable
+data class ParsedItem(
+    val name: String = "",
+    val price: Double? = null,
+    val qty: Double? = null,
+    val unit: String? = null,
+)
 
 /**
  * Разобранный ответ модели. [dropped] — сколько записей из ответа отброшено как испорченные
@@ -124,13 +139,32 @@ object EntryParsing {
             note = e.note?.trim()?.take(MAX_NOTE),
             source = e.source?.trim()?.take(MAX_NAME),
             date = e.date?.trim()?.take(MAX_DATE),
+            items = e.items?.let(::sanitizeItems),
         )
     }
+
+    /** Испорченная цена или количество у товара — не повод терять всю трату: их просто нет. */
+    private fun sanitizeItems(items: List<ParsedItem>): List<ParsedItem>? = items
+        .filter { it.name.isNotBlank() }
+        .take(MAX_ITEMS)
+        .map { i ->
+            i.copy(
+                name = i.name.trim().take(MAX_ITEM_NAME),
+                price = i.price?.takeIf { it.isFinite() && it > 0 && it <= MAX_ENTRY_RUBLES },
+                qty = i.qty?.takeIf { it.isFinite() && it > 0 && it < MAX_QTY },
+                unit = i.unit?.trim()?.take(MAX_UNIT)?.ifEmpty { null },
+            )
+        }
+        .ifEmpty { null }
 
     private const val MAX_NAME = 60
     private const val MAX_EMOJI = 8
     private const val MAX_NOTE = 500
     private const val MAX_DATE = 20
+    private const val MAX_ITEMS = 50
+    private const val MAX_ITEM_NAME = 80
+    private const val MAX_UNIT = 10
+    private const val MAX_QTY = 100_000.0
 }
 
 /**
