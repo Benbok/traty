@@ -31,7 +31,8 @@ internal object ExpenseCommands {
         val byAi = q.intent in EXPENSE_INTENTS
         if (otherRe.containsMatchIn(text)) return null
         if (!byAi && questionRe.containsMatchIn(text)) return null
-        val about = objectRe.containsMatchIn(text)
+        // «удали их» без слова «траты»: понятно из прошлого ответа, если он показал траты
+        val about = objectRe.containsMatchIn(text) || (DebtCommands.refersBack(text) && previous?.ids?.isNotEmpty() == true)
         val intent = when {
             byAi -> q.intent
             about && moveRe.containsMatchIn(text) -> Intents.MOVE_EXPENSE
@@ -49,6 +50,8 @@ internal object ExpenseCommands {
                 from = previous.from,
                 to = previous.to,
                 limit = out.limit ?: previous.limit.takeIf { previous.intent == Intents.TOP },
+                // «удали их»: ровно те траты, что показал прошлый ответ, а не всё, что подходит под фильтр
+                ids = previous.ids,
             )
         }
         return out

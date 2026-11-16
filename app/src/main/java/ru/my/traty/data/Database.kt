@@ -331,6 +331,9 @@ interface IncomeDao {
     @Query("SELECT * FROM incomes ORDER BY timestamp ASC")
     suspend fun getAll(): List<Income>
 
+    @Query("SELECT * FROM incomes WHERE timestamp >= :from AND timestamp < :to ORDER BY timestamp DESC")
+    suspend fun getRange(from: Long, to: Long): List<Income>
+
     @Query("SELECT SUM(amountKopecks) FROM incomes WHERE timestamp >= :from AND timestamp < :to")
     fun observeTotal(from: Long, to: Long): Flow<Long?>
 

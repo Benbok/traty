@@ -1,6 +1,7 @@
 package ru.my.traty.assistant
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.Json
 import ru.my.traty.data.CategoryWithSubs
 
@@ -30,6 +31,13 @@ data class AssistantQuery(
     val all: Boolean = false,
     /** Для move_expense: категория или подкатегория, в которую переносят траты. */
     val target: String? = null,
+    /** Вместе с [relative]: amount — не рубли, а проценты от действующего плана («подними лимит на 10 процентов»). */
+    val percent: Boolean = false,
+    /**
+     * Траты из прошлого ответа, к которым относятся «удали их», «перенеси эти»: их проставляет приложение, а не ИИ.
+     * В JSON не попадает: ни в запрос к ИИ, ни в историю вопросов.
+     */
+    @Transient val ids: List<Long> = emptyList(),
 )
 
 object Intents {
@@ -62,7 +70,7 @@ object Intents {
     const val MOVE_EXPENSE = "move_expense"
     const val UNKNOWN = "unknown"
 
-    val ALL = listOf(TOTAL, TOP, BREAKDOWN, PLACES, COMPARE, AVERAGE, SUBSCRIPTIONS, INCOME, AFFORD, ADVICE, PLAN, BALANCE, SUGGEST_PLAN, SET_PLAN, REMOVE_PLAN, CANCEL_SUB, PAUSE_SUB, RESUME_SUB, EDIT_SUB, TREND, LIST, DEBTS, DELETE_DEBT, CLOSE_DEBT, CANCEL_DEBT, DELETE_EXPENSE, MOVE_EXPENSE, UNKNOWN)
+    val ALL: List<String> = IntentRegistry.ALL.map { it.key }
 }
 
 object AssistantQueries {
@@ -85,6 +93,7 @@ object AssistantQueries {
     private val downRe = Regex("""(уменьш|сниз|убав|урежь)\S*""")
     private val removePlanRe = Regex("""(убер|убр|удал|сним|снят|отмен|отключ|сбрось)\S*\s+(?:мне\s+|мой\s+|мои\s+|весь\s+|все\s+|всё\s+)*(лимит|план|бюджет)""")
     private val suggestPlanRe = Regex("""(предлож|состав|подбер|рассчита|посчита|прикин)\S*.*(план|лимит|бюджет)|^\s*(план|бюджет)\s+(трат|расходов)?\s*(на\s+(месяц|период))?\s*[.!?]*\s*$|какие\s+лимиты""")
+    private val percentRe = Regex("""(\d+(?:[.,]\d+)?)\s*(?:%|процент\S*)""")
     private val amountRe = Regex("""(\d[\d\s\u00A0]*(?:[.,]\d+)?)\s*(тыс\S*|т\.?|к)?(?![\p{L}\d])""")
     private val subWordRe = Regex("""подписк\S*|регулярн\S*\s+платеж\S*|платеж\S*""")
     private val cancelSubRe = Regex("""(отмен|удал|убер|убр|отключ|отпис|прекрат|выкин)\S*.*(подписк|платеж)|отпис\S*\s+(меня\s+)?от""")
@@ -122,11 +131,16 @@ object AssistantQueries {
             sub && cancelSubRe.containsMatchIn(text) -> q.copy(intent = Intents.CANCEL_SUB, place = q.place ?: subNameIn(text))
             removePlanRe.containsMatchIn(text) -> q.copy(intent = Intents.REMOVE_PLAN)
             setPlanRe.containsMatchIn(text) -> {
-                val amount = q.amount?.takeIf { it != 0.0 }?.let { kotlin.math.abs(it) } ?: amountIn(text)
+                // «подними лимит на 10 процентов»: 10 — это проценты от плана, а не десять рублей
+                val pct = percentRe.find(text)?.groupValues?.get(1)?.replace(',', '.')?.toDoubleOrNull()?.takeIf { it > 0 }
+                val amount = pct ?: q.amount?.takeIf { it != 0.0 }?.let { kotlin.math.abs(it) } ?: amountIn(text)
                 val absolute = Regex("""(?:\s|^)до\s+\d""").containsMatchIn(text) || Regex("""(постав|установ|задай|задать)""").containsMatchIn(text)
                 val relative = !absolute && (upRe.containsMatchIn(text) || downRe.containsMatchIn(text))
                 when {
                     amount == null -> q
+                    pct != null -> if (relative) {
+                        q.copy(intent = Intents.SET_PLAN, amount = if (downRe.containsMatchIn(text)) -pct else pct, relative = true, percent = true)
+                    } else q
                     relative -> q.copy(intent = Intents.SET_PLAN, amount = if (downRe.containsMatchIn(text)) -amount else amount, relative = true)
                     else -> q.copy(intent = Intents.SET_PLAN, amount = amount, relative = false)
                 }

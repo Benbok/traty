@@ -4,6 +4,7 @@ package ru.my.traty.assistant
 
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.ExpenseWithCategory
+import ru.my.traty.data.search.SearchText
 import java.util.Locale
 
 private val RU: Locale = Locale.forLanguageTag("ru")
@@ -29,11 +30,12 @@ internal fun stems(text: String): List<String> =
 
 private val PREPOSITIONS = setOf("в", "во", "на", "из", "у", "за", "по", "до", "от", "со")
 
-/** Все основы фразы встречаются в тексте траты (месте или заметке). */
-private fun ExpenseWithCategory.mentions(words: List<String>): Boolean {
+/** Фраза есть в месте или заметке траты: все основы слов встречаются в тексте, а «Озон» находит и «Ozon». */
+private fun ExpenseWithCategory.mentions(phrase: String): Boolean {
+    val words = stems(phrase)
     if (words.isEmpty()) return false
     val text = fold(listOfNotNull(expense.place, expense.note).joinToString(" "))
-    return words.all { it in text }
+    return words.all { it in text } || SearchText.sameBrand(phrase, listOf(expense.place, expense.note))
 }
 
 /**
@@ -47,18 +49,15 @@ internal class Filter(
     val place: String?,
     val terms: List<String> = emptyList(),
 ) {
-    private val placeWords = place?.let(::stems).orEmpty()
-    private val termWords = terms.map(::stems)
-
     val isEmpty get() = names.isEmpty() && terms.isEmpty() && place == null
 
     fun matches(r: ExpenseWithCategory): Boolean {
         if (names.isNotEmpty() || terms.isNotEmpty()) {
             val cat = r.categoryName.lowercase(RU)
             val sub = r.subcategoryName?.lowercase(RU)
-            if (cat !in names && sub !in names && termWords.none { r.mentions(it) }) return false
+            if (cat !in names && sub !in names && terms.none { r.mentions(it) }) return false
         }
-        if (place != null && !r.mentions(placeWords)) return false
+        if (place != null && !r.mentions(place)) return false
         return true
     }
 
@@ -85,7 +84,7 @@ internal class Filter(
             // ИИ записал категорию местом («кофе»), а таких мест в записях нет — считаем по категории
             place?.let { p ->
                 val asCategory = if (p in known) p else closest(p, known)
-                if (asCategory != null && rows.none { it.mentions(stems(p)) }) { found += asCategory; place = null }
+                if (asCategory != null && rows.none { it.mentions(p) }) { found += asCategory; place = null }
             }
             val terms = ArrayList<String>()
             val missing = ArrayList<String>()
@@ -94,7 +93,7 @@ internal class Filter(
                 val hit = if (n in known) n else closest(n, known)
                 when {
                     hit != null -> found += hit
-                    q.intent in TEXT_SEARCH && stems(a).let { w -> rows.any { it.mentions(w) } } -> terms += n
+                    q.intent in TEXT_SEARCH && rows.any { it.mentions(a) } -> terms += n
                     else -> missing += a
                 }
             }

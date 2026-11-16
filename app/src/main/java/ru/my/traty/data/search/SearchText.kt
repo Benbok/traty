@@ -59,5 +59,19 @@ object SearchText {
         return hay.any { SearchAliases.groupOf(it) == group }
     }
 
+    /**
+     * Одно и то же название в разных написаниях: «Озон» и «Ozon», «ВБ» и «Wildberries». Остальные слова должны совпасть целиком.
+     * Для мест, правил и фильтра ассистента, где поиск «слово входит в слово» слишком свободный.
+     */
+    fun sameBrand(query: String, texts: List<String?>): Boolean {
+        val q = queryWords(query)
+        if (q.isEmpty()) return false
+        val hay = texts.filterNotNull().flatMap(::words)
+        return q.all { w ->
+            val g = SearchAliases.groupOf(w)
+            hay.any { it == w || (g != null && SearchAliases.groupOf(it) == g) }
+        }
+    }
+
     private fun words(s: String): List<String> = fold(s).split(SPLIT).filter { it.isNotEmpty() }
 }

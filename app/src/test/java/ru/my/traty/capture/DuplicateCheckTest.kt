@@ -71,4 +71,40 @@ class DuplicateCheckTest {
         val income = EntryRow(EntryType.INCOME, "250", "", "", "Магнит", "", "Прочее", today.toString())
         assertNull(DuplicateCheck.find(listOf(income), listOf(old(7, 25_000, at(14), place = "Магнит")), zone, at(15)).single())
     }
+
+    private fun inc(amount: String, source: String = "Зарплата", note: String = "") =
+        EntryRow(EntryType.INCOME, amount, "", "", "", note, source, today.toString())
+
+    private fun oldIncome(id: Long, kopecks: Long, ts: Long, source: String = "Зарплата", note: String? = null) =
+        ExistingExpense(id, kopecks, ts, null, note, source, income = true)
+
+    @Test
+    fun repeatedIncomeIsAsked() {
+        val hint = DuplicateCheck.find(listOf(inc("50000")), listOf(oldIncome(9, 5_000_000, at(10))), zone, at(10, 5)).single()
+        assertEquals(9L, hint?.expenseId)
+        assertTrue(requireNotNull(hint).income)
+    }
+
+    @Test
+    fun incomeFromOtherSourceOrNoteIsNew() {
+        val existing = listOf(oldIncome(9, 5_000_000, at(10), note = "аванс"))
+        assertNull(DuplicateCheck.find(listOf(inc("50000", source = "Подарок")), existing, zone, at(11)).single())
+        assertNull(DuplicateCheck.find(listOf(inc("50000", note = "премия")), existing, zone, at(11)).single())
+        assertEquals(9L, DuplicateCheck.find(listOf(inc("50000", note = "Аванс")), existing, zone, at(11)).single()?.expenseId)
+    }
+
+    @Test
+    fun expenseAndIncomeOfSameAmountAreDifferent() {
+        val existing = listOf(oldIncome(9, 25_000, at(10), source = "Продукты"))
+        assertNull(DuplicateCheck.find(listOf(row("250")), existing, zone, at(10, 5)).single())
+    }
+
+    @Test
+    fun shopOnOneSideMatchesBySameCategoryRightAfter() {
+        val existing = listOf(old(7, 25_000, at(14), place = "Магнит"))
+        assertEquals(7L, DuplicateCheck.find(listOf(row("250")), existing, zone, at(14, 10)).single()?.expenseId)
+        assertNull(DuplicateCheck.find(listOf(row("250", category = "Кафе")), existing, zone, at(14, 10)).single())
+        val noShop = listOf(old(8, 25_000, at(14), category = "Продукты"))
+        assertEquals(8L, DuplicateCheck.find(listOf(row("250", place = "Магнит")), noShop, zone, at(14, 10)).single()?.expenseId)
+    }
 }

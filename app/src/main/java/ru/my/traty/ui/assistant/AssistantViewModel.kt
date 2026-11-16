@@ -22,7 +22,9 @@ import ru.my.traty.assistant.DebtChange
 import ru.my.traty.assistant.DebtWithPaid
 import ru.my.traty.assistant.ExpenseAction
 import ru.my.traty.assistant.ExpenseChange
+import ru.my.traty.assistant.AssistantAnswers
 import ru.my.traty.assistant.AssistantData
+import ru.my.traty.assistant.Intents
 import ru.my.traty.assistant.AssistantFallback
 import ru.my.traty.assistant.Balance
 import ru.my.traty.assistant.AssistantEngine
@@ -109,11 +111,8 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         val question = raw.trim()
         if (question.isEmpty() || busy) return
         messages += ChatMessage(nextId++, fromUser = true, text = question)
+        // Без ИИ вкладка не отказывает: вопрос понимается по ключевым словам, цифры считает приложение
         val client = c.llm(settings.value)
-        if (client == null) {
-            messages += ChatMessage(nextId++, false, "Чтобы отвечать на вопросы, подключите ИИ в Настройках → «Разбор фраз и ИИ».", error = true)
-            return
-        }
         busy = true
         viewModelScope.launch {
             try {
@@ -122,11 +121,12 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 val categories = c.db.categories().getActiveWithSubs().selectable()
                 // Шаг 1: вопрос → запрос. Если ИИ не ответил, пробуем понять вопрос правилами
                 var aiDown: Exception? = null
-                val fromAi = try {
+                val stepOneUser = AssistantPrompts.queryUser(question, history)
+                val fromAi = if (client == null) null else try {
                     AssistantQueries.decode(
                         client.complete(
                             system = AssistantPrompts.querySystem(categories, today, s.periodStartDay),
-                            user = AssistantPrompts.queryUser(question, history),
+                            user = stepOneUser,
                             jsonMode = true,
                         )
                     )
@@ -140,8 +140,13 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 if (aiDown != null && guessed == null) throw aiDown
                 val offline = aiDown != null
                 val offlineReason = aiDown?.message
-                val previous = history.lastOrNull()?.let { AssistantQueries.decode(it.queryJson) }
+                // Траты прошлого ответа приложение помнит само: «удали их» относится ровно к ним
+                val previous = history.lastOrNull()?.let { t -> AssistantQueries.decode(t.queryJson)?.copy(ids = t.expenseIds) }
                 val query = QuestionRules.resolve(question, fromAi, guessed, today, s.periodStartDay, previous, categories)
+                if (client == null && query.intent == Intents.UNKNOWN) {
+                    messages += ChatMessage(nextId++, false, AssistantFallback.NO_AI_HINT)
+                    return@launch
+                }
                 history += AssistantTurn(question, AssistantQueries.encode(query))
                 while (history.size > AssistantPrompts.HISTORY) history.removeAt(0)
 
@@ -166,13 +171,23 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     )
                     AssistantEngine.run(query, ctx)
                 }
-                val text = data.direct ?: if (offline) AssistantFallback.text(data, guessed = true, reason = offlineReason) else answer(client, question, data)
+                val remembered = data.expenseIds.ifEmpty { data.expenseChanges.map { it.id } }
+                history.lastIndex.takeIf { it >= 0 }?.let { history[it] = history[it].copy(expenseIds = remembered) }
+                val template = AssistantAnswers.template(query.intent, data)
+                val asked = client != null && !offline && data.direct == null && template == null
+                val text = data.direct ?: template ?: when {
+                    client == null -> AssistantFallback.text(data, guessed = true, noAiMode = true)
+                    offline -> AssistantFallback.text(data, guessed = true, reason = offlineReason)
+                    else -> AssistantAnswers.verified(answer(client, question, data), data)
+                }
                 messages += ChatMessage(
                     nextId++, false, text,
                     headline = data.headline,
                     caption = data.caption,
                     expenseIds = data.expenseIds,
-                    sentFacts = data.facts.takeIf { data.direct == null && !offline },
+                    sentFacts = if (client == null || offline) null else AssistantAnswers.sent(
+                        stepOneUser, categories.map { it.category.name }, data.facts.takeIf { asked },
+                    ),
                     planProposals = data.planProposals,
                     planMonth = data.planMonth,
                     subscriptionChanges = data.subscriptionChanges,

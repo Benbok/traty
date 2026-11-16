@@ -174,7 +174,8 @@ object AssistantEngine {
                     append(base)
                     appendLine("Самые крупные траты за $span${subject?.let { " ($it)" }.orEmpty()}:")
                     if (top.isEmpty()) appendLine("трат нет")
-                    top.forEach { appendLine("- ${describe(it, ctx.zone)}") }
+                    // Заметки в ИИ не отправляем: для «самых крупных» хватает категории и места
+                    top.forEach { appendLine("- ${describe(it, ctx.zone, withNote = false)}") }
                 }
                 AssistantData(facts, top.firstOrNull()?.let { formatRub(it.expense.amountKopecks) }, "Самая крупная · $span", top.map { it.expense.id })
             }
@@ -525,12 +526,16 @@ object AssistantEngine {
 
     /** «Поставь план на кафе 10 000»: одна строка с суммой пользователя, добавляется по кнопке. */
     private fun setPlan(q: AssistantQuery, ctx: AssistantContext, period: BillingPeriod, names: Set<String>): AssistantData {
-        val raw = ((q.amount ?: 0.0) * 100).roundToLong()
         val month = PlanMonth.of(period)
         val target = keysFor(ctx, names).firstOrNull()
         val now = target?.let { t -> BudgetPlans.effective(ctx.budgets, month).firstOrNull { PlanKey(it.categoryId, it.subcategoryId) == t.first } }
-        // «Увеличь лимит на 1000»: прибавка к действующему плану, а не новая сумма
-        val amount = if (q.relative) (now?.amountKopecks ?: 0L) + raw else raw
+        val current = now?.amountKopecks ?: 0L
+        // «Увеличь лимит на 1000»: прибавка к действующему плану, а не новая сумма; «на 10 процентов» — доля от плана, до целых рублей
+        val amount = when {
+            q.relative && q.percent -> ((current + current * (q.amount ?: 0.0) / 100.0) / 100.0).roundToLong() * 100
+            q.relative -> current + ((q.amount ?: 0.0) * 100).roundToLong()
+            else -> ((q.amount ?: 0.0) * 100).roundToLong()
+        }
         val facts = buildString {
             append(header(ctx))
             when {
@@ -540,6 +545,7 @@ object AssistantEngine {
                 amount <= 0 -> appendLine("Не понял сумму плана для «${target.second}».")
                 else -> {
                     appendLine("Готово к добавлению: план «${target.second}» ${formatRub(amount)} на период ${span(period.startDate, period.endDate)} и дальше каждый месяц.")
+                    if (q.percent) appendLine("Изменение посчитано как ${signedPercent(q.amount ?: 0.0)} от действующего плана.")
                     appendLine(now?.let { "Сейчас план ${formatRub(it.amountKopecks)}, он заменится (${signed(amount - it.amountKopecks)})." } ?: "Сейчас плана нет.")
                     appendLine("План ещё не изменён: пользователь подтверждает кнопкой под ответом.")
                 }
@@ -548,6 +554,11 @@ object AssistantEngine {
         if (target == null || amount <= 0 || (q.relative && now == null)) return AssistantData(facts)
         val proposal = PlanProposal(target.first.categoryId, target.first.subcategoryId, target.second, target.third, amount, now?.amountKopecks)
         return AssistantData(facts, formatRub(amount), "новый план «${target.second}»", planProposals = listOf(proposal), planMonth = month)
+    }
+
+    private fun signedPercent(p: Double): String {
+        val n = if (p % 1.0 == 0.0) p.toLong().toString() else p.toString()
+        return (if (p > 0) "+" else "") + n.replace('-', '−') + "%"
     }
 
     private fun titleOf(ctx: AssistantContext, key: PlanKey): Pair<String, String>? {

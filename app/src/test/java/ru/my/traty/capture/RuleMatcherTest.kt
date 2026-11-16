@@ -95,4 +95,13 @@ class RuleMatcherTest {
         assertTrue(RuleMatcher.apply(listOf(ParsedEntry(amount = 150.0, category = "Прочее", note = "продукты, лента у дома")), lenta, cats).single().ruleMatched)
         assertTrue(RuleMatcher.apply(listOf(ParsedEntry(amount = 150.0, category = "Прочее", place = "Гипермаркет «Лента»")), lenta, cats).single().ruleMatched)
     }
+
+    @Test
+    fun brandInOtherScriptMatchesRule() {
+        val brandRules = listOf(Rule(id = 5, pattern = "Озон", categoryId = 1))
+        val r = RuleMatcher.apply(listOf(ParsedEntry(amount = 900.0, category = "Прочее", place = "Ozon")), brandRules, cats).single()
+        assertTrue(r.ruleMatched)
+        val other = RuleMatcher.apply(listOf(ParsedEntry(amount = 900.0, category = "Прочее", place = "Ozon Travel Agency")), listOf(Rule(id = 6, pattern = "Wildberries", categoryId = 1)), cats).single()
+        assertFalse(other.ruleMatched)
+    }
 }

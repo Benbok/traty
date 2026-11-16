@@ -37,13 +37,14 @@ fun DuplicateNotice(hint: DuplicateHint, onRepeat: () -> Unit, onNew: () -> Unit
         ) {
             Text("Похоже, это уже записано", style = TratyTheme.typography.titleSmall, color = TratyTheme.colors.onSurface)
             Text(
-                "«${hint.label}», ${formatRub(hint.amountKopecks)}, ${whenText(hint.timestamp)}. Это та же покупка или новая?",
+                "«${hint.label}», ${formatRub(hint.amountKopecks)}, ${whenText(hint.timestamp)}. " +
+                    if (hint.income) "Это то же пополнение или новое?" else "Это та же покупка или новая?",
                 style = TratyTheme.typography.bodyMedium,
                 color = TratyTheme.colors.onSurface,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {
                 TratyTextButton(onClick = onRepeat) { Text("Это повтор") }
-                TratyButton(onClick = onNew) { Text("Новая покупка") }
+                TratyButton(onClick = onNew) { Text(if (hint.income) "Новое пополнение" else "Новая покупка") }
             }
         }
     }

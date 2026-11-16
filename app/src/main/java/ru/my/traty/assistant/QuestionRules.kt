@@ -83,16 +83,35 @@ object QuestionRules {
 object AssistantFallback {
     const val NO_AI = "ИИ сейчас не ответил, поэтому вот что посчитало приложение:"
 
+    /** Режим «Без ИИ»: вопрос понят по ключевым словам, и это не сбой. */
+    const val NO_AI_MODE = "Сейчас выбран разбор без ИИ, поэтому я понял вопрос по ключевым словам. Вот что посчитало приложение:"
+
+    /** Что умеет вкладка без ИИ, когда вопрос не удалось понять по ключевым словам. */
+    const val NO_AI_HINT = "Без ИИ я понимаю вопросы по ключевым словам, например: «сколько я потратил на кафе в этом месяце», " +
+        "«на что ушли деньги», «топ трат», «где я больше всего трачу», «мои подписки», «сколько я должен», «какой баланс». " +
+        "Чтобы спрашивать своими словами, подключите DeepSeek или YandexGPT в Настройках → «Разбор фраз и ИИ»."
+
+    const val UNCHECKED = "В ответе ИИ были числа, которых нет в расчётах приложения, поэтому показываю сами расчёты:"
+
     /** [reason] — понятный текст ошибки ИИ («неверный ключ», «нет сети»), если он есть. */
     fun noAiGuessed(reason: String?): String =
         "ИИ сейчас недоступен${reason?.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()}, " +
             "поэтому я понял вопрос по ключевым словам. Вот что посчитало приложение:"
 
-    fun text(data: AssistantData, guessed: Boolean = false, reason: String? = null): String {
-        val lines = data.facts.lines()
-            .filterNot { it.startsWith("Сегодня ") && it.endsWith("Суммы в рублях.") }
-            .map { it.replace(" — сравнение не приводи", "") }
-            .filter { it.isNotBlank() }
-        return (if (guessed) noAiGuessed(reason) else NO_AI) + "\n" + lines.joinToString("\n")
+    /** Строки посчитанных фактов без служебной шапки. */
+    fun bodyLines(data: AssistantData): List<String> = data.facts.lines()
+        .filterNot { it.startsWith("Сегодня ") && it.endsWith("Суммы в рублях.") }
+        .map { it.replace(" — сравнение не приводи", "") }
+        .filter { it.isNotBlank() }
+
+    fun text(data: AssistantData, guessed: Boolean = false, reason: String? = null, noAiMode: Boolean = false): String {
+        val head = when {
+            noAiMode -> NO_AI_MODE
+            guessed -> noAiGuessed(reason)
+            else -> NO_AI
+        }
+        return head + "\n" + bodyLines(data).joinToString("\n")
     }
+
+    fun unchecked(data: AssistantData): String = UNCHECKED + "\n" + bodyLines(data).joinToString("\n")
 }
