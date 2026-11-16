@@ -110,4 +110,20 @@ class AssistantDebtChangesTest {
         assertEquals(Intents.DELETE_DEBT, q.intent)
         assertEquals("телевизор", q.place)
     }
+
+    @Test
+    fun removeAllLimitsAfterDebtsAnswerIsNotDeleteDebt() {
+        // «все» тут про лимиты, а не про платежи из прошлого ответа
+        val q = correct("убери все лимиты", AssistantQuery(intent = Intents.UNKNOWN), debtsAnswer)
+        assertEquals(Intents.REMOVE_PLAN, q.intent)
+        assertFalse(q.all)
+    }
+
+    @Test
+    fun repayingCreditClosesItButReturningGoodsCancelsPurchase() {
+        assertEquals(Intents.CLOSE_DEBT, correct("я вернул кредит за телевизор", AssistantQuery(intent = Intents.UNKNOWN), null).intent)
+        assertEquals(Intents.CLOSE_DEBT, correct("вернул весь долг", AssistantQuery(intent = Intents.UNKNOWN), debtsAnswer).intent)
+        // Товар вернули в магазин — покупка отменяется
+        assertEquals(Intents.CANCEL_DEBT, correct("вернул телевизор, отмени покупку", AssistantQuery(intent = Intents.UNKNOWN, place = "телевизор"), debtsAnswer).intent)
+    }
 }
