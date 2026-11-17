@@ -39,7 +39,7 @@ internal fun ReadingEditorSheet(
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f)) {
             Text(
                 title,
-                style = TratyTheme.typography.titleLarge,
+                style = TratyTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg)
                     .padding(bottom = TratyTheme.spacing.md),
             )
