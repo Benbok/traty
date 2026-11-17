@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.my.traty.TratyApp
 import ru.my.traty.ai.receipt.ReceiptErrors
+import ru.my.traty.ai.receipt.isRetryable
 import ru.my.traty.capture.ReceiptImage
 import ru.my.traty.capture.ReceiptReview
 import ru.my.traty.capture.ReceiptStep
@@ -31,14 +32,15 @@ sealed interface ReceiptUiState {
     data object Idle : ReceiptUiState
     data class Working(val step: ReceiptStep) : ReceiptUiState
     data class Review(val review: ReceiptReview) : ReceiptUiState
-    data class Failed(val message: String) : ReceiptUiState
+    /** [canRetry] — фото (и, если успели, текст чека) ещё в памяти: «Повторить» продолжит без новой съёмки. */
+    data class Failed(val message: String, val canRetry: Boolean = false) : ReceiptUiState
 }
 
-/** Фото чека: съёмка, разбор через Яндекс и экран проверки. Сохраняет трату экран «Траты» после проверки. */
+/** Фото чека: съёмка, чтение текста Яндексом, разбор DeepSeek и экран проверки. Сохраняет трату экран «Траты» после проверки. */
 class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
     private val c = (app as TratyApp).container
 
-    /** Кнопка камеры видна, только когда заполнены API-ключ и ID каталога Яндекса. */
+    /** Кнопка камеры видна, только когда заполнены ключ и каталог Яндекса и ключ DeepSeek. */
     val canScan: StateFlow<Boolean> = c.settings.flow.map { it.canScanReceipts }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
@@ -56,23 +58,46 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
         return FileProvider.getUriForFile(app, "${app.packageName}.receipts", file)
     }
 
+    /** Фото после сжатия и текст, который Яндекс уже прочитал: для «Повторить» после ошибки. Только в памяти. */
+    private var lastJpeg: ByteArray? = null
+    private var lastText: String? = null
+
     /** [uri] — фото с камеры ([cameraUri]) или из галереи. */
     fun scan(uri: Uri) {
         if (state is ReceiptUiState.Working) return
+        lastJpeg = null
+        lastText = null
+        process {
+            try {
+                ReceiptImage.prepare(getApplication(), uri).also { lastJpeg = it }
+            } finally {
+                // Фото чека на телефоне не храним: после сжатия оно остаётся только в памяти до закрытия экрана
+                withContext(Dispatchers.IO + NonCancellable) { runCatching { photoFile.delete() } }
+            }
+        }
+    }
+
+    /** Продолжить с шага, на котором была ошибка: прочитанный Яндексом текст повторно не отправляется. */
+    fun retry() {
+        val jpeg = lastJpeg ?: return
+        if (state is ReceiptUiState.Working) return
+        process { jpeg }
+    }
+
+    private fun process(photo: suspend () -> ByteArray) {
         job?.cancel()
         state = ReceiptUiState.Working(ReceiptStep.READING)
         job = viewModelScope.launch {
             try {
-                val jpeg = ReceiptImage.prepare(getApplication(), uri)
-                val review = c.receipts.scan(jpeg) { step -> state = ReceiptUiState.Working(step) }
-                state = ReceiptUiState.Review(review)
+                val text = lastText ?: c.receipts.recognize(photo()) { step -> state = ReceiptUiState.Working(step) }
+                    .also { lastText = it }
+                state = ReceiptUiState.Review(c.receipts.parse(text) { step -> state = ReceiptUiState.Working(step) })
+                lastJpeg = null
+                lastText = null
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                state = ReceiptUiState.Failed(ReceiptErrors.text(e))
-            } finally {
-                // Фото чека на телефоне не храним: оно нужно только на время распознавания
-                withContext(Dispatchers.IO + NonCancellable) { runCatching { photoFile.delete() } }
+                state = ReceiptUiState.Failed(ReceiptErrors.text(e), canRetry = lastJpeg != null && ReceiptErrors.isRetryable(e))
             }
         }
     }
@@ -85,6 +110,8 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
     fun close() {
         job?.cancel()
         job = null
+        lastJpeg = null
+        lastText = null
         state = ReceiptUiState.Idle
     }
 }
