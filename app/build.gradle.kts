@@ -24,6 +24,18 @@ fun File.sha256(): String =
         }
     }.digest().joinToString("") { "%02x".format(it) }
 
+// Версия последнего релиза из git-тега («v0.2.2» → «0.2.2»). Нет git, тегов или ошибка — null.
+fun lastGitTagVersion(): String? = try {
+    val process = ProcessBuilder("git", "describe", "--tags", "--abbrev=0")
+        .directory(rootDir)
+        .redirectErrorStream(true)
+        .start()
+    val out = process.inputStream.bufferedReader().readText().trim()
+    if (process.waitFor() == 0) out.removePrefix("v").takeIf { Regex("""\d+(\.\d+)*""").matches(it) } else null
+} catch (e: Exception) {
+    null
+}
+
 val downloadSherpaAar = tasks.register("downloadSherpaAar") {
     val out = sherpaAar.get().asFile
     outputs.file(out)
@@ -46,9 +58,10 @@ android {
         applicationId = "ru.my.traty"
         minSdk = 26
         targetSdk = 35
-        // В CI версия берётся из тега (v0.2 → 0.2), номер сборки — из счётчика запусков; локально — как раньше.
+        // В CI версия берётся из тега (v0.2 → 0.2), номер сборки — из счётчика запусков.
+        // Локально название версии берётся из последнего git-тега (v0.2.2 → 0.2.2), без git и тегов — 0.1.
         versionCode = System.getenv("TRATY_VERSION_CODE")?.toIntOrNull() ?: 1
-        versionName = System.getenv("TRATY_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: "0.1"
+        versionName = System.getenv("TRATY_VERSION_NAME")?.takeIf { it.isNotBlank() } ?: lastGitTagVersion() ?: "0.1"
         // Нативные библиотеки распознавания — только для телефонов arm64 (эмуляторами не пользуемся)
         ndk { abiFilters += "arm64-v8a" }
     }
