@@ -14,14 +14,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import ru.my.traty.data.period.SpendingPace
 import ru.my.traty.ui.designsystem.components.AmountSize
 import ru.my.traty.ui.designsystem.components.TratyAmountText
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatRubSigned
+import ru.my.traty.ui.formatRub
 import ru.my.traty.ui.formatShortDate
 import java.time.LocalDate
 
@@ -53,9 +54,19 @@ internal fun SpendingPaceCard(pace: SpendingPace, endDate: LocalDate, prevSum: L
 
 @Composable
 private fun PaceMetrics(pace: SpendingPace, endDate: LocalDate) {
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val amountStyle = TratyTheme.typography.mediumAmount.copy(fontWeight = FontWeight.Bold)
+    val amountWidth = with(density) {
+        maxOf(
+            measurer.measure(formatRub(pace.dailyAverage), amountStyle, maxLines = 1).size.width,
+            pace.forecast?.let { measurer.measure(formatRub(it), amountStyle, maxLines = 1).size.width } ?: 0,
+        ).toDp()
+    }
+    val gap = TratyTheme.spacing.lg
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // На небольшом экране и при крупном шрифте не ужимаем суммы в половину карточки.
-        val stacked = maxWidth < 280.dp || LocalDensity.current.fontScale > 1.2f
+        val stacked = amountWidth * 2 + gap > maxWidth || density.fontScale > 1.2f
         val forecast = pace.forecast
         if (stacked || forecast == null) {
             Column(verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.lg)) {
