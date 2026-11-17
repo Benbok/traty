@@ -14,7 +14,7 @@ import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 /**
  * Карточка «Чеки по фото»: текст с фото читает Yandex Vision OCR (ключ и ID каталога из карточки YandexGPT),
- * товары раскладывает DeepSeek (его ключ), какой бы ИИ ни был выбран для голоса.
+ * товары раскладывает DeepSeek, какой бы ИИ ни был выбран для голоса.
  * Пока что-то из этого не заполнено, кнопки камеры на «Тратах» нет.
  */
 @Composable
@@ -26,14 +26,14 @@ internal fun ReceiptSettingsCard(s: AppSettings) {
         ) {
             Text("Чеки по фото", style = TratyTheme.typography.titleMedium)
             Text(
-                "Текст с фото читает Yandex Vision OCR, товары из текста раскладывает DeepSeek. Нужны ключ DeepSeek " +
-                    "и API-ключ с ID каталога Yandex Cloud из карточек выше, у сервисного аккаунта — роль ai.vision.user.",
+                "Текст с фото читает Yandex Vision OCR, товары из текста раскладывает DeepSeek. Заполните ключ и модель DeepSeek " +
+                    "и API-ключ, ID каталога и модель Yandex из карточек выше, у сервисного аккаунта — роль ai.vision.user.",
                 style = TratyTheme.typography.bodySmall,
                 color = TratyTheme.colors.onSurfaceVariant,
             )
             Text(
-                if (s.canScanReceipts) "Включено: на «Тратах» рядом с микрофоном есть кнопка камеры"
-                else "Выключено: заполните ключ DeepSeek, API-ключ и ID каталога Yandex Cloud и сохраните",
+                if (s.canScanReceipts) "Включено: на «Тратах» рядом с микрофоном есть кнопка «Чек»"
+                else "Выключено: заполните все поля DeepSeek и Yandex выше и сохраните",
                 style = TratyTheme.typography.bodySmall,
                 color = if (s.canScanReceipts) TratyTheme.colors.primary else TratyTheme.colors.onSurfaceVariant,
             )

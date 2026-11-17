@@ -157,6 +157,20 @@ class ReceiptScannerTest {
     }
 
     @Test
+    fun everyAiFieldIsRequiredAndWhitespaceIsNotConfigured() {
+        val configured = AppSettings(yandexKey = "k", yandexFolderId = "folder", deepseekKey = "d")
+        assertTrue(configured.canScanReceipts)
+        for (blank in listOf("", " ", "\\t\\n")) {
+            assertFalse(configured.copy(deepseekKey = blank).canScanReceipts)
+            assertFalse(configured.copy(deepseekModel = blank).canScanReceipts)
+            assertFalse(configured.copy(yandexKey = blank).canScanReceipts)
+            assertFalse(configured.copy(yandexFolderId = blank).canScanReceipts)
+            assertFalse(configured.copy(yandexModel = blank).canScanReceipts)
+        }
+        assertTrue(configured.copy(provider = ru.my.traty.data.LlmProvider.OFFLINE).canScanReceipts)
+    }
+
+    @Test
     fun withoutYandexOrDeepSeekKeysNoScanning() {
         assertFalse(AppSettings(yandexKey = "k").canScanReceipts)
         assertFalse(AppSettings(yandexKey = "k", yandexFolderId = "b1g").canScanReceipts)
