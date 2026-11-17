@@ -36,7 +36,7 @@ object ApartmentQuestionRules {
             Regex("холод|хвс").containsMatchIn(text) -> "COLD_WATER"
             Regex("электр|квт").containsMatchIn(text) -> "ELECTRICITY"
             Regex("(?<![а-я])газ").containsMatchIn(text) -> "GAS"
-            text.contains("вод") -> "WATER"
+            Regex("(?<![а-я])вод[а-я]*").containsMatchIn(text) -> "WATER"
             else -> base.resource
         }
         val ordered = spans.take(2).sortedBy { it.from }

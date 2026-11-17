@@ -42,6 +42,10 @@ data class AssistantQuery(
 )
 
 object Intents {
+    const val METER_READINGS = "meter_readings"
+    const val RESOURCE_CONSUMPTION = "resource_consumption"
+    const val RESOURCE_COMPARE = "resource_compare"
+    const val RESOURCE_TREND = "resource_trend"
     const val TOTAL = "total"
     const val TOP = "top"
     const val BREAKDOWN = "breakdown"
