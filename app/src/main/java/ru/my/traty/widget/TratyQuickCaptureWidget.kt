@@ -71,7 +71,7 @@ private fun QuickCaptureButton(
     val foreground = ColorProvider(LightTratyColors.onPrimaryContainer, DarkTratyColors.onPrimaryContainer)
     Column(
         modifier.cornerRadius(20.dp).background(background)
-            .clickable(actionStartActivity(intent)).padding(8.dp),
+            .clickable(actionStartActivity(intent)).padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically,
     ) {
