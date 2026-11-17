@@ -21,6 +21,18 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew :app:testDebugUnitTest :app:assembleDebug --console=plain
+      - name: Ошибки тестов
+        if: failure()
+        run: |
+          python3 - <<'PYTESTLOG'
+          import glob, xml.etree.ElementTree as ET
+          for path in glob.glob('app/build/test-results/testDebugUnitTest/TEST-*.xml'):
+              root = ET.parse(path).getroot()
+              for case in root.findall('testcase'):
+                  for failure in case.findall('failure'):
+                      print(root.attrib.get('name'), case.attrib.get('name'))
+                      print((failure.text or '')[:14000])
+          PYTESTLOG
       - name: Сгенерированная схема
         if: always()
         run: |
