@@ -1,7 +1,6 @@
 package ru.my.traty.ui.charts.model
 
 import ru.my.traty.data.StoreTotal
-import java.time.LocalDate
 
 /**
  * Периоды агрегации данных для графиков.
@@ -36,31 +35,6 @@ data class ChartSummary(
 )
 
 /**
- * Точка на графике динамики баланса.
- */
-data class BalancePoint(
-    val label: String,
-    val date: LocalDate,
-    /** Изменение баланса в этот день/интервал (дебет − кредит). */
-    val deltaKopecks: Long,
-    /** Накопительный баланс на конец дня/интервала. */
-    val cumulativeBalanceKopecks: Long,
-)
-
-/**
- * Элемент столбчатого графика сравнения дебета и кредита.
- */
-data class DebitCreditBar(
-    val label: String,
-    val fullDateLabel: String,
-    val date: LocalDate,
-    val debitKopecks: Long,
-    val creditKopecks: Long,
-) {
-    val netKopecks: Long get() = debitKopecks - creditKopecks
-}
-
-/**
  * Доля категории в общем кредите (тратах).
  */
 data class CategoryCreditShare(
@@ -72,3 +46,4 @@ data class CategoryCreditShare(
     /** Разбивка категории по магазинам (по убыванию суммы, «Без магазина» последним). */
     val stores: List<StoreTotal> = emptyList(),
 )
+

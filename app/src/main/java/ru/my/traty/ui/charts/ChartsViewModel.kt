@@ -19,16 +19,14 @@ import ru.my.traty.data.Income
 import ru.my.traty.data.Places
 import ru.my.traty.data.placeTotals
 import ru.my.traty.data.period.BillingPeriod
-import ru.my.traty.ui.RU
-import ru.my.traty.ui.charts.model.BalancePoint
+import ru.my.traty.ui.charts.model.CashFlowPoint
 import ru.my.traty.ui.charts.model.CategoryCreditShare
 import ru.my.traty.ui.charts.model.ChartPeriod
 import ru.my.traty.ui.charts.model.ChartSummary
-import ru.my.traty.ui.charts.model.DebitCreditBar
+import ru.my.traty.ui.charts.model.cumulativeCashFlowPoints
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 
 data class ChartsUiState(
@@ -40,8 +38,7 @@ data class ChartsUiState(
     val rangeStart: LocalDate = LocalDate.now(),
     val rangeEnd: LocalDate = LocalDate.now(),
     val summary: ChartSummary = ChartSummary(0, 0, 0, null, 0, 0, 0),
-    val balancePoints: List<BalancePoint> = emptyList(),
-    val debitCreditBars: List<DebitCreditBar> = emptyList(),
+    val cashFlowPoints: List<CashFlowPoint> = emptyList(),
     val categoryShares: List<CategoryCreditShare> = emptyList(),
     val recentIncomes: List<Income> = emptyList(),
 )
@@ -159,8 +156,7 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
             expenseCount = expenses.size,
         )
 
-        val balancePoints = calculateBalancePoints(p, startDay, range, expenses, incomes)
-        val debitCreditBars = calculateDebitCreditBars(p, startDay, range, expenses, incomes)
+        val cashFlowPoints = calculateCashFlowPoints(p, startDay, range, expenses, incomes)
         val categoryShares = calculateCategoryShares(expenses, totalCredit)
 
         return ChartsUiState(
@@ -170,135 +166,34 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
             rangeStart = range.startDate,
             rangeEnd = range.endDate,
             summary = summary,
-            balancePoints = balancePoints,
-            debitCreditBars = debitCreditBars,
+            cashFlowPoints = cashFlowPoints,
             categoryShares = categoryShares,
             recentIncomes = incomes.take(15),
         )
     }
 
-    private fun calculateBalancePoints(
+    private fun calculateCashFlowPoints(
         period: ChartPeriod,
         startDay: Int,
         range: ChartRange,
         expenses: List<ExpenseWithCategory>,
         incomes: List<Income>,
-    ): List<BalancePoint> {
-        val daysBetween = ChronoUnit.DAYS.between(range.startDate, range.endDate).toInt()
-        if (daysBetween < 0) return emptyList()
-
-        // Сгруппируем операции по дате (LocalDate)
-        val debitByDate = incomes.groupBy {
+    ): List<CashFlowPoint> {
+        if (expenses.isEmpty() && incomes.isEmpty()) return emptyList()
+        val incomeByDate = incomes.groupBy {
             Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate()
-        }.mapValues { (_, list) -> list.sumOf { it.amountKopecks } }
-
-        val creditByDate = expenses.groupBy {
+        }.mapValues { (_, items) -> items.sumOf { it.amountKopecks } }
+        val expenseByDate = expenses.groupBy {
             Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate()
-        }.mapValues { (_, list) -> list.sumOf { it.expense.amountKopecks } }
-
-        val points = mutableListOf<BalancePoint>()
-        var runningCumulative = 0L
-
-        if (usesDailyPoints(period, range)) {
-            // Для месяца и коротких периодов делаем точку на каждый день
-            var curDate = range.startDate
-            while (!curDate.isAfter(range.endDate)) {
-                val debit = debitByDate[curDate] ?: 0L
-                val credit = creditByDate[curDate] ?: 0L
-                val delta = debit - credit
-                runningCumulative += delta
-                points.add(
-                    BalancePoint(
-                        label = "${curDate.dayOfMonth} ${curDate.month.getDisplayName(TextStyle.SHORT, RU)}",
-                        date = curDate,
-                        deltaKopecks = delta,
-                        cumulativeBalanceKopecks = runningCumulative,
-                    ),
-                )
-                curDate = curDate.plusDays(1)
-            }
+        }.mapValues { (_, items) -> items.sumOf { it.expense.amountKopecks } }
+        val intervals = if (usesDailyPoints(period, range)) {
+            generateSequence(range.startDate) { it.plusDays(1) }
+                .takeWhile { !it.isAfter(range.endDate) }
+                .map { it..it }.toList()
         } else {
-            // Для более длинных периодов группируем по расчётным периодам (при дне начала 1 — по месяцам)
-            for (bucket in billingBuckets(range.startDate, range.endDate, startDay)) {
-                val bucketDebit = incomes.filter {
-                    Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate() in bucket
-                }.sumOf { it.amountKopecks }
-
-                val bucketCredit = expenses.filter {
-                    Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate() in bucket
-                }.sumOf { it.expense.amountKopecks }
-
-                val delta = bucketDebit - bucketCredit
-                runningCumulative += delta
-
-                points.add(
-                    BalancePoint(
-                        label = bucketShortLabel(bucket),
-                        date = bucket.endDate,
-                        deltaKopecks = delta,
-                        cumulativeBalanceKopecks = runningCumulative,
-                    ),
-                )
-            }
+            billingBuckets(range.startDate, range.endDate, startDay).map { it.startDate..it.endDate }
         }
-        return points
-    }
-
-    private fun calculateDebitCreditBars(
-        period: ChartPeriod,
-        startDay: Int,
-        range: ChartRange,
-        expenses: List<ExpenseWithCategory>,
-        incomes: List<Income>,
-    ): List<DebitCreditBar> {
-        val debitByDate = incomes.groupBy {
-            Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate()
-        }.mapValues { (_, list) -> list.sumOf { it.amountKopecks } }
-
-        val creditByDate = expenses.groupBy {
-            Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate()
-        }.mapValues { (_, list) -> list.sumOf { it.expense.amountKopecks } }
-
-        val bars = mutableListOf<DebitCreditBar>()
-
-        if (usesDailyPoints(period, range)) {
-            var curDate = range.startDate
-            while (!curDate.isAfter(range.endDate)) {
-                val debit = debitByDate[curDate] ?: 0L
-                val credit = creditByDate[curDate] ?: 0L
-                bars.add(
-                    DebitCreditBar(
-                        label = curDate.dayOfMonth.toString(),
-                        fullDateLabel = "${curDate.dayOfMonth} ${curDate.month.getDisplayName(TextStyle.FULL, RU)}",
-                        date = curDate,
-                        debitKopecks = debit,
-                        creditKopecks = credit,
-                    ),
-                )
-                curDate = curDate.plusDays(1)
-            }
-        } else {
-            for (bucket in billingBuckets(range.startDate, range.endDate, startDay)) {
-                val bucketDebit = incomes.filter {
-                    Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate() in bucket
-                }.sumOf { it.amountKopecks }
-
-                val bucketCredit = expenses.filter {
-                    Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate() in bucket
-                }.sumOf { it.expense.amountKopecks }
-
-                bars.add(
-                    DebitCreditBar(
-                        label = bucketShortLabel(bucket),
-                        fullDateLabel = bucketFullLabel(bucket),
-                        date = bucket.startDate,
-                        debitKopecks = bucketDebit,
-                        creditKopecks = bucketCredit,
-                    ),
-                )
-            }
-        }
-        return bars
+        return cumulativeCashFlowPoints(intervals, incomeByDate, expenseByDate)
     }
 
     private fun calculateCategoryShares(
@@ -325,3 +220,4 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun LocalDate.toStartMillis(): Long = atStartOfDay(zone).toInstant().toEpochMilli()
 }
+
