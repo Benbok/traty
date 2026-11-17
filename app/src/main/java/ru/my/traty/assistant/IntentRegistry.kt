@@ -17,6 +17,10 @@ object IntentRegistry {
     const val DEBT = "debt"
 
     val ALL: List<IntentSpec> = listOf(
+        IntentSpec(ru.my.traty.assistant.apartments.ApartmentIntents.READINGS, IntentKind.QUESTION, "последние показания счётчиков, заполни housing"),
+        IntentSpec(ru.my.traty.assistant.apartments.ApartmentIntents.CONSUMPTION, IntentKind.QUESTION, "потребление воды, газа или электричества в физических единицах, заполни housing"),
+        IntentSpec(ru.my.traty.assistant.apartments.ApartmentIntents.COMPARE, IntentKind.QUESTION, "сравни потребление ресурсов, без периода два последних завершённых интервала, заполни housing"),
+        IntentSpec(ru.my.traty.assistant.apartments.ApartmentIntents.TREND, IntentKind.QUESTION, "история и динамика потребления ресурсов, заполни housing"),
         IntentSpec(Intents.TOTAL, IntentKind.QUESTION, """сколько потрачено (всего, на категорию, в месте)"""),
         IntentSpec(Intents.TOP, IntentKind.QUESTION, """самые крупные траты (limit — сколько, по умолчанию 5)"""),
         IntentSpec(Intents.BREAKDOWN, IntentKind.QUESTION, """на что ушли деньги, разбивка по категориям"""),

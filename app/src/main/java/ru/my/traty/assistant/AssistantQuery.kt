@@ -38,6 +38,7 @@ data class AssistantQuery(
      * В JSON не попадает: ни в запрос к ИИ, ни в историю вопросов.
      */
     @Transient val ids: List<Long> = emptyList(),
+    val housing: ru.my.traty.assistant.apartments.ApartmentQuestion? = null,
 )
 
 object Intents {
