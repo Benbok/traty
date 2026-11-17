@@ -9,7 +9,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 
 @Composable
-internal fun SubmissionDialog(meterId: Long, readings: List<MeterReading>, vm: MeterDetailViewModel, onDismiss: () -> Unit) {
+internal fun SubmissionDialog(meterId: Long, readings: List<MeterReading>, registers: List<MeterRegister>, vm: MeterDetailViewModel, onDismiss: () -> Unit) {
     var day by remember { mutableStateOf(LocalDate.now().toString()) }
     var month by remember { mutableStateOf(YearMonth.now().toString()) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -26,7 +26,7 @@ internal fun SubmissionDialog(meterId: Long, readings: List<MeterReading>, vm: M
         readings.sortedByDescending { it.measuredAt }.forEach { r ->
             Row {
                 Checkbox(r.id in selected, { checked -> if (checked) selected.add(r.id) else selected.remove(r.id) })
-                Text("${ReadingDates.decode(r.measuredAt)} · ${ReadingValues.format(r.valueMilli)}")
+                Text("${registers.firstOrNull { it.id == r.registerId }?.code.orEmpty()} · ${ReadingDates.decode(r.measuredAt)} · ${ReadingValues.format(r.valueMilli)}")
             }
         }
     }

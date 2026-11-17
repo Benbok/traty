@@ -17,7 +17,7 @@ import ru.my.traty.data.apartments.Apartment
 @Config(application = TestTratyApp::class)
 class ApartmentsViewModelTest {
     @Test fun failedInputKeepsHistoryAndResetsBusy() = runBlocking {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
+        Dispatchers.setMain(Dispatchers.Unconfined)
         val app = ApplicationProvider.getApplicationContext<TestTratyApp>()
         val vm = ApartmentsViewModel(app)
         val store = ViewModelStore().apply { put("apartments", vm) }
@@ -25,6 +25,7 @@ class ApartmentsViewModelTest {
             val done = CompletableDeferred<Unit>()
             vm.save(Apartment(name = "Дом")) { done.complete(Unit) }
             withTimeout(5000) { done.await() }
+            withTimeout(5000) { while (vm.busy) delay(1) }
             assertEquals("Дом", vm.snapshot.value.apartments.single().name)
             vm.save(Apartment(name = "")) { fail("Неверный ввод не должен закрывать форму") }
             withTimeout(5000) { while (vm.busy) delay(1) }
