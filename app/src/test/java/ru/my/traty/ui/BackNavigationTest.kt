@@ -14,6 +14,7 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import ru.my.traty.TestTratyApp
+import ru.my.traty.ui.apartments.ApartmentsRoute
 import ru.my.traty.ui.budget.BudgetScreen
 import ru.my.traty.ui.feedback.FeedbackScreen
 import ru.my.traty.ui.recurring.RecurringScreen
@@ -98,6 +99,22 @@ class BackNavigationTest {
         assertTrue("Back callback should be enabled when AiSettingsScreen is open", activity.onBackPressedDispatcher.hasEnabledCallbacks())
         activity.onBackPressedDispatcher.onBackPressed()
         assertTrue("onBack should be called when system back is pressed in AiSettingsScreen", backCalled)
+    }
+
+    @Test
+    fun apartmentsListReturnsToItsCallerOnBack() {
+        val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
+        val activity = controller.get()
+        var backCalled = false
+
+        activity.setContent {
+            ApartmentsRoute(onBack = { backCalled = true })
+        }
+
+        assertTrue(activity.onBackPressedDispatcher.hasEnabledCallbacks())
+        activity.onBackPressedDispatcher.onBackPressed()
+        assertTrue("The apartments list should return to Settings", backCalled)
+        controller.pause().stop().destroy()
     }
 
     @Test

@@ -40,7 +40,8 @@ object QuestionRules {
         val intent = RULES.firstOrNull { it.regex.containsMatchIn(text) }?.intent ?: return null
         return AssistantQuery(
             intent = intent,
-            categories = categoriesIn(text, categories).ifEmpty { subjectIn(text) },
+            categories = broadPetCategory(text, intent, categories)?.let(::listOf)
+                ?: categoriesIn(text, categories).ifEmpty { subjectIn(text) },
             amount = if (intent == Intents.AFFORD) AssistantQueries.amountIn(text) else null,
             limit = if (intent == Intents.TOP) Regex("""топ[\s-]*(\d{1,2})""").find(text)?.groupValues?.get(1)?.toIntOrNull() else null,
             groupBy = if (intent == Intents.TREND) groupIn(text) else null,
@@ -92,7 +93,31 @@ object QuestionRules {
         categories: List<CategoryWithSubs> = emptyList(),
     ): AssistantQuery {
         val base = fromAi?.takeIf { it.intent != Intents.UNKNOWN } ?: guessed ?: fromAi ?: AssistantQuery(intent = Intents.UNKNOWN)
-        return QuestionDates.apply(question, AssistantQueries.correct(question, base, previous, categories), today, startDay)
+        val corrected = AssistantQueries.correct(question, base, previous, categories)
+        val broadPet = broadPetCategory(fold(question), corrected.intent, categories)
+        val scoped = if (broadPet == null) corrected else corrected.copy(
+            categories = listOf(broadPet),
+            place = corrected.place?.takeIf { p -> stems(p).let { it.isNotEmpty() && it.all { word -> word in fold(question) } } },
+        )
+        return QuestionDates.apply(question, scoped, today, startDay)
+    }
+
+    // Общий вопрос о питомце не должен случайно сужаться ИИ до одной услуги.
+    // Именованные животные и конкретные покупки остаются поиском по словам.
+    private val petScopeIntents = setOf(
+        Intents.TOTAL, Intents.TOP, Intents.BREAKDOWN, Intents.PLACES,
+        Intents.COMPARE, Intents.AVERAGE, Intents.TREND, Intents.LIST,
+    )
+    private val broadPetRe = Regex(
+        """(?:^|[^\p{L}])на\s+(?:(?:мою|моего|моих|свою|своего|своих)\s+)?(?:кошку|кошек|кота|котов|котенка|собаку|собак|щенка|питомца|питомцев)(?=\s*(?:$|[?!.,]|за\s|в\s|с\s|по\s|этот\s|прошлый\s))"""
+    )
+
+    private fun broadPetCategory(text: String, intent: String, categories: List<CategoryWithSubs>): String? {
+        if (intent !in petScopeIntents || !broadPetRe.containsMatchIn(text)) return null
+        val pets = categories.firstOrNull { fold(it.category.name) == "питомцы" } ?: return null
+        // «На кошку, только груминг» — явная подкатегория важнее общего названия.
+        if (categoriesIn(text, categories).any { fold(it) != fold(pets.category.name) }) return null
+        return pets.category.name
     }
 }
 

@@ -72,6 +72,7 @@ import java.time.LocalDate
 fun TratyRoot(vm: MainViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(TratyNavTab.HOME) }
     var showCategories by rememberSaveable { mutableStateOf(false) }
+    var showApartments by rememberSaveable { mutableStateOf(false) }
     var showRules by rememberSaveable { mutableStateOf(false) }
     var showRecurring by rememberSaveable { mutableStateOf(false) }
     var showDebtsList by rememberSaveable { mutableStateOf(false) }
@@ -146,7 +147,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             },
             containerColor = TratyTheme.colors.background,
             bottomBar = {
-                NavigationBar(
+                if (!showApartments) NavigationBar(
                     containerColor = TratyTheme.colors.surface,
                     tonalElevation = 2.dp,
                 ) {
@@ -191,7 +192,6 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onStartRecordingHandled = { startRecording = false },
                         onOpenWeekly = { showWeekly = true },
                     )
-                    TratyNavTab.APARTMENTS -> ru.my.traty.ui.apartments.ApartmentsRoute()
                     TratyNavTab.CHARTS -> ChartsScreen()
                     TratyNavTab.STATS -> StatsScreen(
                         vm,
@@ -209,6 +209,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                     TratyNavTab.SETTINGS -> SettingsScreen(
                         vm,
                         onOpenCategories = { showCategories = true },
+                        onOpenApartments = { showApartments = true },
                         onOpenReconcile = { reconcileMode = ReconcileMode.NORMAL },
                         onRedoReconcile = { reconcileMode = ReconcileMode.REDO },
                         onOpenRules = { showRules = true },
@@ -220,6 +221,11 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onOpenHelp = { showHelp = true },
                         onOpenFeedback = { showFeedback = true },
                     )
+                }
+                if (showApartments) {
+                    Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                        ru.my.traty.ui.apartments.ApartmentsRoute(onBack = { showApartments = false })
+                    }
                 }
             }
         }

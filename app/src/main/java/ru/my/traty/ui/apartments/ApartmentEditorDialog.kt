@@ -1,19 +1,54 @@
 package ru.my.traty.ui.apartments
 
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Modifier
 import ru.my.traty.data.apartments.Apartment
+import ru.my.traty.ui.designsystem.components.*
 
 @Composable
-internal fun ApartmentEditorDialog(value: Apartment, vm: ApartmentsViewModel, onDismiss: () -> Unit) {
-    var name by remember(value.id) { mutableStateOf(value.name) }
-    var address by remember(value.id) { mutableStateOf(value.address.orEmpty()) }
-    var archived by remember(value.id) { mutableStateOf(value.archived) }
-    HousingDialog("Квартира", vm.message, vm.busy, onDismiss, { vm.save(value.copy(name = name, address = address.trim().ifBlank { null }, archived = archived), onDismiss) }) {
-        HousingField(name, "Название") { name = it }
-        HousingField(address, "Адрес — необязательно") { address = it }
-        if (value.id != 0L) Row { Checkbox(archived, { archived = it }); Text("В архиве, история сохранится") }
+internal fun ApartmentEditorScreen(value: Apartment, vm: ApartmentsViewModel, onDismiss: () -> Unit) {
+    val isNew = value.id == 0L
+    var name by rememberSaveable(value.id) { mutableStateOf(value.name) }
+    var address by rememberSaveable(value.id) { mutableStateOf(value.address.orEmpty()) }
+    var archived by rememberSaveable(value.id) { mutableStateOf(value.archived) }
+    HousingEditorPage(
+        title = if (isNew) "Новая квартира" else value.name,
+        subtitle = if (isNew) "Создание квартиры" else "Редактирование квартиры",
+        isNew = isNew,
+        busy = vm.busy,
+        canSave = name.isNotBlank(),
+        error = vm.message,
+        onDismiss = onDismiss,
+        onSave = {
+            vm.save(
+                value.copy(name = name.trim(), address = address.trim().ifBlank { null }, archived = archived),
+                onDismiss,
+            )
+        },
+    ) {
+        HousingEditorPreview(
+            emoji = "🏠",
+            title = name.ifBlank { "Новая квартира" },
+            subtitle = address.ifBlank { "Счётчики и показания в одном месте" },
+        )
+        TratyCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth()) {
+                TratyInlineRow("Название", name, placeholder = "Например, Квартира на Лесной", enabled = !vm.busy) { name = it }
+                TratyRowDivider()
+                TratyInlineRow("Адрес", address, placeholder = "Необязательно", enabled = !vm.busy) { address = it }
+                if (!isNew) {
+                    TratyRowDivider()
+                    TratySwitchRow(
+                        title = "В архиве",
+                        subtitle = "Счётчики и история показаний сохранятся",
+                        checked = archived,
+                        enabled = !vm.busy,
+                    ) { archived = it }
+                }
+            }
+        }
     }
 }

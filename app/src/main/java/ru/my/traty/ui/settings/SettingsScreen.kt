@@ -62,6 +62,7 @@ fun SettingsScreen(
     onOpenOnboarding: () -> Unit = {},
     onOpenHelp: () -> Unit = {},
     onOpenFeedback: () -> Unit = {},
+    onOpenApartments: () -> Unit = {},
 ) {
     val saved by vm.settings.collectAsStateWithLifecycle()
 
@@ -83,6 +84,8 @@ fun SettingsScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md),
         ) {
+        DataSettingsCard(onOpenApartments, onOpenCategories, onOpenRules)
+
         OnboardingSettingsCard(onOpenHelp = onOpenHelp, onOpen = onOpenOnboarding)
 
         ThemeSettingsCard()
@@ -150,24 +153,6 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(TratyTheme.spacing.md))
                 TratyOutlinedButton(onClick = onOpenAi) { Text("Модели и API-ключи") }
-            }
-        }
-
-        // Секция: Категории
-        TratyCard(
-            modifier = Modifier.fillMaxWidth(),
-            backgroundColor = TratyTheme.colors.surface,
-        ) {
-            Column(Modifier.padding(TratyTheme.spacing.lg)) {
-                Text("Категории", style = TratyTheme.typography.titleMedium)
-                Spacer(Modifier.height(TratyTheme.spacing.xs))
-                Text(
-                    "Переименование, эмодзи, порядок, архив, объединение и подкатегории.",
-                    style = TratyTheme.typography.bodySmall,
-                    color = TratyTheme.colors.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(TratyTheme.spacing.md))
-                TratyOutlinedButton(onClick = onOpenCategories) { Text("Категории и подкатегории") }
             }
         }
 
@@ -283,24 +268,6 @@ fun SettingsScreen(
                     )
                 }
                 Switch(checked = labelsOn, onCheckedChange = null)
-            }
-        }
-
-        // Секция: Правила
-        TratyCard(
-            modifier = Modifier.fillMaxWidth(),
-            backgroundColor = TratyTheme.colors.surface,
-        ) {
-            Column(Modifier.padding(TratyTheme.spacing.lg)) {
-                Text("Правила категоризации", style = TratyTheme.typography.titleMedium)
-                Spacer(Modifier.height(TratyTheme.spacing.xs))
-                Text(
-                    "Автоматическая подстановка категории по месту или слову.",
-                    style = TratyTheme.typography.bodySmall,
-                    color = TratyTheme.colors.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(TratyTheme.spacing.md))
-                TratyOutlinedButton(onClick = onOpenRules) { Text("Управление правилами") }
             }
         }
 
