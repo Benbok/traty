@@ -98,6 +98,7 @@ object FullBackupWriter {
                 BackupDebtPayment(debt, expense, p.part)
             },
             pendingPhrases = s.pendingPhrases.map { BackupPendingPhrase(it.text, it.createdAt) },
+            housing = ApartmentBackupCodec.portable(s.housing),
             settings = settings,
         )
     }

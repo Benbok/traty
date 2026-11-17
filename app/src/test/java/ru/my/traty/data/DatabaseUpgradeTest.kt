@@ -63,6 +63,12 @@ class DatabaseUpgradeTest {
                 "INSERT INTO expenses (id, amountKopecks, currency, categoryId, subcategoryId, place, note, timestamp, rawText, source) " +
                     "VALUES (1, 35000, 'RUB', 1, NULL, 'Магнит', 'Молоко', 1000, NULL, 'manual')"
             )
+            // Индексы входят в реальную схему v2: неполный fixture не проверяет путь миграции.
+            v2.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_categoryId` ON `expenses` (`categoryId`)")
+            v2.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_subcategoryId` ON `expenses` (`subcategoryId`)")
+            v2.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_timestamp` ON `expenses` (`timestamp`)")
+            v2.execSQL("CREATE INDEX IF NOT EXISTS `index_subcategories_categoryId` ON `subcategories` (`categoryId`)")
+            v2.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_subcategories_categoryId_name` ON `subcategories` (`categoryId`, `name`)")
             v2.version = 2
         }
     }

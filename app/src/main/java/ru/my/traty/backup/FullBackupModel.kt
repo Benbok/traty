@@ -41,6 +41,7 @@ data class FullBackup(
     val debts: List<BackupDebt> = emptyList(),
     @SerialName("debt_payments") val debtPayments: List<BackupDebtPayment> = emptyList(),
     @SerialName("pending_phrases") val pendingPhrases: List<BackupPendingPhrase> = emptyList(),
+    val housing: ru.my.traty.data.apartments.ApartmentSnapshot = ru.my.traty.data.apartments.ApartmentSnapshot(),
     val settings: PortableSettings = PortableSettings(),
 )
 
@@ -201,6 +202,9 @@ data class BackupPendingPhrase(val text: String, val createdAt: Long)
 
 /** Сколько записей в копии, по-русски для окна подтверждения; разделы без записей не показываются. */
 fun FullBackup.summary(): List<Pair<String, Int>> = listOf(
+    "Квартиры" to housing.apartments.size,
+    "Счётчики" to housing.meters.size,
+    "Показания" to housing.readings.size,
     "Категории" to categories.size,
     "Подкатегории" to subcategories.size,
     "Траты" to expenses.size,
@@ -218,7 +222,7 @@ fun FullBackup.summary(): List<Pair<String, Int>> = listOf(
 
 /** Записей всего, без категорий: для сообщений «сохранено N записей». */
 val FullBackup.recordCount: Int
-    get() = expenses.size + incomes.size + reconciliations.size + rules.size + templates.size + recurring.size +
+    get() = housing.apartments.size + housing.meters.size + housing.readings.size + expenses.size + incomes.size + reconciliations.size + rules.size + templates.size + recurring.size +
         budgets.size + monthBudgets.size + weeklyTasks.size + debts.size + pendingPhrases.size
 
 /** Копию нельзя прочитать или восстановить. [message] — готовый текст для пользователя. */
