@@ -82,7 +82,6 @@ import ru.my.traty.ui.formatDate
 import ru.my.traty.ui.formatPeriod
 import ru.my.traty.ui.formatDateSpan
 import ru.my.traty.ui.formatRub
-import ru.my.traty.ui.items.ItemsViewModel
 import ru.my.traty.ui.formatRubSigned
 import ru.my.traty.ui.formatDateWithWeekday
 import ru.my.traty.ui.formatTime
@@ -103,11 +102,9 @@ fun StatsScreen(
     vm: MainViewModel,
     rangeVm: StatsRangeViewModel = viewModel(),
     debtsVm: StatsDebtsViewModel = viewModel(),
-    itemsVm: ItemsViewModel = viewModel(key = "stats-items"),
     onOpenBudget: () -> Unit = {},
     onOpenDebts: () -> Unit = {},
     onOpenDebt: (Long) -> Unit = {},
-    onOpenItems: (LocalDate, LocalDate) -> Unit = { _, _ -> },
 ) {
     val period by vm.period.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -267,7 +264,6 @@ fun StatsScreen(
 
         // Долги по рассрочкам и кредитам считаются на сегодня и не зависят от режима
         debtsOverviewItem(debtsVm, onOpenDebts, onOpenDebt)
-        itemsOverviewItem(itemsVm, heatStart, heatEnd) { onOpenItems(heatStart, heatEnd) }
 
         if (!custom && cumulative.first.points.isNotEmpty() && cumulative.second.last > 0) {
             item(key = "cumulative", contentType = "cumulative") { CumulativeCard(current = cumulative.first, previous = cumulative.second) }

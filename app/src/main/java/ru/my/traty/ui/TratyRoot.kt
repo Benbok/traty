@@ -61,9 +61,7 @@ import ru.my.traty.ui.settings.AiSettingsScreen
 import ru.my.traty.ui.settings.RulesScreen
 import ru.my.traty.ui.settings.SettingsScreen
 import ru.my.traty.ui.stats.StatsScreen
-import ru.my.traty.ui.items.ItemsScreen
 import ru.my.traty.ui.receipt.ReceiptOverlay
-import java.time.LocalDate
 
 /**
  * Корневой контейнер приложения Traty с нижней навигацией: Траты, Графики, Статистика, ИИ, Настройки.
@@ -86,8 +84,6 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     var showWeekly by rememberSaveable { mutableStateOf(false) }
     var showAiSettings by rememberSaveable { mutableStateOf(false) }
     var showFeedback by rememberSaveable { mutableStateOf(false) }
-    // Даты экрана «Товары» (из «Статистики»); null — экран закрыт
-    var itemsWindow by rememberSaveable { mutableStateOf<Pair<LocalDate, LocalDate>?>(null) }
     // null - экран сверки закрыт
     var reconcileMode by rememberSaveable { mutableStateOf<ReconcileMode?>(null) }
     val snackbar = remember { SnackbarHostState() }
@@ -198,7 +194,6 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onOpenBudget = { showBudget = true },
                         onOpenDebts = { showDebtsList = true },
                         onOpenDebt = { selectedDebtId = it },
-                        onOpenItems = { from, to -> itemsWindow = from to to },
                     )
                     TratyNavTab.ASSISTANT -> AssistantScreen(
                         onOpenBudget = { showBudget = true },
@@ -264,12 +259,6 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
         if (showAiSettings) {
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
                 AiSettingsScreen(vm = vm, onBack = { showAiSettings = false })
-            }
-        }
-
-        itemsWindow?.let { (from, to) ->
-            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
-                ItemsScreen(from = from, to = to, onBack = { itemsWindow = null })
             }
         }
 

@@ -46,7 +46,8 @@ internal fun ItemHistorySheet(product: ProductTotal, history: List<ItemSale>, on
             contentPadding = PaddingValues(TratyTheme.spacing.lg),
             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
         ) {
-            items(history, key = { "${it.expenseId}-${it.name}-${it.priceKopecks}" }) { sale -> HistoryRow(sale) }
+            // Одинаковые позиции одного чека — отдельные строки. Их имена и цены не являются уникальным ключом.
+            items(history) { sale -> HistoryRow(sale) }
         }
     }
 }
