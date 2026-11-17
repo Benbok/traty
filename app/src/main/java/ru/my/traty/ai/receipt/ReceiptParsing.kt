@@ -41,7 +41,7 @@ object ReceiptParsing {
     private const val MAX_LINE_RUBLES = 10_000_000L
 
     fun decode(answer: String): ParsedReceipt {
-        val obj = objectIn(answer) ?: throw ReceiptException("ИИ ответил не в том формате, попробуйте ещё раз")
+        val obj = objectIn(answer) ?: throw ReceiptException(BAD_ANSWER)
         val lines = (obj["items"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(::line) }
         return ParsedReceipt(
             place = text(obj["store"])?.take(MAX_TEXT),
@@ -91,6 +91,8 @@ object ReceiptParsing {
         val cleaned = raw.replace(Regex("[\\s\\u00A0₽]|руб\\.?|р\\.", RegexOption.IGNORE_CASE), "").replace(',', '.')
         return cleaned.toBigDecimalOrNull()
     }
+
+    internal const val BAD_ANSWER = "ИИ ответил не в том формате, попробуйте ещё раз"
 
     private val DATE = Regex("\\d{4}-\\d{2}-\\d{2}")
     private const val MAX_TEXT = 120

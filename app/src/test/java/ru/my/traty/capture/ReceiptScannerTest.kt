@@ -80,6 +80,35 @@ class ReceiptScannerTest {
     }
 
     @Test
+    fun shortNetworkDropIsRetried() = runTest {
+        app.container.categories.seedIfEmpty()
+        var calls = 0
+        val flaky = object : ReceiptOcr {
+            override suspend fun recognize(jpeg: ByteArray): String {
+                if (++calls < 3) throw java.io.IOException("connection reset")
+                return receipt
+            }
+        }
+        val review = scanner(flaky, Llm(answer)).scan(ByteArray(1))
+        assertEquals(3, calls)
+        assertEquals("179.99", review.draft.rows.single().amountText)
+    }
+
+    @Test
+    fun afterDeepSeekErrorTextIsParsedWithoutPhoto() = runTest {
+        app.container.categories.seedIfEmpty()
+        var ocrCalls = 0
+        val ocr = object : ReceiptOcr {
+            override suspend fun recognize(jpeg: ByteArray): String = receipt.also { ocrCalls++ }
+        }
+        val s = scanner(ocr, Llm(answer))
+        val text = s.recognize(ByteArray(1))
+        val review = s.parse(text)
+        assertEquals(1, ocrCalls)
+        assertEquals(2, review.draft.rows.single().items.size)
+    }
+
+    @Test
     fun emptyPhotoGivesClearError() = runTest {
         val error = runCatching { scanner(Ocr("  \n "), Llm(answer)).scan(ByteArray(1)) }.exceptionOrNull()
         assertTrue(error is ReceiptException)

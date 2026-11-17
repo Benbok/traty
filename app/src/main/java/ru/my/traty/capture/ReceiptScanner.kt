@@ -1,6 +1,7 @@
 package ru.my.traty.capture
 
 import ru.my.traty.ai.LlmClient
+import ru.my.traty.ai.receipt.NetworkRetry
 import ru.my.traty.ai.receipt.ReceiptOcr
 import ru.my.traty.ai.receipt.ReceiptException
 import ru.my.traty.ai.receipt.ReceiptParsing
@@ -36,14 +37,26 @@ class ReceiptScanner(
     private val ocrFor: (AppSettings) -> ReceiptOcr? = ::receiptOcrFor,
     private val llmFor: (AppSettings) -> LlmClient? = ::receiptLlmFor,
 ) {
-    suspend fun scan(jpeg: ByteArray, onStep: (ReceiptStep) -> Unit = {}): ReceiptReview {
-        val s = settings.current()
-        val ocr = ocrFor(s)
-        val llm = llmFor(s)
-        require(ocr != null && llm != null) { "Заполните ключ и ID каталога Yandex Cloud и ключ DeepSeek в настройках ИИ" }
+    /** Весь путь сразу: фото → текст → черновик. */
+    suspend fun scan(jpeg: ByteArray, onStep: (ReceiptStep) -> Unit = {}): ReceiptReview =
+        parse(recognize(jpeg, onStep), onStep)
+
+    /**
+     * Шаг 1: текст с фото (Яндекс). Отдельно от [parse], чтобы после ошибки DeepSeek повторять
+     * только разбор, не отправляя фото ещё раз.
+     */
+    suspend fun recognize(jpeg: ByteArray, onStep: (ReceiptStep) -> Unit = {}): String {
+        val ocr = ocrFor(settings.current())
+        require(ocr != null) { NOT_READY }
         onStep(ReceiptStep.READING)
-        val text = step(ReceiptService.OCR) { ocr.recognize(jpeg) }
-        return parse(text, llm, onStep)
+        return step(ReceiptService.OCR) { NetworkRetry.run { ocr.recognize(jpeg) } }
+    }
+
+    /** Шаг 2: текст чека → товары (DeepSeek) → черновик. */
+    suspend fun parse(ocrText: String, onStep: (ReceiptStep) -> Unit = {}): ReceiptReview {
+        val llm = llmFor(settings.current())
+        require(llm != null) { NOT_READY }
+        return parse(ocrText, llm, onStep)
     }
 
     /** Разбор уже распознанного текста: отдельно, чтобы проверять без фото. */
@@ -54,7 +67,9 @@ class ReceiptScanner(
         val cats = db.categories().getActiveWithSubs().selectable()
         val today = LocalDate.now(zone)
         val answer = step(ReceiptService.PARSE) {
-            llm.complete(ReceiptPrompt.system(cats.map { it.category.name }, today), ReceiptPrompt.user(forAi), jsonMode = true)
+            NetworkRetry.run {
+                llm.complete(ReceiptPrompt.system(cats.map { it.category.name }, today), ReceiptPrompt.user(forAi), jsonMode = true)
+            }
         }
         val parsed = ReceiptParsing.decode(answer)
         return ReceiptDraft.build(
@@ -80,5 +95,6 @@ class ReceiptScanner(
     private companion object {
         /** Меньше этого — на фото не чек (или он не прочитался). */
         const val MIN_TEXT = 10
+        const val NOT_READY = "Заполните ключ и ID каталога Yandex Cloud и ключ DeepSeek в настройках ИИ"
     }
 }

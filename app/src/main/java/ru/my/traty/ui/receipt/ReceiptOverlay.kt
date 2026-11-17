@@ -23,6 +23,7 @@ fun ReceiptOverlay(
             state = state,
             categories = categories,
             onClose = vm::close,
+            onRetry = vm::retry,
             onSave = { draft ->
                 onSave(draft)
                 vm.close()

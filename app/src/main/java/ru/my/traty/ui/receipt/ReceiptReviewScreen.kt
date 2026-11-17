@@ -43,6 +43,7 @@ fun ReceiptReviewScreen(
     categories: List<CategoryWithSubs>,
     onClose: () -> Unit,
     onSave: (EntryDraft) -> Unit,
+    onRetry: () -> Unit = {},
 ) {
     BackHandler(onBack = onClose)
     Scaffold(
@@ -61,7 +62,7 @@ fun ReceiptReviewScreen(
         when (state) {
             is ReceiptUiState.Review -> ReceiptReviewContent(state.review, categories, onSave, content)
             is ReceiptUiState.Working -> ReceiptWaiting(state.step.title, content)
-            is ReceiptUiState.Failed -> ReceiptFailed(state.message, onClose, content)
+            is ReceiptUiState.Failed -> ReceiptFailed(state, onRetry, onClose, content)
             ReceiptUiState.Idle -> Unit
         }
     }
@@ -119,7 +120,7 @@ private fun ReceiptWaiting(step: String, modifier: Modifier) {
 }
 
 @Composable
-private fun ReceiptFailed(message: String, onClose: () -> Unit, modifier: Modifier) {
+private fun ReceiptFailed(failed: ReceiptUiState.Failed, onRetry: () -> Unit, onClose: () -> Unit, modifier: Modifier) {
     Box(modifier.padding(TratyTheme.spacing.xl), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -127,12 +128,16 @@ private fun ReceiptFailed(message: String, onClose: () -> Unit, modifier: Modifi
         ) {
             Text("Чек не разобран", style = TratyTheme.typography.titleMedium, color = TratyTheme.colors.onSurface)
             Text(
-                message,
+                failed.message,
                 style = TratyTheme.typography.bodyMedium,
                 color = TratyTheme.colors.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
-            TratyOutlinedButton(onClick = onClose) { Text("Закрыть") }
+            if (failed.canRetry) {
+                // Фото ещё в памяти: снимать заново не нужно
+                TratyButton(onClick = onRetry) { Text("Повторить") }
+            }
+            TratyOutlinedButton(onClick = onClose) { Text(if (failed.canRetry) "Отменить" else "Закрыть") }
         }
     }
 }

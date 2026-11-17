@@ -23,6 +23,21 @@ object ReceiptErrors {
     }
 }
 
+/**
+ * Поможет ли «Повторить» с тем же фото: да при обрыве связи, перегрузке и сбое сервиса;
+ * нет, если не принят ключ, фото не читается или на нём нет чека — тут нужно чинить настройки или переснять.
+ */
+fun ReceiptErrors.isRetryable(e: Throwable): Boolean {
+    val cause = if (e is ReceiptServiceFailure) e.cause ?: e else e
+    return when {
+        cause is LlmHttpException -> cause.code == 429 || cause.code == 408 || cause.code >= 500
+        cause is IOException -> true
+        // ИИ ответил не в формате: другой ответ на тот же текст обычно приходит нормальным
+        cause is ReceiptException -> cause.message == ReceiptParsing.BAD_ANSWER
+        else -> false
+    }
+}
+
 /** Какой сервис работал, когда случилась ошибка. */
 enum class ReceiptService(val title: String) {
     OCR("Яндекс"),
