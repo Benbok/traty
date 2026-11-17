@@ -51,4 +51,21 @@ class ApartmentAssistantTest {
         assertEquals("HOT_WATER", q?.resource)
         assertEquals("2026-10-01", q?.from)
     }
+
+    @Test fun waterScopeDoesNotIncludeElectricityAndGas() {
+        val day = ReadingDates.encode(LocalDate.of(2026, 1, 1))
+        val s = ApartmentSnapshot(listOf(Apartment(1, "Дом")), listOf(
+            Meter(1, 1, "Кухня", "COLD_WATER", accountingFrom = day),
+            Meter(2, 1, "Электричество", "ELECTRICITY", accountingFrom = day)),
+            listOf(MeterRegister(1, 1), MeterRegister(2, 2)), listOf(MeterReading(1, 1, day, 1000), MeterReading(2, 2, day, 2000)))
+        val q = ApartmentQuestionRules.resolve("Последние показания воды", null, null, LocalDate.of(2026, 11, 17))
+        val answer = ApartmentAssistant.answer(requireNotNull(q), s)
+        assertTrue(answer.contains("Холодная вода"))
+        assertFalse(answer.contains("Электричество"))
+    }
+    @Test fun tariffRegisterQuestionIsNotAMoneyQuestion() {
+        val q = ApartmentQuestionRules.resolve("Покажи показания второго тарифа", null, null, LocalDate.of(2026, 11, 17))
+        assertEquals("T2", q?.register)
+        assertEquals("readings", q?.kind)
+    }
 }
