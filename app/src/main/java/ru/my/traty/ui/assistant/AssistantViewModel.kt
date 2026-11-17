@@ -101,6 +101,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
 
     private val budgets = BudgetRepository(c.db)
     private val subscriptions = RecurringRepository(c.db)
+    private val housingConversation = ru.my.traty.assistant.apartments.ApartmentConversation()
     private val history = ArrayList<AssistantTurn>()
     private var nextId = 1L
 
@@ -121,11 +122,13 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 val categories = c.db.categories().getActiveWithSubs().selectable()
                 // Шаг 1: вопрос → запрос. Если ИИ не ответил, пробуем понять вопрос правилами
                 var aiDown: Exception? = null
+                val housing = withContext(Dispatchers.IO) { c.apartments.snapshot() }
+                val housingCatalog = ru.my.traty.assistant.apartments.ApartmentPrompts.catalog(housing)
                 val stepOneUser = AssistantPrompts.queryUser(question, history)
                 val fromAi = if (client == null) null else try {
                     AssistantQueries.decode(
                         client.complete(
-                            system = AssistantPrompts.querySystem(categories, today, s.periodStartDay),
+                            system = AssistantPrompts.querySystem(categories, today, s.periodStartDay) + "\n" + housingCatalog,
                             user = stepOneUser,
                             jsonMode = true,
                         )
@@ -135,6 +138,12 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (e: Exception) {
                     aiDown = e
                     null
+                }
+                val housingReply = housingConversation.reply(question, fromAi, housing, today, client,
+                    AssistantAnswers.sent(stepOneUser, categories.map { it.category.name }, null) + "\n" + housingCatalog)
+                if (housingReply != null) {
+                    messages += ChatMessage(nextId++, false, housingReply.text, sentFacts = housingReply.sentFacts)
+                    return@launch
                 }
                 val guessed = QuestionRules.guess(question, categories)
                 if (aiDown != null && guessed == null) throw aiDown
@@ -190,7 +199,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     caption = data.caption,
                     expenseIds = data.expenseIds,
                     sentFacts = if (client == null || offline) null else AssistantAnswers.sent(
-                        stepOneUser, categories.map { it.category.name }, data.facts.takeIf { asked },
+                        stepOneUser + "\n" + housingCatalog, categories.map { it.category.name }, data.facts.takeIf { asked },
                     ),
                     planProposals = data.planProposals,
                     planMonth = data.planMonth,
