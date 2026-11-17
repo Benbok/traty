@@ -49,6 +49,6 @@ fun MeterDetailScreen(meterId: Long, onBack: () -> Unit, vm: MeterDetailViewMode
     }
     if (adding) ReadingEditorDialog(registers, null, vm) { adding = false }
     editing?.let { r -> ReadingEditorDialog(registers.filter { it.id == r.registerId }, r, vm) { editing = null } }
-    if (submitting) SubmissionDialog(meterId, readings, vm) { submitting = false }
+    if (submitting) SubmissionDialog(meterId, readings, registers, vm) { submitting = false }
     deleting?.let { r -> AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Удалить показание?") }, text = { Text("Расход соседних интервалов пересчитается. При удалении первого замера начало доступной истории изменится. Связанные отметки передачи будут сняты.") }, confirmButton = { TratyTextButton(onClick = { vm.delete(r.id) { deleting = null } }, enabled = !vm.busy) { Text("Удалить") } }, dismissButton = { TratyTextButton(onClick = { deleting = null }) { Text("Отмена") } }) }
 }

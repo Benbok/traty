@@ -140,7 +140,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     null
                 }
                 val housingReply = housingConversation.reply(question, fromAi, housing, today, client,
-                    stepOneUser + "\n" + housingCatalog)
+                    AssistantAnswers.sent(stepOneUser, categories.map { it.category.name }, null) + "\n" + housingCatalog)
                 if (housingReply != null) {
                     messages += ChatMessage(nextId++, false, housingReply.text, sentFacts = housingReply.sentFacts)
                     return@launch

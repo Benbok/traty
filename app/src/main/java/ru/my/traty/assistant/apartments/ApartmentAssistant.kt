@@ -12,12 +12,13 @@ object ApartmentAssistant {
             else s.apartments.filter { sameName(it.name, q.apartment) }
         if (apartments.isEmpty()) return "Квартира не найдена. Добавьте её в разделе «Квартиры» или уточните название."
         if (q.apartment != null && apartments.size > 1) return "Уточните квартиру: несколько квартир имеют одинаковое название. Переименуйте их в разделе «Квартиры»."
+        val water = q.resource == "WATER"
         val resource = q.resource?.let { name -> ResourceType.entries.firstOrNull { it.name == name } }
-        if (q.resource != null && resource == null) return "Уточните ресурс: холодная вода, горячая вода, электричество или газ."
+        if (q.resource != null && resource == null && !water) return "Уточните ресурс: холодная вода, горячая вода, электричество или газ."
         val result = mutableListOf<String>()
         for (a in apartments) {
             result += "Квартира «${a.name}»"
-            val candidates = s.meters.filter { it.apartmentId == a.id && (q.meter != null || q.from != null || !it.archived) && (resource == null || it.resource == resource.name) }
+            val candidates = s.meters.filter { it.apartmentId == a.id && (q.meter != null || q.from != null || !it.archived) && (resource == null || it.resource == resource.name) && (!water || it.resource in setOf("COLD_WATER", "HOT_WATER")) }
             val meters = if (q.meter.isNullOrBlank()) candidates else candidates.filter { sameName(it.name, q.meter) }
             if (q.meter != null && meters.size > 1) return "Уточните счётчик: несколько приборов имеют это название."
             if (meters.isEmpty()) { result += "Подходящие счётчики не найдены."; continue }
@@ -29,7 +30,10 @@ object ApartmentAssistant {
                 when (q.kind) {
                     "readings" -> series.forEach { rs ->
                         val meter = group.first { it.id == rs.meterId }
-                        val last = rs.points.maxByOrNull { it.measuredAt }
+                        val last = rs.points.filter { p ->
+                            (q.from == null || ReadingDates.decode(p.measuredAt) >= LocalDate.parse(q.from)) &&
+                                (q.to == null || ReadingDates.decode(p.measuredAt) <= LocalDate.parse(q.to))
+                        }.maxByOrNull { it.measuredAt }
                         result += if (last == null) "${meter.name} ${rs.code}: показаний пока нет." else "${meter.name} ${rs.code}: ${ReadingValues.format(last.valueMilli)} $unit, снято ${ReadingDates.decode(last.measuredAt)}."
                     }
                     "trend" -> series.forEach { rs ->

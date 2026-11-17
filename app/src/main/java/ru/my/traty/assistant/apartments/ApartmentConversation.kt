@@ -22,15 +22,16 @@ class ApartmentConversation {
         val facts = ApartmentAssistant.answer(q, s)
         if (client == null) return ApartmentReply(facts, null)
         // Факты остаются в ответе дословно; модель может добавить только краткое пояснение.
-        val explanation = if (facts.contains("Уточните") || facts.contains("не найдена") || facts.contains("Недостаточно")) null else try {
+        val explain = !facts.contains("Уточните") && !facts.contains("не найдена") && !facts.contains("Недостаточно")
+        val explanation = if (!explain) null else try {
             val text = client.complete(
-                "Ты объясняешь потребление коммунальных ресурсов. Не вычисляй числа, не делай выводов о деньгах и не утверждай причины роста. Дай не более двух предложений по готовым фактам; возможные причины обозначай предположениями. Если фактов мало, скажи об этом.",
+                "Ты объясняешь потребление коммунальных ресурсов. Не вычисляй числа, не делай выводов о деньгах и не утверждай причины роста. Не повторяй и не добавляй числа. Дай не более двух предложений по готовым фактам; возможные причины обозначай предположениями. Если фактов мало, скажи об этом.",
                 "Вопрос: $raw\nРассчитанные приложением факты:\n$facts", jsonMode = false,
             )
-            text.takeIf { AssistantAnswers.unknownNumbers(it, facts).isEmpty() }
+            text.takeIf { it.none(Char::isDigit) }
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) { null }
-        return ApartmentReply(facts + explanation?.let { "\n\n$it" }.orEmpty(), sentQuery + "\n\nРассчитанные факты для пояснения:\n" + facts)
+        return ApartmentReply(facts + explanation?.let { "\n\n$it" }.orEmpty(), sentQuery + if (explain) "\n\nРассчитанные факты для пояснения:\n$facts" else "")
     }
 }
 data class ApartmentReply(val text: String, val sentFacts: String?)

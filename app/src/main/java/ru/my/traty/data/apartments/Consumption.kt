@@ -44,7 +44,8 @@ object ConsumptionGroups {
             val end = s.points.singleOrNull { it.measuredAt == to } ?: return null
             // Validate the complete history, including interior readings.
             Consumption.intervals(s.points)
-            total = Math.addExact(total, Math.subtractExact(end.valueMilli, start.valueMilli))
+            total = try { Math.addExact(total, Math.subtractExact(end.valueMilli, start.valueMilli)) }
+                catch (_: ArithmeticException) { return null }
         }
         return ConsumptionInterval(from, to, total)
     }
