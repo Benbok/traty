@@ -138,7 +138,7 @@ internal fun HousingField(value: String, label: String, onChange: (String) -> Un
 }
 
 @Composable
-internal fun HousingDialog(title: String, error: String?, busy: Boolean, onDismiss: () -> Unit, onSave: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+internal fun HousingDialog(title: String, error: String?, busy: Boolean, onDismiss: () -> Unit, onSave: () -> Unit, saveEnabled: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() }, title = { Text(title) },
         containerColor = TratyTheme.colors.surface,
@@ -146,7 +146,7 @@ internal fun HousingDialog(title: String, error: String?, busy: Boolean, onDismi
             content()
             if (error != null) Text(error, color = TratyTheme.colors.expense)
         } },
-        confirmButton = { TratyTextButton(onClick = onSave, enabled = !busy) { Text("Сохранить") } },
+        confirmButton = { TratyTextButton(onClick = onSave, enabled = !busy && saveEnabled) { Text("Сохранить") } },
         dismissButton = { TratyTextButton(onClick = onDismiss, enabled = !busy) { Text("Отмена") } },
     )
 }

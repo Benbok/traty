@@ -174,7 +174,9 @@ fun MeterDetailScreen(meterId: Long, onBack: () -> Unit, vm: MeterDetailViewMode
             }
         }
     }
-    if (adding) ReadingEditorDialog(registers, null, vm) { adding = false }
+    if (adding) ReadingEditorDialog(registers, null, vm, onEditExisting = {
+        adding = false; editing = it
+    }) { adding = false }
     editing?.let { r -> ReadingEditorDialog(registers.filter { it.id == r.registerId }, r, vm) { editing = null } }
     if (submitting) SubmissionDialog(meterId, readings, registers, vm) { submitting = false }
     deleting?.let { r ->
