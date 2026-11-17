@@ -35,7 +35,7 @@ internal val lenientJson = Json { ignoreUnknownKeys = true; isLenient = true; co
 
 private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
-private fun postJson(
+internal fun postJson(
     url: String,
     body: JsonObject,
     headers: Map<String, String>,
@@ -70,7 +70,7 @@ internal fun httpErrorText(code: Int, body: String): String = when (code) {
 }
 
 /** Достаёт текст ответа по пути полей; при неожиданном формате — понятная ошибка вместо NullPointerException. */
-private fun JsonObject.textAt(provider: String, read: (JsonObject) -> String?): String =
+internal fun JsonObject.textAt(provider: String, read: (JsonObject) -> String?): String =
     runCatching { read(this) }.getOrNull()
         ?: throw IllegalStateException("$provider вернул ответ неожиданного формата")
 

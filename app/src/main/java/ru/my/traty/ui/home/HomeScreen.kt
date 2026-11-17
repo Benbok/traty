@@ -42,7 +42,6 @@ import ru.my.traty.data.Income
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.rememberKeyboardOpen
-import ru.my.traty.ui.capture.MicButton
 import ru.my.traty.ui.capture.RecordState
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
@@ -372,12 +371,7 @@ fun HomeScreen(
         // Если запись или разбор уже идут, кнопку оставляем, чтобы её можно было остановить.
         val keyboardOpen by rememberKeyboardOpen()
         if (!keyboardOpen || mic.state !is RecordState.Idle || vm.busy) {
-            MicButton(
-                state = mic.state,
-                busy = vm.busy,
-                compact = true,
-                onClick = mic::onClick,
-            )
+            HomeCaptureBar(mic = mic, busy = vm.busy, onError = { vm.message = it })
         }
     }
 

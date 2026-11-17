@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Фото чека с камеры: лежит в кэше, пока его читает Vision OCR, потом удаляется. В резервные копии кэш не попадает. -->
+<paths>
+    <cache-path name="receipts" path="receipts/" />
+</paths>
