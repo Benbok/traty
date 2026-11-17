@@ -34,27 +34,32 @@ internal fun ReadingEditorDialog(
     }
     val high = checks.any { it.second.unusuallyHigh }
     val blocked = checks.any { it.second.error != null }
-    HousingDialog(
+    ReadingEditorSheet(
         if (existing == null) "Новые показания" else "Исправить показание",
-        error ?: vm.message, vm.busy, onDismiss,
+        busy = vm.busy,
+        canSave = !voiceBusy && !blocked && (!high || confirmedHigh) && fields.values.any { it.isNotBlank() },
+        error = error ?: vm.message,
+        onDismiss = onDismiss,
         onSave = {
             try {
                 require(!voiceBusy && !blocked && (!high || confirmedHigh)) { "Проверьте показания перед сохранением" }
                 vm.save(enteredReadings(registers, fields, day, note, existing), onDismiss)
             } catch (e: IllegalArgumentException) { error = e.message }
         },
-        saveEnabled = !voiceBusy && !blocked && (!high || confirmedHigh) && fields.values.any { it.isNotBlank() },
+        voice = {
+            ReadingVoiceInput(!vm.busy, onText = { text ->
+                lastVoice = text
+                try {
+                    val draft = MeterVoiceParser.parse(text, registers.map { it.code })
+                    val updated = registers.mapNotNull { reg -> draft.valuesMilli[reg.code]?.let { reg.id to ReadingValues.format(it) } }.toMap()
+                    fields = fields + updated
+                    draft.date?.let { day = HousingDates.format(it) }
+                    error = null
+                } catch (e: IllegalArgumentException) { error = e.message }
+            }, onError = { error = it }, onBusy = { voiceBusy = it })
+        },
     ) {
-        ReadingVoiceInput(!vm.busy, onText = { text ->
-            lastVoice = text
-            try {
-                val draft = MeterVoiceParser.parse(text, registers.map { it.code })
-                val updated = registers.mapNotNull { reg -> draft.valuesMilli[reg.code]?.let { reg.id to ReadingValues.format(it) } }.toMap()
-                fields = fields + updated
-                draft.date?.let { day = HousingDates.format(it) }
-                error = null
-            } catch (e: IllegalArgumentException) { error = e.message }
-        }, onError = { error = it }, onBusy = { voiceBusy = it })
+        HousingHint("Можно сказать «123 запятая 05» или «тариф один — 5200, тариф два — 1800».")
         lastVoice?.let { Text("Распознано: «" + it + "»") }
         HousingField(day, "Дата снятия: дд.мм.гггг") { day = it; error = null }
         registers.forEach { reg ->
