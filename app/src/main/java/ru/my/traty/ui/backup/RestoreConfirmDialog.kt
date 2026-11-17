@@ -37,6 +37,7 @@ internal fun RestoreConfirmDialog(offer: RestoreOffer, onConfirm: () -> Unit, on
                     "Текущие данные будут заменены данными из копии. Копия от $made, в ней:",
                     style = TratyTheme.typography.bodyMedium,
                 )
+                Text("Квартиры: сейчас ${offer.currentApartments}, в копии ${offer.backup.housing.apartments.size}. Показания: сейчас ${offer.currentReadings}, в копии ${offer.backup.housing.readings.size}. Текущая история будет удалена и заменена, даже если в копии её нет.", style = TratyTheme.typography.bodySmall)
                 offer.sections.forEach { (title, count) -> SectionRow(title, count) }
                 Text(
                     "Ключи ИИ в копии нет: после восстановления введите их заново в «Модели и API-ключи».",

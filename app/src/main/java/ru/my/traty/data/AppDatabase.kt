@@ -1,5 +1,6 @@
 package ru.my.traty.data
 
+import ru.my.traty.data.apartments.*
 import android.content.Context
 import androidx.room.ColumnInfo
 import androidx.room.Dao
@@ -37,11 +38,12 @@ import ru.my.traty.data.weekly.WeeklyTask
 import ru.my.traty.data.weekly.WeeklyTaskDao
 
 @Database(
-    entities = [Expense::class, Category::class, Subcategory::class, Income::class, Reconciliation::class, Template::class, Rule::class, PendingPhrase::class, Recurring::class, Budget::class, MonthBudget::class, WeeklyTask::class, Debt::class, DebtPayment::class, ExpenseItem::class],
+    entities = [Apartment::class, Meter::class, MeterRegister::class, MeterReading::class, ReadingSubmission::class, SubmissionReading::class, Expense::class, Category::class, Subcategory::class, Income::class, Reconciliation::class, Template::class, Rule::class, PendingPhrase::class, Recurring::class, Budget::class, MonthBudget::class, WeeklyTask::class, Debt::class, DebtPayment::class, ExpenseItem::class],
     version = DB_SCHEMA_VERSION,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
+    abstract fun apartments(): ApartmentDao
     abstract fun expenses(): ExpenseDao
     abstract fun categories(): CategoryDao
     abstract fun incomes(): IncomeDao
@@ -68,7 +70,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun build(context: Context, name: String = "traty.db"): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, name)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, BudgetMigrations.MIGRATION_10_11, BudgetMigrations.MIGRATION_11_12, WeeklyMigrations.MIGRATION_12_13, DebtMigrations.MIGRATION_13_14, ItemMigrations.MIGRATION_14_15, ItemMigrations.MIGRATION_15_16)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, BudgetMigrations.MIGRATION_10_11, BudgetMigrations.MIGRATION_11_12, WeeklyMigrations.MIGRATION_12_13, DebtMigrations.MIGRATION_13_14, ItemMigrations.MIGRATION_14_15, ItemMigrations.MIGRATION_15_16, ApartmentMigrations.MIGRATION_16_17)
                 // Решение владельца: в v1 реальных данных нет — базу v1 пересоздаём.
                 // Для версий 2+ — только Migration(n, n+1).
                 .fallbackToDestructiveMigrationFrom(true, 1)

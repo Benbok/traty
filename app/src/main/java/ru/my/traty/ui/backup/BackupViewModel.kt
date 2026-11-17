@@ -25,7 +25,7 @@ import ru.my.traty.data.portable
 data class BackupNotice(val text: String, val isError: Boolean = false)
 
 /** Копия прочитана и проверена, ждёт подтверждения «заменить всё». */
-data class RestoreOffer(val backup: FullBackup, val sections: List<Pair<String, Int>>)
+data class RestoreOffer(val backup: FullBackup, val sections: List<Pair<String, Int>>, val currentApartments: Int = 0, val currentReadings: Int = 0)
 
 /**
  * Полная резервная копия в настройках: сохранить всё в JSON и восстановить «заменить всё».
@@ -62,7 +62,8 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
             FullBackupReader.decode(bytes, DB_SCHEMA_VERSION)
         }
         notice = null
-        offer = RestoreOffer(backup, backup.summary())
+        val current = withContext(Dispatchers.IO) { c.apartments.snapshot() }
+        offer = RestoreOffer(backup, backup.summary(), current.apartments.size, current.readings.size)
     }
 
     fun cancelRestore() {

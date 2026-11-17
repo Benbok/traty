@@ -59,7 +59,9 @@ object FullBackupRestore {
         }
         if (payments.map { it.expenseId }.toSet().size != payments.size) damaged("одна трата в двух платежах")
 
+        val housing = ApartmentBackupCodec.checked(b.housing)
         return DbSnapshot(
+            housing = housing,
             categories = cats,
             subcategories = subs,
             expenses = b.expenses.map { e ->

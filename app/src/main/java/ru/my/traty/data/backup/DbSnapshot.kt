@@ -21,6 +21,7 @@ import ru.my.traty.data.weekly.WeeklyTask
  * Обычные Kotlin-классы, без Android: копию можно собрать и разобрать в тесте без телефона.
  */
 data class DbSnapshot(
+    val housing: ru.my.traty.data.apartments.ApartmentSnapshot = ru.my.traty.data.apartments.ApartmentSnapshot(),
     val categories: List<Category> = emptyList(),
     val subcategories: List<Subcategory> = emptyList(),
     val expenses: List<Expense> = emptyList(),
