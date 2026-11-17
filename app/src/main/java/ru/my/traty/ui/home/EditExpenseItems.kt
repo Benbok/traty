@@ -97,8 +97,8 @@ private fun ItemRow(item: DraftItem, enabled: Boolean, onClick: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Text(item.name, style = TratyTheme.typography.bodyMedium, color = TratyTheme.colors.onSurface)
-            val qty = listOf(item.qtyText, item.unit).filter { it.isNotBlank() }.joinToString(" ")
-            if (qty.isNotEmpty()) {
+            val qty = item.amountText()
+            if (qty != null) {
                 Text(qty, style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
             }
         }

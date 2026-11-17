@@ -29,6 +29,21 @@ class ReceiptParsingTest {
         assertEquals(2000L, r.lines[1].quantityMilli)
     }
 
+    @Test fun decode_packAndWeight() {
+        val r = ReceiptParsing.decode(
+            """{"items": [
+              {"name": "Коктейль молочный Чудо 2%", "qty": 3, "unit": "шт", "pack": "200 мл", "sum": 270},
+              {"name": "Бананы", "qty": "1,234", "unit": "кг", "pack": null, "sum": 160.4},
+              {"name": "Вода 0,5л", "qty": 1, "unit": "шт", "pack": "непонятно", "sum": 40}
+            ]}""",
+        )
+        assertEquals(ru.my.traty.data.items.Pack(200_000, "мл"), r.lines[0].pack)
+        assertEquals(1234L, r.lines[1].quantityMilli)
+        assertNull(r.lines[1].pack)
+        // Фасовку не разобрали — её найдёт черновик в названии
+        assertNull(r.lines[2].pack)
+    }
+
     @Test fun decode_badDateAndNulls() {
         val r = ReceiptParsing.decode("""{"store": null, "date": "15.11.2026", "total": null, "items": []}""")
         assertNull(r.place)

@@ -82,12 +82,16 @@ object ReceiptDraft {
         return parsed
     }
 
-    private fun draftItem(l: ReceiptLine) = DraftItem(
-        name = l.name,
-        priceText = l.priceKopecks?.let(::kopecksToText).orEmpty(),
-        qtyText = l.quantityMilli?.let { BigDecimal(it).movePointLeft(3).stripTrailingZeros().toPlainString() }.orEmpty(),
-        unit = l.unit.orEmpty(),
-    )
+    private fun draftItem(l: ReceiptLine): DraftItem {
+        val (name, pack) = DraftItem.splitPack(l.name, l.pack)
+        return DraftItem(
+            name = name,
+            priceText = l.priceKopecks?.let(::kopecksToText).orEmpty(),
+            qtyText = l.quantityMilli?.let { BigDecimal(it).movePointLeft(3).stripTrailingZeros().toPlainString() }.orEmpty(),
+            unit = l.unit.orEmpty(),
+            packText = pack?.text().orEmpty(),
+        )
+    }
 
     private fun rub(kopecks: Long) = "${kopecksToText(kopecks)} ₽"
 }

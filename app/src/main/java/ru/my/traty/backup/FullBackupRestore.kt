@@ -70,7 +70,7 @@ object FullBackupRestore {
                 )
             },
             expenseItems = b.expenseItems.map {
-                ExpenseItem(0, expense(it.expense), it.position, it.name, it.priceKopecks, it.quantityMilli, it.unit)
+                ExpenseItem(0, expense(it.expense), it.position, it.name, it.priceKopecks, it.quantityMilli, it.unit, it.packMilli, it.packUnit)
             },
             incomes = b.incomes.map {
                 Income(income(it.key), it.amountKopecks, it.currency, it.source, it.note, it.timestamp, it.origin)

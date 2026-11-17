@@ -47,6 +47,7 @@ data class ParsedEntry(
 
 /**
  * Товар из покупки. [price] — сколько заплачено за позицию целиком (₽), [qty] и [unit] — «2 шт», «1,5 кг».
+ * [pack] — фасовка одной штуки текстом: «200 мл», «500 г».
  * Всё, чего нет во фразе, — null. Суммы позиций складывает приложение, а не ИИ.
  */
 @Serializable
@@ -55,6 +56,7 @@ data class ParsedItem(
     val price: Double? = null,
     val qty: Double? = null,
     val unit: String? = null,
+    val pack: String? = null,
 )
 
 /**
@@ -153,6 +155,7 @@ object EntryParsing {
                 price = i.price?.takeIf { it.isFinite() && it > 0 && it <= MAX_ENTRY_RUBLES },
                 qty = i.qty?.takeIf { it.isFinite() && it > 0 && it < MAX_QTY },
                 unit = i.unit?.trim()?.take(MAX_UNIT)?.ifEmpty { null },
+                pack = i.pack?.trim()?.take(MAX_ITEM_NAME)?.ifEmpty { null },
             )
         }
         .ifEmpty { null }

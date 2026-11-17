@@ -5,4 +5,4 @@ package ru.my.traty.data
  * чтобы копию с более новой схемой можно было распознать и отклонить.
  * При изменении схемы поднять здесь и написать Migration (CLAUDE.md §3).
  */
-const val DB_SCHEMA_VERSION = 15
+const val DB_SCHEMA_VERSION = 16

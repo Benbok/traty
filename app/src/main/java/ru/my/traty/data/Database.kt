@@ -741,7 +741,7 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun build(context: Context, name: String = "traty.db"): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, name)
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, BudgetMigrations.MIGRATION_10_11, BudgetMigrations.MIGRATION_11_12, WeeklyMigrations.MIGRATION_12_13, DebtMigrations.MIGRATION_13_14, ItemMigrations.MIGRATION_14_15)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, BudgetMigrations.MIGRATION_10_11, BudgetMigrations.MIGRATION_11_12, WeeklyMigrations.MIGRATION_12_13, DebtMigrations.MIGRATION_13_14, ItemMigrations.MIGRATION_14_15, ItemMigrations.MIGRATION_15_16)
                 // Решение владельца: в v1 реальных данных нет — базу v1 пересоздаём.
                 // Для версий 2+ — только Migration(n, n+1).
                 .fallbackToDestructiveMigrationFrom(true, 1)

@@ -5,6 +5,9 @@ package ru.my.traty.assistant
 
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.items.ExpenseItem
+import ru.my.traty.data.items.ItemAmounts
+import ru.my.traty.data.items.ItemMeasure
+import ru.my.traty.data.items.PackSize
 import ru.my.traty.data.search.SearchText
 import ru.my.traty.ui.formatRub
 import java.time.ZoneId
@@ -22,8 +25,16 @@ internal fun ExpenseItem.mentionsItem(phrase: String): Boolean {
  * [amount] — копейки; [items] — совпавшие позиции; [whole] — трата засчитана целиком
  * (у неё нет списка товаров, а товар назван в заметке или месте, либо в чеке только этот товар);
  * [unpriced] — совпавшие позиции без цены, в сумму они не вошли.
+ * Количество товара (штуки, кг, литры) считает [AssistantItems.quantity].
  */
-internal class ItemPart(val amount: Long, val items: List<ExpenseItem>, val whole: Boolean, val unpriced: Int = 0)
+internal class ItemPart(
+    val amount: Long,
+    val items: List<ExpenseItem>,
+    val whole: Boolean,
+    val unpriced: Int = 0,
+    /** Заметка траты без списка товаров: в ней может быть фасовка («гуляш 500 г»). */
+    val note: String? = null,
+)
 
 internal object AssistantItems {
     /**
@@ -34,7 +45,7 @@ internal object AssistantItems {
     fun part(r: ExpenseWithCategory, items: List<ExpenseItem>, terms: List<String>, mentions: (String) -> Boolean): ItemPart? {
         if (terms.isEmpty()) return null
         if (items.isEmpty()) {
-            return if (terms.any(mentions)) ItemPart(r.expense.amountKopecks, emptyList(), whole = true) else null
+            return if (terms.any(mentions)) ItemPart(r.expense.amountKopecks, emptyList(), whole = true, note = r.expense.note) else null
         }
         val matched = items.filter { item -> terms.any { item.mentionsItem(it) } }
         if (matched.isEmpty()) return null
@@ -55,6 +66,7 @@ internal object AssistantItems {
         if (withItems.isNotEmpty()) {
             out += "Это цена самих товаров, без остальных покупок в тех же чеках: позиций ${withItems.sumOf { it.items.size }} в ${withItems.size} ${purchasesWord(withItems.size)}."
         }
+        quantity(parts)?.let(out::add)
         val unpriced = parts.sumOf { it.unpriced }
         if (unpriced > 0) out += "У $unpriced ${positionsWord(unpriced)} не записана цена, в сумму они не вошли."
         val whole = parts.filter { it.whole }
@@ -65,10 +77,40 @@ internal object AssistantItems {
         return out
     }
 
+    /**
+     * Сколько товара куплено: «Количество: 5 шт · 1 л». Считает приложение по позициям ([ItemMeasure]):
+     * 3 шт по 200 мл = 0,6 л, весовой товар — по весу. У покупки без списка товаров берётся фасовка
+     * из заметки («гуляш 500 г»), а если её нет — такая покупка в количество не входит, об этом пишем.
+     */
+    fun quantity(parts: List<ItemPart>): String? {
+        if (parts.isEmpty()) return null
+        var total = ItemAmounts()
+        var unknown = 0
+        parts.forEach { p ->
+            when {
+                p.items.isNotEmpty() -> p.items.forEach { total += ItemMeasure.of(it) }
+                PackSize.find(p.note) != null -> total += ItemMeasure.of(p.note.orEmpty(), null, null, null, null)
+                else -> unknown++
+            }
+        }
+        if (total.isEmpty) return null
+        return buildString {
+            append("Количество: ${total.text()}")
+            if (total.assumedPieces > 0) {
+                append(" (у ${total.assumedPieces} ${positionsWord(total.assumedPieces)} количество не названо, ${if (total.assumedPieces == 1) "посчитана" else "посчитаны"} как 1 шт)")
+            }
+            append('.')
+            if (unknown > 0) append(" Ещё в $unknown ${purchasesWord(unknown)} без списка товаров количество не названо, они не вошли.")
+        }
+    }
+
     /** Строка для списка: сами товары с ценами, а не вся сумма чека. */
     fun line(r: ExpenseWithCategory, part: ItemPart?, zone: ZoneId): String {
         if (part == null || part.items.isEmpty()) return describe(r, zone)
-        val goods = part.items.joinToString(", ") { i -> i.name.take(40) + (i.priceKopecks?.let { " ${formatRub(it)}" } ?: " (без цены)") }
+        val goods = part.items.joinToString(", ") { i ->
+            val amount = ItemMeasure.describe(i.quantityMilli, i.unit, ItemMeasure.packOf(i.name, i.packMilli, i.packUnit))?.let { " $it" }.orEmpty()
+            i.name.take(40) + amount + (i.priceKopecks?.let { " ${formatRub(it)}" } ?: " (без цены)")
+        }
         val where = r.expense.place?.trim()?.take(40)?.takeIf { it.isNotEmpty() }?.let { ", $it" }.orEmpty()
         return "${date(day(r.expense.timestamp, zone))}: $goods$where"
     }

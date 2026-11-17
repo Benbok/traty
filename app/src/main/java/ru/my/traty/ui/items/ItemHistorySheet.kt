@@ -57,7 +57,7 @@ private fun HistoryRow(sale: ItemSale) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm)) {
         Column(Modifier.weight(1f)) {
             Text(formatDate(day), style = TratyTheme.typography.bodyMedium)
-            val details = listOfNotNull(Places.normalize(sale.place), ItemTexts.quantity(sale.quantityMilli, sale.unit))
+            val details = listOfNotNull(Places.normalize(sale.place), ItemTexts.quantity(sale))
             if (details.isNotEmpty()) {
                 Text(details.joinToString(" · "), style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
             }

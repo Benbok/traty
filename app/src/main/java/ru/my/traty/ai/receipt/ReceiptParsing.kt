@@ -7,15 +7,21 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import ru.my.traty.data.items.Pack
+import ru.my.traty.data.items.PackSize
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-/** Строка чека после разбора ИИ. Цена — за позицию целиком (все штуки, со скидкой), в копейках. */
+/**
+ * Строка чека после разбора ИИ. Цена — за позицию целиком (все штуки, со скидкой), в копейках.
+ * [pack] — фасовка одной штуки («200 мл»), если ИИ её выделил; иначе её поищут в названии.
+ */
 data class ReceiptLine(
     val name: String,
     val priceKopecks: Long?,
     val quantityMilli: Long? = null,
     val unit: String? = null,
+    val pack: Pack? = null,
 )
 
 /** Чек после разбора ИИ: деньги уже в копейках, ничего не досчитано за ИИ. */
@@ -62,6 +68,7 @@ object ReceiptParsing {
             priceKopecks = price?.takeIf { it > 0 },
             quantityMilli = quantityMilli(o["qty"]),
             unit = text(o["unit"])?.take(MAX_UNIT),
+            pack = PackSize.parse(text(o["pack"])),
         )
     }
 

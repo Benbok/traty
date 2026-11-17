@@ -71,7 +71,7 @@ data class BackupExpense(
     val source: String,
 )
 
-/** Позиция чека; [expense] — [BackupExpense.key] её траты. */
+/** Позиция чека; [expense] — [BackupExpense.key] её траты. Фасовки ([packMilli]) в копиях до схемы 16 нет. */
 @Serializable
 data class BackupExpenseItem(
     val expense: Long,
@@ -80,6 +80,8 @@ data class BackupExpenseItem(
     val priceKopecks: Long? = null,
     val quantityMilli: Long? = null,
     val unit: String? = null,
+    val packMilli: Long? = null,
+    val packUnit: String? = null,
 )
 
 @Serializable

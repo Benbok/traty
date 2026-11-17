@@ -44,9 +44,9 @@ fun EntryItemsPreview(
 @Composable
 private fun ItemLine(item: DraftItem, onRemove: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        val qty = listOf(item.qtyText, item.unit).filter { it.isNotBlank() }.joinToString(" ")
+        val qty = item.amountText()
         Text(
-            if (qty.isEmpty()) item.name else "${item.name}, $qty",
+            if (qty == null) item.name else "${item.name}, $qty",
             style = TratyTheme.typography.bodyMedium,
             color = TratyTheme.colors.onSurface,
             modifier = Modifier.weight(1f),
