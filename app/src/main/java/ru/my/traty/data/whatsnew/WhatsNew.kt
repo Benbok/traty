@@ -13,6 +13,16 @@ data class WhatsNewEntry(val version: String, val items: List<WhatsNewItem>)
 object WhatsNew {
     val entries: List<WhatsNewEntry> = listOf(
         WhatsNewEntry(
+            version = "0.2.2",
+            items = listOf(
+                WhatsNewItem("Чек можно сфотографировать: приложение прочитает магазин, сумму и товары, а вы проверите и сохраните.", "receipt"),
+                WhatsNewItem("Товары из голосовой записи сохраняются отдельными позициями, их можно посмотреть и поправить на экране траты.", "shopping"),
+                WhatsNewItem("В «Статистике» есть карточка «Товары» с выбором магазина.", "stats"),
+                WhatsNewItem("ИИ-помощник лучше считает по товарам и понимает периоды вроде «с ноября по декабрь» и кварталы.", "assistant"),
+                WhatsNewItem("Голосовая запись стала надёжнее: цены через тире и копейки разбираются точнее, а после «стоп» кнопка сразу показывает, что идёт распознавание.", "voice"),
+            ),
+        ),
+        WhatsNewEntry(
             version = "0.2.1",
             items = listOf(
                 WhatsNewItem("Справка по всем функциям: Настройки → «Как пользоваться»."),
