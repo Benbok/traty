@@ -36,6 +36,7 @@ import ru.my.traty.ui.charts.model.CashFlowPoint
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatDate
+import ru.my.traty.ui.formatDateNumeric
 import ru.my.traty.ui.formatRub
 import ru.my.traty.ui.formatRubSigned
 import kotlin.math.roundToInt
@@ -138,10 +139,13 @@ private fun CashFlowPlot(points: List<CashFlowPoint>, selected: Int?, onSelect: 
     ) {
         drawCashFlow(points, selected, maxValue, incomeColor, expenseColor, gridColor)
     }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = if (points.size == 1) Arrangement.Center else Arrangement.SpaceBetween,
+    ) {
         val indices = listOf(0, points.lastIndex / 2, points.lastIndex).distinct()
         indices.forEach { index ->
-            Text(formatDate(points[index].date), style = TratyTheme.typography.labelSmall)
+            Text(formatDateNumeric(points[index].date), style = TratyTheme.typography.labelSmall)
         }
     }
 }
