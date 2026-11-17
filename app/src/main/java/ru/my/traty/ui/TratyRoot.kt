@@ -191,6 +191,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         onStartRecordingHandled = { startRecording = false },
                         onOpenWeekly = { showWeekly = true },
                     )
+                    TratyNavTab.APARTMENTS -> ru.my.traty.ui.apartments.ApartmentsRoute()
                     TratyNavTab.CHARTS -> ChartsScreen()
                     TratyNavTab.STATS -> StatsScreen(
                         vm,
