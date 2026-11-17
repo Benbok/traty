@@ -38,6 +38,7 @@ import ru.my.traty.data.AppSettings
 import ru.my.traty.data.period.MAX_PERIOD_START_DAY
 import ru.my.traty.data.period.MIN_PERIOD_START_DAY
 import ru.my.traty.ui.MainViewModel
+import ru.my.traty.ui.backup.BackupSettingsCard
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
@@ -63,12 +64,6 @@ fun SettingsScreen(
     onOpenFeedback: () -> Unit = {},
 ) {
     val saved by vm.settings.collectAsStateWithLifecycle()
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
-        if (uri != null) vm.exportCsv(uri)
-    }
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) vm.importCsv(uri)
-    }
 
     Column(Modifier.fillMaxSize()) {
         TratyHeaderCard(
@@ -311,35 +306,8 @@ fun SettingsScreen(
 
         ReconcileSettingsCard(onOpenReconcile, onRedoReconcile)
 
-        // Секция: Резервная копия
-        TratyCard(
-            modifier = Modifier.fillMaxWidth(),
-            backgroundColor = TratyTheme.colors.surface,
-        ) {
-            Column(Modifier.padding(TratyTheme.spacing.lg)) {
-                Text("Резервная копия", style = TratyTheme.typography.titleMedium)
-                Spacer(Modifier.height(TratyTheme.spacing.xs))
-                Text(
-                    "Все данные хранятся только на телефоне. Периодически выгружайте CSV (открывается в Excel). " +
-                        "Импорт добавляет траты из файла и пропускает те, что уже есть.",
-                    style = TratyTheme.typography.bodySmall,
-                    color = TratyTheme.colors.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(TratyTheme.spacing.md))
-                Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm)) {
-                    TratyOutlinedButton(onClick = { exportLauncher.launch("traty-${java.time.LocalDate.now()}.csv") }) {
-                        Text("Экспорт в CSV")
-                    }
-                    TratyOutlinedButton(onClick = {
-                        importLauncher.launch(
-                            arrayOf("text/csv", "text/comma-separated-values", "text/plain", "application/vnd.ms-excel")
-                        )
-                    }) {
-                        Text("Импорт из CSV")
-                    }
-                }
-            }
-        }
+        // Секция: Резервная копия (полная копия и CSV для Excel)
+        BackupSettingsCard(onExportCsv = { vm.exportCsv(it) }, onImportCsv = { vm.importCsv(it) })
 
         UpdateSettingsCard()
 

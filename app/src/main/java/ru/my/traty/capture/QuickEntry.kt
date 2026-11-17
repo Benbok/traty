@@ -97,6 +97,11 @@ class QuickEntry(
     /** Эмитит после каждого сохранения — виджет обновляет суммы. */
     val changes: SharedFlow<Unit> = _changes.asSharedFlow()
 
+    /** Данные поменялись не через ввод (восстановление из копии): виджеты пересчитывают суммы. */
+    fun notifyChanged() {
+        _changes.tryEmit(Unit)
+    }
+
     fun emptyDraft(origin: EntryOrigin, rawText: String = ""): EntryDraft =
         EntryDraft(listOf(EntryRow.empty()), rawText, origin)
 

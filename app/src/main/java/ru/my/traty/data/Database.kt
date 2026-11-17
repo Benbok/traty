@@ -580,7 +580,7 @@ interface PendingPhraseDao {
 
 @Database(
     entities = [Expense::class, Category::class, Subcategory::class, Income::class, Reconciliation::class, Template::class, Rule::class, PendingPhrase::class, Recurring::class, Budget::class, MonthBudget::class, WeeklyTask::class, Debt::class, DebtPayment::class, ExpenseItem::class],
-    version = 15,
+    version = DB_SCHEMA_VERSION,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

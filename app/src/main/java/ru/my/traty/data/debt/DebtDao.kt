@@ -47,6 +47,13 @@ interface DebtDao {
     @Query("SELECT * FROM debts ORDER BY state = 'active' DESC, createdAt DESC")
     fun observeAll(): Flow<List<Debt>>
 
+    /** Все покупки и все связи платежей: для полной резервной копии. */
+    @Query("SELECT * FROM debts ORDER BY id")
+    suspend fun getAll(): List<Debt>
+
+    @Query("SELECT * FROM debt_payments ORDER BY id")
+    suspend fun getAllPayments(): List<DebtPayment>
+
     @Query("SELECT expenseId FROM debt_payments WHERE debtId = :debtId")
     suspend fun getPaymentExpenseIds(debtId: Long): List<Long>
 
