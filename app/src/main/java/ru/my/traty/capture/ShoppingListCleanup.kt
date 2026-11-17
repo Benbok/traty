@@ -50,11 +50,16 @@ object ShoppingListCleanup {
 
     /**
      * Позиции траты: от ИИ, если он их дал; товары из самой фразы, если ИИ их не дал или потерял названные цены.
-     * Меньше двух товаров — позиций нет, хватит заметки.
+     * Меньше двух товаров — позиций нет, хватит заметки. Междометия («а-а», «э-э») товарами не считаются.
+     *
+     * Из фразы позиции берутся, только если это правда список: назван итог («на 2500 купил…»)
+     * или у двух товаров и больше есть свои цены. «Говядина, гуляш, 500 г, 457 ₽» — один товар,
+     * который распознавание речи разбило запятыми, а единственная сумма — цена всей покупки.
      */
     internal fun itemsOf(fromAi: List<ParsedItem>?, list: ShoppingList?): List<ParsedItem>? {
-        val ai = fromAi?.takeIf { it.size >= 2 }
-        val phrase = list?.items?.map { ParsedItem(name = it.name, price = it.price) }?.takeIf { it.size >= 2 }
+        val ai = fromAi?.filterNot { ShoppingListParser.isInterjection(it.name) }?.takeIf { it.size >= 2 }
+        val phrase = list?.takeIf { it.total != null || it.items.count { i -> i.price != null } >= 2 }
+            ?.items?.map { ParsedItem(name = it.name, price = it.price) }?.takeIf { it.size >= 2 }
         return when {
             ai == null -> phrase
             phrase != null && list?.hasPrices == true && ai.none { it.price != null } -> phrase

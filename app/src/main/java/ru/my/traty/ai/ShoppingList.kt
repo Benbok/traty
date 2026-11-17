@@ -172,7 +172,8 @@ object ShoppingListParser {
                 items += parsed
                 continue
             }
-            if (piece.any(Char::isLetter)) continue
+            // «аа 457 ₽»: кроме междометия в куске только цена — она тоже цена предыдущего товара
+            if (nameOf(piece) != null) continue
             val price = MoneyAmounts.all(piece).singleOrNull()?.value ?: continue
             val last = items.lastOrNull() ?: continue
             if (last.price == null) items[items.lastIndex] = last.copy(price = price)
@@ -181,12 +182,31 @@ object ShoppingListParser {
     }
 
     private fun item(piece: String): ListedItem? {
-        val money = MoneyAmounts.all(piece)
-        val price = money.lastOrNull()?.value
-        var name = mask(piece, money.map { it.range }).replace(currency, " ")
-        name = tidy(name) ?: return null
+        val name = nameOf(piece) ?: return null
         if (name.lowercase() in vague) return null
-        return ListedItem(name, price)
+        return ListedItem(name, MoneyAmounts.all(piece).lastOrNull()?.value)
+    }
+
+    /** Название товара в куске без цены, валюты, служебных слов и междометий; null — названия нет. */
+    private fun nameOf(piece: String): String? {
+        val money = MoneyAmounts.all(piece)
+        val words = mask(piece, money.map { it.range }).replace(currency, " ").split(Regex("""\s+"""))
+        return tidy(words.filterNot(::isInterjection).joinToString(" "))
+    }
+
+    private val hesitations = setOf("э", "эм", "эмм", "хм", "хмм", "ам", "ну")
+
+    /**
+     * «а-а», «аа», «э-э», «ммм», «хм» — распознавание речи записывает заминку как слово, а это не товар.
+     * Слово из одной повторённой буквы (с дефисами) или известная заминка.
+     */
+    fun isInterjection(word: String): Boolean {
+        val w = word.lowercase().trim(' ', ',', '.', ';', ':', '—', '…', '!', '?')
+        if (w.isEmpty()) return false
+        if (w in hesitations) return true
+        val letters = w.replace("-", "")
+        if (letters.isEmpty() || !letters.all(Char::isLetter)) return false
+        return letters.length >= 2 && letters.toSet().size == 1
     }
 
     /** Убирает служебные слова по краям: «в купил рыбу за» → «рыбу». Слова в середине не трогает. */
