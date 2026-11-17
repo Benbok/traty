@@ -23,6 +23,8 @@ import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.IncomeRepository
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.ReconciliationRepository
+import ru.my.traty.backup.FullBackupImporter
+import ru.my.traty.data.backup.BackupRepository
 import ru.my.traty.data.debt.DebtPaymentRemoval
 import ru.my.traty.data.debt.DebtReminderWork
 import ru.my.traty.data.debt.DebtRepository
@@ -113,6 +115,9 @@ class AppContainer(
     val quickEntry = QuickEntry(db, categories, settings, debugLog = debugEntryLog(context), clientProvider = llm)
     val debts = DebtRepository(db)
     val expenseItems = ExpenseItemRepository(db)
+    val backups = BackupRepository(db)
+    val fullBackupImporter = FullBackupImporter(backups, settings)
+    val appVersion: String = installedVersionOf(context)
 
     /** Фото чека → черновик траты с товарами. Только Яндекс, независимо от выбранного ИИ для голоса. */
     val receipts = ReceiptScanner(db, settings)

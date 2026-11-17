@@ -32,6 +32,10 @@ interface ExpenseItemDao {
     @Query("SELECT * FROM expense_items ORDER BY expenseId, position, id")
     fun observeAll(): Flow<List<ExpenseItem>>
 
+    /** Все позиции одним списком: для полной резервной копии. */
+    @Query("SELECT * FROM expense_items ORDER BY expenseId, position, id")
+    suspend fun getAll(): List<ExpenseItem>
+
     /** Сколько товаров в каждой покупке: лента показывает «5 товаров» вместо длинного списка в заметке. */
     @Query("SELECT expenseId, COUNT(*) AS count FROM expense_items GROUP BY expenseId")
     fun observeCounts(): Flow<List<ItemCount>>

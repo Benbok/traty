@@ -181,6 +181,30 @@ class SettingsRepository(
         }
     }
 
+    /**
+     * Настройки из полной резервной копии, одной записью. Ключи ИИ не трогаются:
+     * их в копии нет, пользователь вводит их заново.
+     */
+    suspend fun restore(s: PortableSettings) {
+        context.dataStore.edit { p ->
+            enumOrNull<ThemeMode>(s.themeMode)?.let { p[K.themeMode] = it.name }
+            s.dynamicColor?.let { p[K.dynamicColor] = it }
+            s.holidayDecor?.let { p[K.holidayDecor] = it }
+            enumOrNull<LlmProvider>(s.provider)?.let { p[K.provider] = it.name }
+            s.deepseekModel?.trim()?.takeIf { it.isNotEmpty() }?.let { p[K.dsModel] = it }
+            s.yandexModel?.trim()?.takeIf { it.isNotEmpty() }?.let { p[K.yaModel] = it }
+            s.periodStartDay?.let { p[K.periodStartDay] = it.coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY) }
+            s.calculatorLines?.let { p[K.calculatorLines] = encodeLines(it) }
+            enumOrNull<VoiceEngine>(s.voiceEngine)?.let { p[K.voiceEngine] = it.name }
+            s.labelsEnabled?.let { p[K.labelsEnabled] = it }
+            s.dailyDigestEnabled?.let { p[K.dailyDigest] = it }
+            s.homePlanExpanded?.let { p[K.homePlanExpanded] = it }
+            s.budgetAlertsEnabled?.let { p[K.budgetAlerts] = it }
+            s.weeklyTasksNotify?.let { p[K.weeklyTasksNotify] = it }
+            s.updateCheckEnabled?.let { p[K.updateCheck] = it }
+        }
+    }
+
     /** Перешифровывает ключи, сохранённые старыми версиями открытым текстом. */
     suspend fun upgradeStoredSecrets() {
         context.dataStore.edit { p ->
