@@ -6,4 +6,6 @@
     <string name="widget_totals_description">Расходы за сегодня, список трат и быстрая запись</string>
     <string name="widget_record_label">Траты: быстрая запись</string>
     <string name="widget_record_description">Кнопка записи расхода без лишнего текста</string>
+    <string name="widget_quick_capture_label">Траты: голос и чек</string>
+    <string name="widget_quick_capture_description">Микрофон для записи траты и камера для съёмки чека</string>
 </resources>
