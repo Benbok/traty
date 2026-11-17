@@ -64,6 +64,6 @@ internal fun ReceiptPhotosContent(
             onClick = onParse,
             enabled = texts.isNotEmpty(),
             modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = sp.lg, vertical = sp.sm),
-        ) { Text("Разобрать чек") }
+        ) { Text("Распознать товары") }
     }
 }

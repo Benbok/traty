@@ -81,10 +81,11 @@ data class AppSettings(
 
 /**
  * Фото чеков: текст с фото читает Yandex Vision OCR (API-ключ и ID каталога Yandex Cloud),
- * товары из текста раскладывает DeepSeek (его ключ). Без любого из них кнопки камеры нет.
+ * товары из текста раскладывает DeepSeek. Кнопка доступна, когда заполнены все пять полей обоих сервисов.
  */
 val AppSettings.canScanReceipts: Boolean
-    get() = yandexKey.isNotBlank() && yandexFolderId.isNotBlank() && deepseekKey.isNotBlank()
+    get() = deepseekKey.isNotBlank() && deepseekModel.isNotBlank() &&
+        yandexKey.isNotBlank() && yandexFolderId.isNotBlank() && yandexModel.isNotBlank()
 
 internal fun encodeLines(lines: List<String>): String =
     lines.map { it.replace('\n', ' ').trim() }.filter { it.isNotEmpty() }.joinToString("\n")
