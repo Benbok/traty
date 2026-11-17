@@ -58,4 +58,12 @@ class ConsumptionTest {
         val day = LocalDate.parse("2026-03-29")
         assertEquals(day, ReadingDates.decode(ReadingDates.encode(day)))
     }
+
+    @Test fun overflowingGroupIsUnavailableInsteadOfCrashing() {
+        val points = listOf(point("2026-01-01", 0), point("2026-02-01", Long.MAX_VALUE), point("2026-03-01", Long.MAX_VALUE))
+        val a = RegisterSeries(1, 1, "T1", points, points.first().measuredAt)
+        val b = a.copy(registerId = 2, code = "T2")
+        assertNull(ConsumptionGroups.forRange(listOf(a, b), points[0].measuredAt, points[1].measuredAt))
+        assertNull(ConsumptionGroups.lastComparison(listOf(a, b)))
+    }
 }
