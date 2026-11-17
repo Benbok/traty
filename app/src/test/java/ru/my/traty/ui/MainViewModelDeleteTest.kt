@@ -76,8 +76,8 @@ class MainViewModelDeleteTest {
         // Perform undo
         vm.undoDelete()
 
-        // Check it was restored
-        expensesList = app.container.db.expenses().observeAll().first()
+        // undoDelete запускает корутину: ждём восстановления, а не первый старый снимок базы.
+        expensesList = app.container.db.expenses().observeAll().first { restored -> restored.any { it.id == id } }
         assertTrue(expensesList.any { it.id == id })
         assertNull(vm.deletedForUndo)
     }
