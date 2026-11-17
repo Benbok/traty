@@ -41,11 +41,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.data.Places
-import ru.my.traty.ui.charts.components.BalanceAreaChart
+import ru.my.traty.ui.charts.components.CashFlowChart
 import ru.my.traty.ui.charts.components.ChartDateCard
 import ru.my.traty.ui.charts.components.ChartKpiCard
 import ru.my.traty.ui.charts.components.DateRangePickerModal
-import ru.my.traty.ui.charts.components.DebitCreditBarChart
 import ru.my.traty.ui.charts.model.ChartPeriod
 import ru.my.traty.ui.designsystem.components.AmountSize
 import ru.my.traty.ui.designsystem.components.TratyAmountText
@@ -128,14 +127,9 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
             ChartKpiCard(summary = state.summary)
         }
 
-        // График 1: Динамика баланса (Линейный с заливкой)
-        item(key = "balance-chart", contentType = "balance-chart") {
-            BalanceAreaChart(points = state.balancePoints)
-        }
-
-        // График 2: Дебет vs Кредит (Столбчатый)
-        item(key = "debit-credit-chart", contentType = "debit-credit-chart") {
-            DebitCreditBarChart(bars = state.debitCreditBars)
+        // Накопительные доходы и расходы на общей шкале.
+        item(key = "cash-flow-chart", contentType = "cash-flow-chart") {
+            CashFlowChart(points = state.cashFlowPoints)
         }
 
         // Структура трат (Кредит по категориям)
@@ -309,3 +303,4 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
         )
     }
 }
+

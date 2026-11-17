@@ -105,11 +105,12 @@ class ChartsViewModelTest {
         assertEquals(1, state.summary.incomeCount)
         assertEquals(1, state.summary.expenseCount)
 
-        assertTrue(state.balancePoints.isNotEmpty())
-        assertTrue(state.debitCreditBars.isNotEmpty())
+        assertTrue(state.cashFlowPoints.isNotEmpty())
 
-        val lastPoint = state.balancePoints.last()
-        assertEquals(30_000_00L, lastPoint.cumulativeBalanceKopecks)
+        val lastPoint = state.cashFlowPoints.last()
+        assertEquals(50_000_00L, lastPoint.incomeKopecks)
+        assertEquals(20_000_00L, lastPoint.expenseKopecks)
+        assertEquals(30_000_00L, lastPoint.netKopecks)
     }
 
     @Test
@@ -130,3 +131,4 @@ class ChartsViewModelTest {
         assertEquals(end, state.rangeEnd)
     }
 }
+
