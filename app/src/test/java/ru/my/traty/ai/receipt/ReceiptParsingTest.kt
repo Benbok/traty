@@ -5,6 +5,25 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ReceiptParsingTest {
+    @Test fun decodePartsPreservesOrderAndDuplicateRowsForApplicationMerge() {
+        val parts = ReceiptParsing.decodeParts(
+            """{"parts":[{"items":[{"name":"Хлеб","sum":45},{"name":"Хлеб","sum":45}]},
+                {"total":90,"items":[{"name":"Хлеб","sum":45}]}]}""", 2,
+        )
+        assertEquals(2, parts.first().lines.size)
+        assertEquals(1, parts.last().lines.size)
+        assertNull(parts.first().totalKopecks)
+        assertEquals(9000L, parts.last().totalKopecks)
+    }
+
+    @Test(expected = ReceiptException::class) fun decodePartsRejectsMissingPhoto() {
+        ReceiptParsing.decodeParts("""{"parts":[{"items":[]}]}""", 2)
+    }
+
+    @Test(expected = ReceiptException::class) fun decodePartsRejectsInvalidPhoto() {
+        ReceiptParsing.decodeParts("""{"parts":[null,{}]}""", 2)
+    }
+
     @Test fun decode_fullAnswer_inKopecksWithoutDouble() {
         val r = ReceiptParsing.decode(
             """
@@ -63,3 +82,4 @@ class ReceiptParsingTest {
         ReceiptParsing.decode("Извините, я не могу прочитать чек")
     }
 }
+

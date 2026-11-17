@@ -48,6 +48,17 @@ object ReceiptParsing {
 
     fun decode(answer: String): ParsedReceipt {
         val obj = objectIn(answer) ?: throw ReceiptException(BAD_ANSWER)
+        return receipt(obj)
+    }
+
+    /** По одному результату на снимок: объединение и исключение пересечений делает приложение. */
+    fun decodeParts(answer: String, expectedCount: Int): List<ParsedReceipt> {
+        val parts = objectIn(answer)?.get("parts") as? JsonArray ?: throw ReceiptException(BAD_ANSWER)
+        if (parts.size != expectedCount) throw ReceiptException(BAD_ANSWER)
+        return parts.map { receipt(it as? JsonObject ?: throw ReceiptException(BAD_ANSWER)) }
+    }
+
+    private fun receipt(obj: JsonObject): ParsedReceipt {
         val lines = (obj["items"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(::line) }
         return ParsedReceipt(
             place = text(obj["store"])?.take(MAX_TEXT),
@@ -105,3 +116,4 @@ object ReceiptParsing {
     private const val MAX_TEXT = 120
     private const val MAX_UNIT = 10
 }
+

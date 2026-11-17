@@ -44,6 +44,10 @@ fun ReceiptReviewScreen(
     onClose: () -> Unit,
     onSave: (EntryDraft) -> Unit,
     onRetry: () -> Unit = {},
+    onParse: () -> Unit = {},
+    onRemovePhoto: (Int) -> Unit = {},
+    onReturnToPhotos: () -> Unit = {},
+    photoButton: @Composable ((String) -> Unit) -> Unit = {},
 ) {
     BackHandler(onBack = onClose)
     Scaffold(
@@ -60,9 +64,10 @@ fun ReceiptReviewScreen(
     ) { pad ->
         val content = Modifier.padding(pad).consumeWindowInsets(pad).fillMaxSize()
         when (state) {
+            is ReceiptUiState.Photos -> ReceiptPhotosContent(state.texts, onRemovePhoto, onParse, photoButton, content)
             is ReceiptUiState.Review -> ReceiptReviewContent(state.review, categories, onSave, content)
             is ReceiptUiState.Working -> ReceiptWaiting(state.step.title, content)
-            is ReceiptUiState.Failed -> ReceiptFailed(state, onRetry, onClose, content)
+            is ReceiptUiState.Failed -> ReceiptFailed(state, onRetry, onReturnToPhotos, onClose, content)
             ReceiptUiState.Idle -> Unit
         }
     }
@@ -120,7 +125,7 @@ private fun ReceiptWaiting(step: String, modifier: Modifier) {
 }
 
 @Composable
-private fun ReceiptFailed(failed: ReceiptUiState.Failed, onRetry: () -> Unit, onClose: () -> Unit, modifier: Modifier) {
+private fun ReceiptFailed(failed: ReceiptUiState.Failed, onRetry: () -> Unit, onPhotos: () -> Unit, onClose: () -> Unit, modifier: Modifier) {
     Box(modifier.padding(TratyTheme.spacing.xl), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -137,7 +142,9 @@ private fun ReceiptFailed(failed: ReceiptUiState.Failed, onRetry: () -> Unit, on
                 // Фото ещё в памяти: снимать заново не нужно
                 TratyButton(onClick = onRetry) { Text("Повторить") }
             }
+            TratyOutlinedButton(onClick = onPhotos) { Text("Вернуться к снимкам") }
             TratyOutlinedButton(onClick = onClose) { Text(if (failed.canRetry) "Отменить" else "Закрыть") }
         }
     }
 }
+
