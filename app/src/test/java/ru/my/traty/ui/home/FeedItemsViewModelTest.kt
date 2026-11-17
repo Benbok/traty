@@ -55,7 +55,8 @@ class FeedItemsViewModelTest {
         )
         app.container.expenseItems.replace(coffee, listOf(ExpenseItem(name = "кофе")))
 
-        val counts = vm.counts.filter { it.isNotEmpty() }.first()
+        // Room может сначала выдать обновление только первой покупки: ждём обе записи.
+        val counts = vm.counts.filter { shop in it && coffee in it }.first()
 
         assertEquals(mapOf(shop to 3, coffee to 1), counts)
     }
