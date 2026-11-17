@@ -25,7 +25,8 @@ object QuestionDates {
 
     fun apply(question: String, q: AssistantQuery, today: LocalDate, startDay: Int): AssistantQuery {
         if (q.intent !in DATED) return q
-        val spans = find(question, today, startDay)
+        // В сравнении «сентябрь и октябрь» — два отрезка, в остальных вопросах — один общий
+        val spans = find(question, today, startDay, joinMonths = q.intent != Intents.COMPARE)
         val fixed = fixFuture(q, today)
         if (spans.isEmpty()) return fixed
         if (q.intent == Intents.COMPARE) {
@@ -55,10 +56,10 @@ object QuestionDates {
     }
 
     /** Все отрезки в порядке упоминания. Совпадения не пересекаются: «с 1 по 10 октября» — один отрезок. */
-    fun find(question: String, today: LocalDate, startDay: Int): List<DateSpan> {
+    fun find(question: String, today: LocalDate, startDay: Int, joinMonths: Boolean = true): List<DateSpan> {
         val text = question.lowercase().replace('ё', 'е')
         val hits = ArrayList<Pair<IntRange, DateSpan>>()
-        for (rule in rules(today, startDay)) {
+        for (rule in rules(today, startDay, joinMonths)) {
             rule.regex.findAll(text).forEach { m ->
                 if (hits.none { it.first.first <= m.range.last && m.range.first <= it.first.last }) {
                     rule.span(m)?.let { s -> hits += m.range to s.clampTo(today) }
@@ -103,7 +104,7 @@ object QuestionDates {
         else -> null
     }
 
-    private fun rules(today: LocalDate, startDay: Int): List<Rule> {
+    private fun rules(today: LocalDate, startDay: Int, joinMonths: Boolean): List<Rule> {
         val period = BillingPeriod.containing(today, startDay)
         val monday = today.with(DayOfWeek.MONDAY)
         val year = "(?:\\s+(\\d{4})(?:\\s*г\\S*)?)?"
@@ -116,6 +117,20 @@ object QuestionDates {
                 val fromMonth = if (g[2].isNotEmpty()) monthOf(g[2]) else toMonth
                 val from = runCatching { LocalDate.of(to.year, fromMonth, g[1].toInt()) }.getOrNull() ?: return@Rule null
                 DateSpan(if (from.isAfter(to)) from.minusYears(1) else from, to)
+            },
+            // «с ноября по декабрь», «с октября 2025 по март 2026», «с ноября по декабрь прошлого года»
+            Rule("(?:с|от)\\s+(?:начала\\s+)?$MONTH$year\\s+(?:по|до)\\s+(?:конец\\s+|конца\\s+)?$MONTH$year(\\s+прошлого\\s+года)?") { m ->
+                monthRange(m.groupValues, today)
+            },
+            // «в ноябре и декабре» — один отрезок, а не два месяца из разных лет
+            Rule("(?:в|за)\\s+$MONTH$year\\s+и\\s+$MONTH$year(\\s+прошлого\\s+года)?") { m ->
+                if (joinMonths) monthRange(m.groupValues, today) else null
+            },
+            // «с ноября», «с начала октября» — с первого числа по сегодня
+            Rule("с\\s+(?:начала\\s+)?$MONTH$year(\\s+прошлого\\s+года)?") { m ->
+                val month = monthOf(m.groupValues[1])
+                val y = yearFor(month, m.groupValues[2], m.groupValues[3].isNotEmpty(), today)
+                DateSpan(LocalDate.of(y, month, 1), today)
             },
             // «5 октября»
             Rule("(\\d{1,2})\\s+$MONTH$year") { m ->
@@ -137,8 +152,23 @@ object QuestionDates {
             Rule("(?:в|за)\\s+(?:прошлом|прошлый|прошедшем|прошедший|предыдущем|предыдущий)\\s+(?:месяц\\S*|период\\S*)") {
                 period.previous(startDay).let { DateSpan(it.startDate, it.endDate) }
             },
+            // Кварталы календарные: январь–март, апрель–июнь, июль–сентябрь, октябрь–декабрь
+            Rule("(?:в|за|на)\\s+(?:этом|этот|текущем|текущий)\\s+квартал\\S*|с\\s+начала\\s+квартала") {
+                DateSpan(quarterStart(today), today)
+            },
+            Rule("(?:в|за)\\s+(?:прошлом|прошлый|прошедшем|прошедший|предыдущем|предыдущий)\\s+квартал\\S*") {
+                val start = quarterStart(today).minusMonths(3)
+                DateSpan(start, start.plusMonths(3).minusDays(1))
+            },
+            // «за первый квартал», «во 2 квартале 2025»; «за 2 квартала» — это полгода, ниже
+            Rule("(?:в|во|за)\\s+(1|2|3|4|перв\\S*|втор\\S*|трет\\S*|четверт\\S*)\\s+квартал(?:е)?$year") { m ->
+                val n = m.groupValues[1].let { w -> w.toIntOrNull() ?: when { w.startsWith("перв") -> 1; w.startsWith("втор") -> 2; w.startsWith("трет") -> 3; else -> 4 } }
+                var start = LocalDate.of(m.groupValues[2].toIntOrNull() ?: today.year, (n - 1) * 3 + 1, 1)
+                if (m.groupValues[2].isEmpty() && start.isAfter(today)) start = start.minusYears(1)
+                DateSpan(start, start.plusMonths(3).minusDays(1))
+            },
             // «за неделю», «за последние 3 месяца», «за полгода», «за пару недель»
-            Rule("за\\s+(?:последн\\S+\\s+)?(\\d{1,3}|два|две|три|четыре|пять|шесть|пару|)\\s*(дн\\S*|день|недел\\S*|месяц\\S*|год\\S*|лет)|за\\s+(?:последн\\S+\\s+)?(полгода)") { m ->
+            Rule("за\\s+(?:последн\\S+\\s+)?(\\d{1,3}|два|две|три|четыре|пять|шесть|пару|)\\s*(дн\\S*|день|недел\\S*|месяц\\S*|квартал\\S*|год\\S*|лет)|за\\s+(?:последн\\S+\\s+)?(полгода)") { m ->
                 val g = m.groupValues
                 if (g[3].isNotEmpty()) return@Rule DateSpan(today.minusMonths(6).plusDays(1), today)
                 val n = count(g[1]) ?: return@Rule null
@@ -149,12 +179,14 @@ object QuestionDates {
                     unit.startsWith("д") -> today.minusDays(n.toLong())
                     unit.startsWith("н") -> today.minusWeeks(n.toLong())
                     unit.startsWith("м") -> today.minusMonths(n.toLong())
+                    // «за последний квартал» — последние три месяца, как «за последний год» — последние 12
+                    unit.startsWith("к") -> today.minusMonths(3L * n)
                     else -> today.minusYears(n.toLong())
                 }
                 DateSpan(from.plusDays(1), today)
             },
-            Rule("(?:в|за)\\s+(?:этом|этот|текущем|текущий)\\s+году|с\\s+начала\\s+года") { DateSpan(today.withDayOfYear(1), today) },
-            Rule("(?:в|за)\\s+(?:прошлом|прошлый)\\s+году|(?:в|за)\\s+прошлый\\s+год") {
+            Rule("(?:в|за)\\s+(?:этом|этот|текущем|текущий)\\s+год(?:у)?|с\\s+начала\\s+года") { DateSpan(today.withDayOfYear(1), today) },
+            Rule("(?:в|за)\\s+(?:прошлом|прошлый|предыдущем|предыдущий)\\s+год(?:у)?") {
                 val y = today.year - 1
                 DateSpan(LocalDate.of(y, 1, 1), LocalDate.of(y, 12, 31))
             },
@@ -175,6 +207,30 @@ object QuestionDates {
                 season(m.groupValues[2], m.groupValues[1].isNotEmpty(), m.groupValues[3], today)
             },
         )
+    }
+
+    private fun quarterStart(d: LocalDate): LocalDate = LocalDate.of(d.year, (d.monthValue - 1) / 3 * 3 + 1, 1)
+
+    /**
+     * «с ноября по декабрь»: [g] — группы правила (месяц, год, месяц, год, «прошлого года»).
+     * Без года отрезок — последний уже начавшийся: в ноябре «с ноября по декабрь» — с 1 ноября по сегодня,
+     * «с декабря по февраль» — с прошлого декабря. Если второй месяц раньше первого, отрезок переходит через Новый год.
+     */
+    private fun monthRange(g: List<String>, today: LocalDate): DateSpan {
+        val m1 = monthOf(g[1])
+        val m2 = monthOf(g[3])
+        val wrap = if (m2 < m1) 1 else 0
+        val y1 = g[2].toIntOrNull()
+        val y2 = g[4].toIntOrNull()
+        val fromYear = when {
+            y1 != null -> y1
+            y2 != null -> y2 - wrap
+            g[5].isNotEmpty() -> today.year - 1 - wrap
+            else -> yearFor(m1, null, false, today)
+        }
+        val from = YearMonth.of(fromYear, m1).atDay(1)
+        val to = YearMonth.of(y2 ?: (fromYear + wrap), m2).atEndOfMonth()
+        return if (to.isBefore(from)) DateSpan(YearMonth.of(y2 ?: fromYear, m2).atDay(1), YearMonth.of(fromYear, m1).atEndOfMonth()) else DateSpan(from, to)
     }
 
     /** Время года: последнее уже начавшееся (зима — с декабря по февраль). */

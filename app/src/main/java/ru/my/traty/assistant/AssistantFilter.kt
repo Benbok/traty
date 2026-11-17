@@ -39,14 +39,6 @@ private fun ExpenseWithCategory.mentions(phrase: String): Boolean {
     return words.all { it in text } || SearchText.sameBrand(phrase, listOf(expense.place, expense.note))
 }
 
-/** Фраза есть в названии позиции (товара) внутри покупки. */
-internal fun ExpenseItem.mentionsItem(phrase: String): Boolean {
-    val words = stems(phrase)
-    if (words.isEmpty()) return false
-    val text = fold(name)
-    return words.all { it in text }
-}
-
 /**
  * Какие траты попадают в ответ.
  * [names] — категории и подкатегории (в нижнем регистре); [terms] — слова, которых нет среди категорий,
@@ -63,38 +55,32 @@ internal class Filter(
 ) {
     val isEmpty get() = names.isEmpty() && terms.isEmpty() && place == null && itemTerms.isEmpty()
 
-    /** Фильтр по транзакции целиком: проходит, если хотя бы одна из позиций совпадает с [itemTerms]. */
+    /** Трата прошла по категории, подкатегории или слову из места и заметки: засчитывается вся сумма. */
+    private fun wholeMatch(r: ExpenseWithCategory): Boolean {
+        val cat = r.categoryName.lowercase(RU)
+        val sub = r.subcategoryName?.lowercase(RU)
+        return cat in names || sub in names || terms.any { r.mentions(it) }
+    }
+
+    /** Какая часть траты относится к товарам из вопроса; null — вопрос не про товар или трата прошла целиком. */
+    fun itemPart(r: ExpenseWithCategory, items: List<ExpenseItem>): ItemPart? =
+        if (itemTerms.isEmpty() || wholeMatch(r)) null else AssistantItems.part(r, items, itemTerms) { r.mentions(it) }
+
+    /** Трата попадает в ответ: по категории, по слову в месте или заметке или по товару внутри покупки. */
     fun matches(r: ExpenseWithCategory, items: List<ExpenseItem> = emptyList()): Boolean {
         if (names.isNotEmpty() || terms.isNotEmpty() || itemTerms.isNotEmpty()) {
-            val cat = r.categoryName.lowercase(RU)
-            val sub = r.subcategoryName?.lowercase(RU)
-            val byCategory = cat in names || sub in names
-            val byTerm = terms.any { r.mentions(it) }
-            val byItem = itemTerms.isNotEmpty() && items.any { item -> itemTerms.any { item.mentionsItem(it) } }
-            if (!byCategory && !byTerm && !byItem) return false
+            if (!wholeMatch(r) && itemPart(r, items) == null) return false
         }
         if (place != null && !r.mentions(place)) return false
         return true
     }
 
     /**
-     * Сумма, которую нужно засчитать за данную транзакцию при данном фильтре.
-     * Если запрос — по конкретному товару ([itemTerms] непуст и совпадение только по ним) —
-     * суммируем только прайсы совпавших позиций; иначе берём всю сумму транзакции.
+     * Сколько засчитать за трату: при вопросе про товар — только цены совпавших позиций
+     * ([AssistantItems.part]), иначе всю сумму.
      */
-    fun amountOf(r: ExpenseWithCategory, items: List<ExpenseItem>): Long {
-        // Нет товарного фильтра, или транзакция прошла по категории/термину — берём всю сумму
-        if (itemTerms.isEmpty()) return r.expense.amountKopecks
-        val cat = r.categoryName.lowercase(RU)
-        val sub = r.subcategoryName?.lowercase(RU)
-        if (cat in names || sub in names || terms.any { r.mentions(it) }) return r.expense.amountKopecks
-        // Только товарный матч: суммируем priceKopecks совпавших позиций
-        val matchedItems = items.filter { item -> itemTerms.any { item.mentionsItem(it) } }
-        if (matchedItems.isEmpty()) return r.expense.amountKopecks
-        val itemsSum = matchedItems.sumOf { it.priceKopecks ?: 0L }
-        // Если у всех позиций нет цен — возвращаем всю сумму (лучше, чем 0)
-        return if (itemsSum > 0) itemsSum else r.expense.amountKopecks
-    }
+    fun amountOf(r: ExpenseWithCategory, items: List<ExpenseItem>): Long =
+        itemPart(r, items)?.amount ?: r.expense.amountKopecks
 
     fun describe(): String? = listOfNotNull(
         names.takeIf { it.isNotEmpty() }?.joinToString(", ") { it.replaceFirstChar { c -> c.uppercase() } },
@@ -128,22 +114,28 @@ internal class Filter(
             }
             val terms = ArrayList<String>()
             val itemTerms = ArrayList<String>()
+            // ИИ записал товар местом («шоколадки»), а такого места нет — ищем товар в покупках
+            place?.let { p ->
+                val isPlace = rows.any { r -> r.expense.place?.let { stems(p).all { w -> w in fold(it) } } == true }
+                if (q.intent in TEXT_SEARCH && !isPlace && hasItem(expenseItems, p)) { itemTerms += p; place = null }
+            }
             val missing = ArrayList<String>()
             for (a in asked) {
                 val n = a.lowercase(RU)
                 val hit = if (n in known) n else closest(n, known)
                 when {
                     hit != null -> found += hit
+                    // Товар из списков покупок проверяем раньше заметок: в заметке такой покупки тот же список,
+                    // и по ней засчиталась бы вся сумма чека, а не цена товара
+                    q.intent in TEXT_SEARCH && hasItem(expenseItems, a) -> itemTerms += n
                     q.intent in TEXT_SEARCH && rows.any { it.mentions(a) } -> terms += n
-                    // Товарный поиск: слова нет ни в категориях, ни в местах/заметках,
-                    // но оно есть в именах позиций хотя бы одной покупки
-                    q.intent in TEXT_SEARCH && expenseItems.values.any { items ->
-                        items.any { item -> item.mentionsItem(a) }
-                    } -> itemTerms += n
                     else -> missing += a
                 }
             }
-            return Filter(found, missing, place, terms, itemTerms)
+            return Filter(found, missing, place, terms, itemTerms.distinct())
         }
+
+        private fun hasItem(expenseItems: Map<Long, List<ExpenseItem>>, phrase: String) =
+            expenseItems.values.any { items -> items.any { it.mentionsItem(phrase) } }
     }
 }

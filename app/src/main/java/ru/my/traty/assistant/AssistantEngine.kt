@@ -25,7 +25,6 @@ import ru.my.traty.data.recurring.yearlyKopecks
 import ru.my.traty.ui.formatRub
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.roundToLong
 
@@ -150,97 +149,33 @@ object AssistantEngine {
             )
         }
 
-        fun itemsFor(r: ExpenseWithCategory) = ctx.expenseItems[r.expense.id] ?: emptyList()
-
         fun rowsIn(a: LocalDate, b: LocalDate) = spending.filter { r ->
             val d = day(r.expense.timestamp, ctx.zone)
-            !d.isBefore(a) && !d.isAfter(b) && filter.matches(r, itemsFor(r))
+            !d.isBefore(a) && !d.isAfter(b) && filter.matches(r, ctx.expenseItems[r.expense.id].orEmpty())
         }
-
-        /** Сумма для строки с учётом товарного фильтра: только прайс совпавших позиций или вся транзакция. */
-        fun amountOf(r: ExpenseWithCategory) = filter.amountOf(r, itemsFor(r))
 
         val rows = rowsIn(from, to)
         val span = span(from, to)
         val subject = filter.describe()
         val base = header(ctx) + (if (filter.unknownNames.isNotEmpty()) "Не найдены в записях: ${filter.unknownNames.joinToString(", ")}.\n" else "")
+        val picked = Picked(rows, filter, ctx)
 
         return when (q.intent) {
-            Intents.TOTAL -> {
-                val sum = rows.sumOf { amountOf(it) }
-                val itemNote = if (filter.itemTerms.isNotEmpty() && rows.any { ctx.expenseItems[it.expense.id]?.isNotEmpty() == true })
-                    " (только стоимость товаров ${filter.itemTerms.joinToString(", ") { "«$it»" }} из списков покупок)" else ""
-                val countLabel = if (filter.itemTerms.isNotEmpty()) "покупок с таким товаром" else "покупок"
-                val facts = buildString {
-                    append(base)
-                    appendLine("Потрачено за $span${subject?.let { " ($it)" }.orEmpty()}: ${formatRub(sum)}, $countLabel: ${rows.size}.$itemNote")
-                    if (filter.isEmpty && rows.isNotEmpty()) {
-                        appendLine("Больше всего:")
-                        byCategory(rows).take(5).forEach { (name, s) -> appendLine("- $name: ${formatRub(s)} (${share(s, sum)})") }
-                    }
-                }
-                AssistantData(facts, formatRub(sum), listOfNotNull(subject, span).joinToString(" · "), ids(rows))
-            }
+            Intents.TOTAL -> AssistantSpending.total(picked, filter, span, subject, base)
 
-            Intents.TOP -> {
-                val n = (q.limit ?: DEFAULT_TOP).coerceIn(1, MAX_TOP)
-                val top = rows.sortedByDescending { it.expense.amountKopecks }.take(n)
-                val facts = buildString {
-                    append(base)
-                    appendLine("Самые крупные траты за $span${subject?.let { " ($it)" }.orEmpty()}:")
-                    if (top.isEmpty()) appendLine("трат нет")
-                    // Заметки в ИИ не отправляем: для «самых крупных» хватает категории и места
-                    top.forEach { appendLine("- ${describe(it, ctx.zone, withNote = false)}") }
-                }
-                AssistantData(facts, top.firstOrNull()?.let { formatRub(it.expense.amountKopecks) }, "Самая крупная · $span", top.map { it.expense.id })
-            }
+            Intents.TOP -> AssistantSpending.top(picked, (q.limit ?: DEFAULT_TOP).coerceIn(1, MAX_TOP), span, subject, base)
 
-            Intents.BREAKDOWN -> {
-                val sum = rows.sumOf { amountOf(it) }
-                // По одной категории разбиваем на подкатегории, иначе по категориям
-                val bySub = filter.names.size == 1
-                val groups = if (bySub) rows.groupBy { it.subcategoryName ?: "без подкатегории" }
-                    .map { (k, v) -> k to v.sumOf { amountOf(it) } }.sortedByDescending { it.second }
-                else byCategory(rows).map { (k, _) -> k to rows.filter { r -> r.categoryName == k }.sumOf { amountOf(it) } }
-                val facts = buildString {
-                    append(base)
-                    appendLine("Траты за $span${subject?.let { " ($it)" }.orEmpty()} по ${if (bySub) "подкатегориям" else "категориям"}, всего ${formatRub(sum)}:")
-                    groups.take(10).forEach { (name, s) -> appendLine("- $name: ${formatRub(s)} (${share(s, sum)})") }
-                }
-                AssistantData(facts, formatRub(sum), listOfNotNull(subject, span).joinToString(" · "), ids(rows))
-            }
+            Intents.BREAKDOWN -> AssistantSpending.breakdown(picked, filter, span, subject, base)
 
-            Intents.PLACES -> {
-                val withPlace = rows.filter { !it.expense.place.isNullOrBlank() }
-                val groups = withPlace.groupBy { it.expense.place!!.trim().lowercase(RU) }
-                    .map { (_, v) -> v.first().expense.place!!.trim() to v }
-                    .sortedByDescending { (_, v) -> v.sumOf { it.expense.amountKopecks } }
-                val facts = buildString {
-                    append(base)
-                    appendLine("Места, где больше всего потрачено за $span${subject?.let { " ($it)" }.orEmpty()}:")
-                    if (groups.isEmpty()) appendLine("у трат за этот срок не записаны места")
-                    groups.take(8).forEach { (name, v) ->
-                        appendLine("- $name: ${formatRub(v.sumOf { it.expense.amountKopecks })}, покупок: ${v.size}")
-                    }
-                    val noPlace = rows.size - withPlace.size
-                    if (noPlace > 0) appendLine("Трат без места: $noPlace.")
-                }
-                val top = groups.firstOrNull()
-                AssistantData(
-                    facts,
-                    top?.let { (_, v) -> formatRub(v.sumOf { it.expense.amountKopecks }) },
-                    top?.let { "${it.first} · $span" },
-                    top?.second?.let { ids(it) }.orEmpty(),
-                )
-            }
+            Intents.PLACES -> AssistantSpending.places(picked, span, subject, base)
 
             Intents.COMPARE -> {
                 val (cFrom, cTo) = compareRange(q, from, to, period, ctx)
-                val other = rowsIn(cFrom, cTo)
-                val cur = rows.sumOf { amountOf(it) }
-                val prev = other.sumOf { amountOf(it) }
+                val other = Picked(rowsIn(cFrom, cTo), filter, ctx)
+                val cur = picked.sum
+                val prev = other.sum
                 val diff = cur - prev
-                val changes = PeriodComparison.changes(totals(rows), totals(other)).take(5)
+                val changes = PeriodComparison.changes(totals(rows), totals(other.rows)).take(5)
                 val facts = buildString {
                     append(base)
                     appendLine("Сравнение${subject?.let { " ($it)" }.orEmpty()}:")
@@ -255,18 +190,7 @@ object AssistantEngine {
                 AssistantData(facts, signed(diff), "$span против ${span(cFrom, cTo)}", ids(rows))
             }
 
-            Intents.AVERAGE -> {
-                val days = (ChronoUnit.DAYS.between(from, to) + 1).toInt()
-                val sum = rows.sumOf { amountOf(it) }
-                val perDay = sum / days
-                val facts = buildString {
-                    append(base)
-                    appendLine("За $span${subject?.let { " ($it)" }.orEmpty()} ($days ${daysWord(days)}): ${formatRub(sum)}.")
-                    appendLine("В среднем в день: ${formatRub(perDay)}, в неделю: ${formatRub(perDay * 7)}.")
-                    if (rows.isNotEmpty()) appendLine("Средняя покупка: ${formatRub(sum / rows.size)}.")
-                }
-                AssistantData(facts, formatRub(perDay), "в среднем в день · $span", ids(rows))
-            }
+            Intents.AVERAGE -> AssistantSpending.average(picked, from, to, span, subject, base)
 
             Intents.SUBSCRIPTIONS -> {
                 val active = ctx.recurring.filter { it.state == RecurringState.ACTIVE }.sortedBy { it.nextEpochDay }
@@ -301,9 +225,9 @@ object AssistantEngine {
                 AssistantData(facts, formatRub(got), "поступления · $span")
             }
 
-            Intents.TREND -> AssistantTrends.trend(q, rows, from, to, ctx, subject, base)
+            Intents.TREND -> AssistantTrends.trend(q, picked, from, to, ctx, subject, base)
 
-            Intents.LIST -> AssistantTrends.list(rows, from, to, ctx, subject, base)
+            Intents.LIST -> AssistantTrends.list(picked, from, to, ctx, subject, base)
 
             Intents.AFFORD -> afford(q, ctx, spending, period, filter.names)
 
