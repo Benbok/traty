@@ -34,4 +34,21 @@ class ApartmentAssistantTest {
         assertNull(q?.from)
         assertEquals("ELECTRICITY", q?.resource)
     }
+
+    @Test fun moneyPhrasingAndUnrelatedFollowUpRemainFinancial() {
+        val previous = ApartmentQuestion(resource = "HOT_WATER", apartment = "Дом")
+        val today = LocalDate.of(2026, 11, 17)
+        assertNull(ApartmentQuestionRules.resolve("Сколько ушло на воду за октябрь?", null, null, today))
+        assertNull(ApartmentQuestionRules.resolve("А сколько ушло на такси?", null, previous, today))
+    }
+    @Test fun onlineFollowUpMergesSelectorsInsteadOfLosingThem() {
+        val old = ApartmentQuestion(apartment = "Дом", meter = "Ванная", resource = "HOT_WATER")
+        val ai = ru.my.traty.assistant.AssistantQuery(intent = ApartmentIntents.CONSUMPTION,
+            housing = ApartmentQuestion(from = "2026-10-01", to = "2026-10-31"))
+        val q = ApartmentQuestionRules.resolve("А за октябрь?", ai, old, LocalDate.of(2026, 11, 17))
+        assertEquals("Дом", q?.apartment)
+        assertEquals("Ванная", q?.meter)
+        assertEquals("HOT_WATER", q?.resource)
+        assertEquals("2026-10-01", q?.from)
+    }
 }
