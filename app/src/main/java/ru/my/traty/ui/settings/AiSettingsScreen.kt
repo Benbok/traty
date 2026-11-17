@@ -192,7 +192,7 @@ fun AiSettingsScreen(
                 ) {
                     Text("Параметры YandexGPT", style = TratyTheme.typography.titleMedium)
                     Text(
-                        "Сервисный аккаунт и каталог в Yandex Cloud. Те же ключ и каталог нужны для чеков по фото",
+                        "Сервисный аккаунт и каталог в Yandex Cloud. Те же ключ и каталог читают фото чеков",
                         style = TratyTheme.typography.bodySmall,
                         color = TratyTheme.colors.onSurfaceVariant,
                     )
@@ -217,7 +217,7 @@ fun AiSettingsScreen(
                 }
             }
 
-            ReceiptSettingsCard(s) { s = it }
+            ReceiptSettingsCard(s)
 
             // Кнопки управления
             Row(

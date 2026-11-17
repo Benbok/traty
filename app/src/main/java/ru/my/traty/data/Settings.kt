@@ -48,8 +48,6 @@ data class AppSettings(
     val yandexKey: String = "",
     val yandexFolderId: String = "",
     val yandexModel: String = "yandexgpt-lite/latest",
-    /** Модель YandexGPT для разбора чеков с фото: длинный текст чека Pro читает точнее, чем Lite. */
-    val yandexReceiptModel: String = DEFAULT_RECEIPT_MODEL,
     /** День месяца (1..28), с которого начинается расчётный период. */
     val periodStartDay: Int = MIN_PERIOD_START_DAY,
     /** Последний день (epoch day), в который карточка сверки скрыта кнопкой «Напомнить завтра»; 0 - нет. */
@@ -81,11 +79,12 @@ data class AppSettings(
     val updateDismissedVersion: String = "",
 )
 
-const val DEFAULT_RECEIPT_MODEL = "yandexgpt/latest"
-
-/** Фото чеков работают только с Яндексом: нужны API-ключ и ID каталога Yandex Cloud. */
+/**
+ * Фото чеков: текст с фото читает Yandex Vision OCR (API-ключ и ID каталога Yandex Cloud),
+ * товары из текста раскладывает DeepSeek (его ключ). Без любого из них кнопки камеры нет.
+ */
 val AppSettings.canScanReceipts: Boolean
-    get() = yandexKey.isNotBlank() && yandexFolderId.isNotBlank()
+    get() = yandexKey.isNotBlank() && yandexFolderId.isNotBlank() && deepseekKey.isNotBlank()
 
 internal fun encodeLines(lines: List<String>): String =
     lines.map { it.replace('\n', ' ').trim() }.filter { it.isNotEmpty() }.joinToString("\n")
@@ -115,7 +114,6 @@ class SettingsRepository(
         val yaKey = stringPreferencesKey("yandex_key")
         val yaFolder = stringPreferencesKey("yandex_folder")
         val yaModel = stringPreferencesKey("yandex_model")
-        val yaReceiptModel = stringPreferencesKey("yandex_receipt_model")
         val periodStartDay = intPreferencesKey("period_start_day")
         val reconcileSnooze = longPreferencesKey("reconcile_snooze_until")
         val calculatorLines = stringPreferencesKey("calculator_lines")
@@ -147,7 +145,6 @@ class SettingsRepository(
             yandexKey = secrets.open(p[K.yaKey]),
             yandexFolderId = p[K.yaFolder] ?: "",
             yandexModel = p[K.yaModel] ?: d.yandexModel,
-            yandexReceiptModel = p[K.yaReceiptModel]?.takeIf { it.isNotBlank() } ?: d.yandexReceiptModel,
             periodStartDay = (p[K.periodStartDay] ?: d.periodStartDay)
                 .coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY),
             reconcileSnoozeUntilEpochDay = (p[K.reconcileSnooze] ?: 0L).coerceAtLeast(0L),
@@ -180,7 +177,6 @@ class SettingsRepository(
             p[K.yaKey] = secrets.seal(s.yandexKey.trim())
             p[K.yaFolder] = s.yandexFolderId.trim()
             p[K.yaModel] = s.yandexModel.trim()
-            p[K.yaReceiptModel] = s.yandexReceiptModel.trim()
             p[K.periodStartDay] = s.periodStartDay.coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY)
         }
     }

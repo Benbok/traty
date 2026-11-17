@@ -3,7 +3,7 @@ package ru.my.traty.ai.receipt
 import java.time.LocalDate
 
 /**
- * Промпт YandexGPT для текста чека. ИИ только переписывает строки чека в JSON:
+ * Промпт DeepSeek для текста чека. ИИ только переписывает строки чека в JSON:
  * ничего не складывает и не досчитывает, итог и сверку считает приложение.
  */
 object ReceiptPrompt {

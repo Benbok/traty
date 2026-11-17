@@ -51,7 +51,7 @@ fun ReceiptReviewScreen(
             TratyHeaderCard(
                 modifier = Modifier.statusBarsPadding(),
                 title = if (state is ReceiptUiState.Review) "Проверьте чек" else "Чек по фото",
-                subtitle = "Яндекс читает чек, сумму сверяет приложение",
+                subtitle = "Яндекс читает фото, DeepSeek — товары, сумму сверяет приложение",
                 icon = Icons.AutoMirrored.Filled.ReceiptLong,
                 onBack = onClose,
             )

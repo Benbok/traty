@@ -110,8 +110,6 @@ class YandexGptClient(
     private val folderId: String,
     private val model: String,
     private val timeoutSeconds: Long = LlmRetry.DEFAULT_TIMEOUT_SECONDS,
-    /** Длинный чек в JSON не помещается в обычные 800 токенов ответа. */
-    private val maxTokens: Int = 800,
 ) : LlmClient {
     override val name = "YandexGPT"
 
@@ -125,7 +123,7 @@ class YandexGptClient(
                 putJsonObject("completionOptions") {
                     put("stream", false)
                     put("temperature", 0.1)
-                    put("maxTokens", maxTokens.toString())
+                    put("maxTokens", "800")
                 }
                 putJsonArray("messages") {
                     addJsonObject { put("role", "system"); put("text", system) }

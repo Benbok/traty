@@ -5,6 +5,8 @@ import ru.my.traty.ai.receipt.ReceiptOcr
 import ru.my.traty.ai.receipt.ReceiptException
 import ru.my.traty.ai.receipt.ReceiptParsing
 import ru.my.traty.ai.receipt.ReceiptPrompt
+import ru.my.traty.ai.receipt.ReceiptService
+import ru.my.traty.ai.receipt.ReceiptServiceFailure
 import ru.my.traty.ai.receipt.ReceiptText
 import ru.my.traty.ai.receipt.receiptLlmFor
 import ru.my.traty.ai.receipt.receiptOcrFor
@@ -12,6 +14,7 @@ import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.SettingsRepository
 import ru.my.traty.data.selectable
+import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -24,7 +27,7 @@ enum class ReceiptStep(val title: String) {
 /**
  * Путь «фото чека → текст → товары → черновик траты». Ничего не сохраняет:
  * черновик всегда показывается на экране проверки, сохраняет человек.
- * В Яндекс уходят фото (Vision OCR), текст чека без служебных строк и названия категорий (YandexGPT).
+ * В Яндекс уходит только фото (Vision OCR), в DeepSeek — текст чека без служебных строк и названия категорий.
  */
 class ReceiptScanner(
     private val db: AppDatabase,
@@ -37,9 +40,9 @@ class ReceiptScanner(
         val s = settings.current()
         val ocr = ocrFor(s)
         val llm = llmFor(s)
-        require(ocr != null && llm != null) { "Заполните API-ключ и ID каталога Yandex Cloud в настройках ИИ" }
+        require(ocr != null && llm != null) { "Заполните ключ и ID каталога Yandex Cloud и ключ DeepSeek в настройках ИИ" }
         onStep(ReceiptStep.READING)
-        val text = ocr.recognize(jpeg)
+        val text = step(ReceiptService.OCR) { ocr.recognize(jpeg) }
         return parse(text, llm, onStep)
     }
 
@@ -50,7 +53,9 @@ class ReceiptScanner(
         onStep(ReceiptStep.PARSING)
         val cats = db.categories().getActiveWithSubs().selectable()
         val today = LocalDate.now(zone)
-        val answer = llm.complete(ReceiptPrompt.system(cats.map { it.category.name }, today), ReceiptPrompt.user(forAi), jsonMode = true)
+        val answer = step(ReceiptService.PARSE) {
+            llm.complete(ReceiptPrompt.system(cats.map { it.category.name }, today), ReceiptPrompt.user(forAi), jsonMode = true)
+        }
         val parsed = ReceiptParsing.decode(answer)
         return ReceiptDraft.build(
             parsed = parsed,
@@ -62,6 +67,15 @@ class ReceiptScanner(
             receiptText = forAi,
         )
     }
+
+    private suspend fun <T> step(service: ReceiptService, block: suspend () -> T): T =
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ReceiptServiceFailure(service, e)
+        }
 
     private companion object {
         /** Меньше этого — на фото не чек (или он не прочитался). */

@@ -59,7 +59,7 @@ internal fun ReceiptForm(
         }
         item(key = "privacy") {
             Text(
-                "Фото ушло в Yandex Vision OCR, текст чека без кассира и номеров кассы — в YandexGPT. На телефоне фото не хранится.",
+                "Фото ушло в Yandex Vision OCR, текст чека без кассира и номеров кассы — в DeepSeek. На телефоне фото не хранится.",
                 style = TratyTheme.typography.bodySmall,
                 color = TratyTheme.colors.onSurfaceVariant,
             )

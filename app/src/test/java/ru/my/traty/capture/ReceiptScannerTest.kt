@@ -86,8 +86,10 @@ class ReceiptScannerTest {
     }
 
     @Test
-    fun withoutYandexKeysNoScanning() {
+    fun withoutYandexOrDeepSeekKeysNoScanning() {
         assertFalse(AppSettings(yandexKey = "k").canScanReceipts)
-        assertTrue(AppSettings(yandexKey = "k", yandexFolderId = "b1g").canScanReceipts)
+        assertFalse(AppSettings(yandexKey = "k", yandexFolderId = "b1g").canScanReceipts)
+        assertFalse(AppSettings(yandexFolderId = "b1g", deepseekKey = "d").canScanReceipts)
+        assertTrue(AppSettings(yandexKey = "k", yandexFolderId = "b1g", deepseekKey = "d").canScanReceipts)
     }
 }
