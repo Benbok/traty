@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.ui.designsystem.components.TratyIconButton
+import ru.my.traty.ui.designsystem.components.TratyOutlinedButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 /**
@@ -35,6 +36,7 @@ fun ReceiptCameraButton(
     onError: (String) -> Unit,
     modifier: Modifier = Modifier,
     vm: ReceiptViewModel = viewModel(),
+    compact: Boolean = true,
 ) {
     val canScan by vm.canScan.collectAsStateWithLifecycle()
     if (!canScan) return
@@ -50,7 +52,9 @@ fun ReceiptCameraButton(
         if (uri != null) vm.scan(uri)
     }
     Box(modifier) {
-        TratyIconButton(
+        if (!compact) {
+            TratyOutlinedButton(onClick = { menu = true }, enabled = enabled) { Text("Добавить снимок") }
+        } else TratyIconButton(
             icon = Icons.Filled.PhotoCamera,
             contentDescription = "Чек по фото",
             onClick = { menu = true },
@@ -70,6 +74,7 @@ fun ReceiptCameraButton(
                         camera.launch(uri)
                     } catch (_: ActivityNotFoundException) {
                         pendingUri = null
+                        vm.photoNotTaken()
                         onError("На телефоне не нашлось приложения камеры")
                     }
                 },
@@ -85,3 +90,4 @@ fun ReceiptCameraButton(
         }
     }
 }
+

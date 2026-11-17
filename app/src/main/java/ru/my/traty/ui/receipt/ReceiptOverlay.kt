@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.capture.EntryDraft
+import ru.my.traty.capture.ReceiptParts
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
@@ -24,6 +25,17 @@ fun ReceiptOverlay(
             categories = categories,
             onClose = vm::close,
             onRetry = vm::retry,
+            onParse = vm::parsePhotos,
+            onRemovePhoto = vm::removePhoto,
+            onReturnToPhotos = vm::returnToPhotos,
+            photoButton = { onError ->
+                ReceiptCameraButton(
+                    enabled = state is ReceiptUiState.Photos && state.texts.size < ReceiptParts.MAX_PHOTOS,
+                    onError = onError,
+                    vm = vm,
+                    compact = false,
+                )
+            },
             onSave = { draft ->
                 onSave(draft)
                 vm.close()
@@ -31,3 +43,4 @@ fun ReceiptOverlay(
         )
     }
 }
+

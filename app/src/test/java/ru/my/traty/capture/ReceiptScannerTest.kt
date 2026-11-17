@@ -115,6 +115,48 @@ class ReceiptScannerTest {
     }
 
     @Test
+    fun severalPhotosSaveOneExpenseWithOverlappingItemsOnlyOnce() = runTest {
+        app.container.categories.seedIfEmpty()
+        val llm = Llm("""{"parts":[
+            {"store":"Пятёрочка","category":"Продукты","items":[
+                {"name":"Молоко","sum":89.99},{"name":"Хлеб","sum":45}]},
+            {"total":284.99,"items":[{"name":"Хлеб","sum":45},{"name":"Сыр","sum":150}]}]}""")
+        val s = scanner(Ocr(receipt), llm)
+        val review = s.parseParts(listOf(
+            "Пятёрочка\nМолоко 89.99\nХлеб 45.00\nКассир: Иванова",
+            "Хлеб 45.00\nСыр 150.00\nИТОГ 284.99\nФН 1234567",
+        ))
+        assertTrue(llm.sentUser.contains("Снимок 1:"))
+        assertTrue(llm.sentUser.contains("Снимок 2:"))
+        assertFalse(llm.sentUser.contains("Иванова"))
+        assertFalse(llm.sentUser.contains("1234567"))
+        assertEquals("284.99", review.draft.rows.single().amountText)
+        assertEquals(3, review.draft.rows.single().items.size)
+        val id = app.container.quickEntry.save(review.draft).saved.expenseIds.single()
+        assertEquals(3, app.container.expenseItems.getFor(id).size)
+        assertEquals(28499L, app.container.expenseItems.getFor(id).sumOf { it.priceKopecks ?: 0 })
+    }
+
+    @Test
+    fun missingPrintedTotalUsesMergedItemSumWithoutOverlap() = runTest {
+        app.container.categories.seedIfEmpty()
+        val llm = Llm("""{"parts":[{"items":[{"name":"Молоко","sum":89.99},{"name":"Хлеб","sum":45}]},
+            {"items":[{"name":"Хлеб","sum":45},{"name":"Сыр","sum":150}]}]}""")
+        val review = scanner(Ocr(receipt), llm).parseParts(listOf("Молоко 89.99\nХлеб 45.00", "Хлеб 45.00\nСыр 150.00"))
+        assertEquals("284.99", review.draft.rows.single().amountText)
+    }
+
+    @Test
+    fun conflictingPrintedTotalsCannotBecomeOnePurchase() = runTest {
+        app.container.categories.seedIfEmpty()
+        val llm = Llm("""{"parts":[{"items":[]},{"items":[]}]}""")
+        val result = runCatching {
+            scanner(Ocr(receipt), llm).parseParts(listOf("Молоко 89.99\nИТОГ 89.99", "Хлеб 45.00\nИТОГ 45.00"))
+        }
+        assertTrue(result.exceptionOrNull() is ReceiptException)
+    }
+
+    @Test
     fun withoutYandexOrDeepSeekKeysNoScanning() {
         assertFalse(AppSettings(yandexKey = "k").canScanReceipts)
         assertFalse(AppSettings(yandexKey = "k", yandexFolderId = "b1g").canScanReceipts)
@@ -122,3 +164,4 @@ class ReceiptScannerTest {
         assertTrue(AppSettings(yandexKey = "k", yandexFolderId = "b1g", deepseekKey = "d").canScanReceipts)
     }
 }
+

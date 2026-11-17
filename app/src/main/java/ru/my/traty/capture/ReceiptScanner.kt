@@ -54,33 +54,51 @@ class ReceiptScanner(
 
     /** Шаг 2: текст чека → товары (DeepSeek) → черновик. */
     suspend fun parse(ocrText: String, onStep: (ReceiptStep) -> Unit = {}): ReceiptReview {
+        return parseParts(listOf(ocrText), onStep)
+    }
+
+    /** Все части уходят одним запросом, итог и товары объединяются один раз до сохранения. */
+    suspend fun parseParts(texts: List<String>, onStep: (ReceiptStep) -> Unit = {}): ReceiptReview {
         val llm = llmFor(settings.current())
         require(llm != null) { NOT_READY }
-        return parse(ocrText, llm, onStep)
+        return parseParts(texts, llm, onStep)
     }
 
     /** Разбор уже распознанного текста: отдельно, чтобы проверять без фото. */
     internal suspend fun parse(ocrText: String, llm: LlmClient, onStep: (ReceiptStep) -> Unit = {}): ReceiptReview {
-        val forAi = ReceiptText.forAi(ocrText)
-        if (forAi.length < MIN_TEXT) throw ReceiptException("На фото не нашлось текста чека. Переснимите его ближе и при хорошем свете")
+        return parseParts(listOf(ocrText), llm, onStep)
+    }
+
+    internal suspend fun parseParts(texts: List<String>, llm: LlmClient, onStep: (ReceiptStep) -> Unit = {}): ReceiptReview {
+        val cleaned = ReceiptParts.clean(texts)
+        val multiple = cleaned.size > 1
+        val totals = texts.mapNotNull(ReceiptText::printedTotal).distinct()
+        if (totals.size > 1) throw ReceiptException("На снимках разные итоги. Проверьте, что это части одного чека, и удалите неверный снимок")
         onStep(ReceiptStep.PARSING)
         val cats = db.categories().getActiveWithSubs().selectable()
         val today = LocalDate.now(zone)
         val answer = step(ReceiptService.PARSE) {
             NetworkRetry.run {
-                llm.complete(ReceiptPrompt.system(cats.map { it.category.name }, today), ReceiptPrompt.user(forAi), jsonMode = true)
+                val names = cats.map { it.category.name }
+                llm.complete(
+                    if (multiple) ReceiptPrompt.partsSystem(names, today) else ReceiptPrompt.system(names, today),
+                    if (multiple) ReceiptPrompt.partsUser(cleaned) else ReceiptPrompt.user(cleaned.single()),
+                    jsonMode = true,
+                )
             }
         }
-        val parsed = ReceiptParsing.decode(answer)
-        return ReceiptDraft.build(
-            parsed = parsed,
-            printedTotal = ReceiptText.printedTotal(ocrText),
+        val parts = if (multiple) ReceiptParsing.decodeParts(answer, cleaned.size) else listOf(ReceiptParsing.decode(answer))
+        val merged = ReceiptParts.merge(parts, cleaned)
+        val review = ReceiptDraft.build(
+            parsed = merged.receipt,
+            printedTotal = totals.singleOrNull(),
             categories = cats,
             rules = db.rules().getAll(),
             knownPlaces = db.expenses().distinctPlaces(),
             today = today,
-            receiptText = forAi,
+            receiptText = if (multiple) ReceiptPrompt.partsUser(cleaned) else cleaned.single(),
         )
+        return review.copy(notices = merged.notices + review.notices)
     }
 
     private suspend fun <T> step(service: ReceiptService, block: suspend () -> T): T =
@@ -93,8 +111,7 @@ class ReceiptScanner(
         }
 
     private companion object {
-        /** Меньше этого — на фото не чек (или он не прочитался). */
-        const val MIN_TEXT = 10
         const val NOT_READY = "Заполните ключ и ID каталога Yandex Cloud и ключ DeepSeek в настройках ИИ"
     }
 }
+

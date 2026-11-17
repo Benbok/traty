@@ -20,8 +20,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.my.traty.TratyApp
 import ru.my.traty.ai.receipt.ReceiptErrors
+import ru.my.traty.ai.receipt.ReceiptException
+import ru.my.traty.ai.receipt.ReceiptText
 import ru.my.traty.ai.receipt.isRetryable
 import ru.my.traty.capture.ReceiptImage
+import ru.my.traty.capture.ReceiptParts
 import ru.my.traty.capture.ReceiptReview
 import ru.my.traty.capture.ReceiptStep
 import ru.my.traty.data.canScanReceipts
@@ -30,17 +33,16 @@ import java.io.File
 /** Что показывает экран чека. [Idle] — экран закрыт. */
 sealed interface ReceiptUiState {
     data object Idle : ReceiptUiState
+    data class Photos(val texts: List<String>) : ReceiptUiState
     data class Working(val step: ReceiptStep) : ReceiptUiState
     data class Review(val review: ReceiptReview) : ReceiptUiState
-    /** [canRetry] — фото (и, если успели, текст чека) ещё в памяти: «Повторить» продолжит без новой съёмки. */
     data class Failed(val message: String, val canRetry: Boolean = false) : ReceiptUiState
 }
 
-/** Фото чека: съёмка, чтение текста Яндексом, разбор DeepSeek и экран проверки. Сохраняет трату экран «Траты» после проверки. */
+/** Части чека остаются в памяти до общей проверки. Сохраняется одна трата по кнопке пользователя. */
 class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
     private val c = (app as TratyApp).container
 
-    /** Кнопка камеры видна, только когда заполнены ключ и каталог Яндекса и ключ DeepSeek. */
     val canScan: StateFlow<Boolean> = c.settings.flow.map { it.canScanReceipts }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
@@ -48,70 +50,97 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     private var job: Job? = null
-
+    private var texts = emptyList<String>()
+    // Только неудачно прочитанный снимок. Успешные фото сразу освобождаются, остаётся текст.
+    private var lastJpeg: ByteArray? = null
+    private var retryParsing = false
     private val photoFile: File get() = File(File(getApplication<Application>().cacheDir, "receipts"), "receipt.jpg")
 
-    /** Куда камера запишет фото: файл в кэше, отданный камере через FileProvider. */
     fun cameraUri(): Uri {
         val app = getApplication<Application>()
         val file = photoFile.also { it.parentFile?.mkdirs() }
         return FileProvider.getUriForFile(app, "${app.packageName}.receipts", file)
     }
 
-    /** Фото после сжатия и текст, который Яндекс уже прочитал: для «Повторить» после ошибки. Только в памяти. */
-    private var lastJpeg: ByteArray? = null
-    private var lastText: String? = null
-
-    /** [uri] — фото с камеры ([cameraUri]) или из галереи. */
+    /** Новый снимок добавляется к текущему чеку; ошибка не теряет уже прочитанные части. */
     fun scan(uri: Uri) {
-        if (state is ReceiptUiState.Working) return
+        if (state is ReceiptUiState.Working || texts.size >= ReceiptParts.MAX_PHOTOS) return
         lastJpeg = null
-        lastText = null
-        process {
+        readPhoto {
             try {
                 ReceiptImage.prepare(getApplication(), uri).also { lastJpeg = it }
             } finally {
-                // Фото чека на телефоне не храним: после сжатия оно остаётся только в памяти до закрытия экрана
                 withContext(Dispatchers.IO + NonCancellable) { runCatching { photoFile.delete() } }
             }
         }
     }
 
-    /** Продолжить с шага, на котором была ошибка: прочитанный Яндексом текст повторно не отправляется. */
-    fun retry() {
-        val jpeg = lastJpeg ?: return
-        if (state is ReceiptUiState.Working) return
-        process { jpeg }
-    }
-
-    private fun process(photo: suspend () -> ByteArray) {
+    private fun readPhoto(photo: suspend () -> ByteArray) {
+        retryParsing = false
         job?.cancel()
         state = ReceiptUiState.Working(ReceiptStep.READING)
         job = viewModelScope.launch {
             try {
-                val text = lastText ?: c.receipts.recognize(photo()) { step -> state = ReceiptUiState.Working(step) }
-                    .also { lastText = it }
-                state = ReceiptUiState.Review(c.receipts.parse(text) { step -> state = ReceiptUiState.Working(step) })
+                val text = c.receipts.recognize(photo())
+                if (ReceiptText.clean(text).length < 10) {
+                    throw ReceiptException("На фото не нашлось текста чека. Переснимите ближе и при хорошем свете")
+                }
+                texts = texts + text
                 lastJpeg = null
-                lastText = null
+                state = ReceiptUiState.Photos(texts)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                state = ReceiptUiState.Failed(ReceiptErrors.text(e), canRetry = lastJpeg != null && ReceiptErrors.isRetryable(e))
+                state = ReceiptUiState.Failed(ReceiptErrors.text(e), lastJpeg != null && ReceiptErrors.isRetryable(e))
             }
         }
+    }
+
+    fun removePhoto(index: Int) {
+        if (state !is ReceiptUiState.Photos) return
+        texts = texts.filterIndexed { i, _ -> i != index }
+        state = ReceiptUiState.Photos(texts)
+    }
+
+    fun parsePhotos() {
+        if (state is ReceiptUiState.Working || texts.isEmpty()) return
+        retryParsing = true
+        state = ReceiptUiState.Working(ReceiptStep.PARSING)
+        job = viewModelScope.launch {
+            try {
+                val review = c.receipts.parseParts(texts)
+                state = ReceiptUiState.Review(review)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                state = ReceiptUiState.Failed(ReceiptErrors.text(e), ReceiptErrors.isRetryable(e))
+            }
+        }
+    }
+
+    /** Ошибка разбора повторяет только DeepSeek, ошибка чтения — только последний снимок. */
+    fun retry() {
+        if (state !is ReceiptUiState.Failed) return
+        if (retryParsing) parsePhotos() else lastJpeg?.let { jpeg -> readPhoto { jpeg } }
+    }
+
+    fun returnToPhotos() {
+        if (state is ReceiptUiState.Working) return
+        lastJpeg = null
+        retryParsing = false
+        state = ReceiptUiState.Photos(texts)
     }
 
     fun photoNotTaken() {
         viewModelScope.launch(Dispatchers.IO) { runCatching { photoFile.delete() } }
     }
 
-    /** Закрыть экран: разбор, если он идёт, останавливается. */
     fun close() {
         job?.cancel()
         job = null
         lastJpeg = null
-        lastText = null
+        texts = emptyList()
+        retryParsing = false
         state = ReceiptUiState.Idle
     }
 }

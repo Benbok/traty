@@ -19,12 +19,14 @@ object ReceiptText {
     )
 
     /** Убирает служебные строки (кассир, номера ФН/ФД, ИНН, почта покупателя) и пустые строки, обрезает по [MAX_CHARS]. */
-    fun forAi(ocrText: String): String =
+    fun forAi(ocrText: String): String = clean(ocrText).take(MAX_CHARS)
+
+    /** Очистка без обрезания: несколько частей проверяются на общий размер до отправки. */
+    fun clean(ocrText: String): String =
         ocrText.lines()
             .map { it.trim() }
             .filter { it.isNotEmpty() && !serviceLine.matches(it) }
             .joinToString("\n")
-            .take(MAX_CHARS)
 
     // «ИТОГ», «ИТОГО», «ИТОГО К ОПЛАТЕ», «К ОПЛАТЕ», «ВСЕГО К ОПЛАТЕ»; «ПОДИТОГ» и «ИТОГО СКИДКА» не подходят
     private val totalLabel = Regex(
@@ -60,3 +62,4 @@ object ReceiptText {
         return rub.movePointRight(2).setScale(0, RoundingMode.HALF_UP).toLong()
     }
 }
+
