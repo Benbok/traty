@@ -13,10 +13,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.items.ExpenseItem
+import ru.my.traty.data.items.ItemMeasure
 import ru.my.traty.data.labels.ExpenseLabelHit
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatRub
-import java.math.BigDecimal
 
 /**
  * Строка траты и под ней товары, из-за которых она нашлась поиском («шоколад Alpen Gold — 209,97 ₽»).
@@ -72,9 +72,9 @@ fun MatchedItems(items: List<ExpenseItem>, modifier: Modifier = Modifier) {
     }
 }
 
-/** «шоколад Alpen Gold», а если названо количество — «молоко · 2 уп». */
+/** «шоколад Alpen Gold», а если названо количество или фасовка — «молоко · 2 уп», «коктейль · 200 мл». */
 internal fun matchedItemTitle(item: ExpenseItem): String {
-    val qty = item.quantityMilli?.let { BigDecimal(it).movePointLeft(3).stripTrailingZeros().toPlainString() }
-    val amount = listOfNotNull(qty, item.unit?.takeIf { it.isNotBlank() }).joinToString(" ")
-    return if (amount.isEmpty()) item.name else "${item.name} · $amount"
+    val pack = ItemMeasure.packOf("", item.packMilli, item.packUnit)
+    val amount = ItemMeasure.describe(item.quantityMilli, item.unit?.takeIf { it.isNotBlank() }, pack)
+    return if (amount == null) item.name else "${item.name} · $amount"
 }

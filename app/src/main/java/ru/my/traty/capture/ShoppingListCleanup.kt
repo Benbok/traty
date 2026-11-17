@@ -10,6 +10,7 @@ import ru.my.traty.ai.ShoppingList
 import ru.my.traty.ai.ShoppingListFormat
 import ru.my.traty.ai.ShoppingListParser
 import ru.my.traty.ai.SpokenTotal
+import ru.my.traty.data.items.PackSize
 import ru.my.traty.data.sameName
 
 /**
@@ -20,6 +21,7 @@ import ru.my.traty.data.sameName
  * - цены товаров не теряются: они остаются в заметке («рыбу 500 ₽, хлеб 80 ₽») и в позициях траты
  *   (товар, цена) — по ним потом считаются траты на каждый товар. Позиции — от двух товаров.
  * Несколько магазинов («Пятёрочка 1200, Магнит 800») и разные категории остаются отдельными тратами.
+ * Один товар с фасовкой («гуляш 500 г») — одна позиция на всю сумму ([singleMeasured]).
  */
 object ShoppingListCleanup {
 
@@ -45,8 +47,32 @@ object ShoppingListCleanup {
             list.hasPrices && e.note.none(Char::isDigit) -> list.note()
             else -> e.note
         }
-        return e.copy(amount = amount, note = note, items = itemsOf(e.items, list))
+        val items = itemsOf(e.items, list) ?: singleMeasured(e.items, note, amount)
+        return e.copy(amount = amount, note = note, items = items)
     }
+
+    /**
+     * Один товар с фасовкой или весом — одна позиция на всю сумму: «говядина гуляш 500 г, 457 ₽» →
+     * «говядина гуляш», 500 г, 457 ₽. Так ассистент сможет посчитать, сколько гуляша куплено за месяц.
+     * Без фасовки («лекарство для кошки») позиции нет, хватит заметки. Если в заметке есть другие числа
+     * или «и» между товарами, это не один товар.
+     */
+    internal fun singleMeasured(fromAi: List<ParsedItem>?, note: String?, amount: Double): List<ParsedItem>? {
+        val ai = fromAi?.filterNot { ShoppingListParser.isInterjection(it.name) }?.singleOrNull()
+        if (ai != null && (PackSize.parse(ai.pack) != null || PackSize.find(ai.name) != null || measuredQty(ai))) {
+            return listOf(ai.copy(price = ai.price ?: amount.takeIf { it > 0 }))
+        }
+        val text = note?.replace(Regex("[,;]"), " ")?.replace(Regex("\\s+"), " ")?.trim() ?: return null
+        val pack = PackSize.find(text) ?: return null
+        val name = PackSize.strip(text)
+        if (name == text || name.any(Char::isDigit) || Regex("(?<![\\p{L}])и(?![\\p{L}])").containsMatchIn(name.lowercase())) return null
+        val words = name.split(' ').filterNot { ShoppingListParser.isInterjection(it) }
+        if (words.isEmpty()) return null
+        return listOf(ParsedItem(name = words.joinToString(" "), price = amount.takeIf { it > 0 }, pack = pack.text()))
+    }
+
+    private fun measuredQty(i: ParsedItem): Boolean =
+        i.qty != null && i.unit != null && PackSize.unitOf(i.unit) != null
 
     /**
      * Позиции траты: от ИИ, если он их дал; товары из самой фразы, если ИИ их не дал или потерял названные цены.

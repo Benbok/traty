@@ -14,6 +14,8 @@ import ru.my.traty.data.Expense
  * [priceKopecks] — сколько заплачено за позицию целиком (за все штуки), в копейках; null — цену не назвали.
  * [quantityMilli] — количество в тысячных: 2 шт = 2000, 0,5 кг = 500; null — не названо.
  * [unit] — «шт», «кг», «л» или null. [position] — порядок в чеке, с нуля.
+ * [packMilli] и [packUnit] — фасовка одной штуки: «коктейль 200 мл» = 200 000 и «мл», «гуляш 500 г» = 500 000 и «г»;
+ * null — не названа. Сколько всего куплено, считает [ItemMeasure]: 3 шт по 200 мл = 0,6 л.
  */
 @Entity(
     tableName = "expense_items",
@@ -30,6 +32,8 @@ data class ExpenseItem(
     val priceKopecks: Long? = null,
     val quantityMilli: Long? = null,
     val unit: String? = null,
+    val packMilli: Long? = null,
+    val packUnit: String? = null,
 )
 
 /** Сколько товаров в одной покупке (трате с позициями). */
@@ -48,4 +52,6 @@ data class ItemSale(
     val timestamp: Long,
     val place: String?,
     val categoryId: Long,
+    val packMilli: Long? = null,
+    val packUnit: String? = null,
 )

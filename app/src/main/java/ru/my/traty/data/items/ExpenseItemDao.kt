@@ -8,7 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 private const val SALES =
-    "SELECT i.name, i.priceKopecks, i.quantityMilli, i.unit, i.expenseId, e.timestamp, e.place, e.categoryId " +
+    "SELECT i.name, i.priceKopecks, i.quantityMilli, i.unit, i.expenseId, e.timestamp, e.place, e.categoryId, i.packMilli, i.packUnit " +
         "FROM expense_items i JOIN expenses e ON e.id = i.expenseId"
 
 @Dao
@@ -70,6 +70,14 @@ object ItemMigrations {
                 """.trimIndent()
             )
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_expense_items_expenseId` ON `expense_items` (`expenseId`)")
+        }
+    }
+
+    /** Фасовка товара: «коктейль 200 мл», «гуляш 500 г». У старых позиций пусто, её ищут в названии. */
+    val MIGRATION_15_16 = object : Migration(15, 16) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `expense_items` ADD COLUMN `packMilli` INTEGER")
+            db.execSQL("ALTER TABLE `expense_items` ADD COLUMN `packUnit` TEXT")
         }
     }
 }

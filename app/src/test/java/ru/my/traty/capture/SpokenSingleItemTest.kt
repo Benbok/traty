@@ -29,12 +29,36 @@ class SpokenSingleItemTest {
     private val phrase = "Говядина, гуляш, а-а, пол 500 г, аа 457 ₽"
 
     @Test
-    fun oneSumIsOneExpenseWithoutItems() {
+    fun oneSumIsOneExpenseWithOneMeasuredItem() {
         val ai = listOf(ParsedEntry(amount = 457.0, category = "Продукты", subcategory = "Супермаркет", note = "говядина гуляш 500 г"))
         val e = clean(ai, phrase).single()
         assertEquals(457.0, e.amount, 0.0)
         assertEquals("говядина гуляш 500 г", e.note)
-        assertNull(e.items)
+        // Один товар с весом — одна позиция на всю сумму, чтобы ассистент посчитал килограммы
+        val item = e.items.orEmpty().single()
+        assertEquals("говядина гуляш", item.name)
+        assertEquals("500 г", item.pack)
+        assertEquals(457.0, item.price ?: 0.0, 0.0)
+    }
+
+    @Test
+    fun oneProductWithoutWeightHasNoItems() {
+        val ai = listOf(ParsedEntry(amount = 731.0, category = "Продукты", note = "лекарство для кошки Чуни от блох"))
+        assertNull(clean(ai, "зоомагазин 731 лекарство для кошки Чуни от блох").single().items)
+    }
+
+    @Test
+    fun noteWithTwoProductsIsNotOneItem() {
+        assertNull(ShoppingListCleanup.singleMeasured(null, "молоко 1 л и хлеб", 150.0))
+        assertNull(ShoppingListCleanup.singleMeasured(null, "молоко 1 л 90 ₽", 150.0))
+        assertNull(ShoppingListCleanup.singleMeasured(null, "молоко 1 л, сыр 200 г", 150.0))
+    }
+
+    @Test
+    fun singleAiGoodWithPackKeepsItsFields() {
+        val one = ShoppingListCleanup.singleMeasured(listOf(ParsedItem("молочный коктейль", qty = 3.0, unit = "шт", pack = "200 мл")), "коктейли", 270.0)
+        assertEquals(270.0, one?.single()?.price ?: 0.0, 0.0)
+        assertEquals("200 мл", one?.single()?.pack)
     }
 
     @Test

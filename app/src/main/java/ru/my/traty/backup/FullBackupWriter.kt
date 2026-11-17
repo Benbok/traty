@@ -51,7 +51,7 @@ object FullBackupWriter {
                 )
             },
             expenseItems = s.expenseItems.mapNotNull { i ->
-                expenseKey[i.expenseId]?.let { BackupExpenseItem(it, i.position, i.name, i.priceKopecks, i.quantityMilli, i.unit) }
+                expenseKey[i.expenseId]?.let { BackupExpenseItem(it, i.position, i.name, i.priceKopecks, i.quantityMilli, i.unit, i.packMilli, i.packUnit) }
             },
             incomes = s.incomes.map { i ->
                 BackupIncome(incomeKey.getValue(i.id), i.amountKopecks, i.currency, i.source, i.note, i.timestamp, i.origin)

@@ -101,4 +101,14 @@ class QuestionRulesTest {
         assertTrue(QuestionRules.subjectIn("сколько я потратил на этой неделе").isEmpty())
         assertTrue(QuestionRules.subjectIn("сколько я потратил в ноябре").isEmpty())
     }
+
+    @Test
+    fun howMuchOfItemBoughtWithoutAi() {
+        assertEquals(listOf("молока"), QuestionRules.subjectIn("сколько литров молока я купил в ноябре"))
+        assertEquals(listOf("коктейлей"), QuestionRules.subjectIn("сколько коктейлей я купил"))
+        val q = QuestionRules.guess("Сколько коктейлей я купил за месяц?", emptyList())
+        assertEquals(Intents.TOTAL, q?.intent)
+        assertEquals(1, q?.categories?.size)
+        assertEquals(Intents.LIST, QuestionRules.guess("сколько раз я покупал кофе", emptyList())?.intent)
+    }
 }

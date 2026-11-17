@@ -281,6 +281,23 @@ class DatabaseUpgradeTest {
     }
 
     @Test
+    fun migrationChainReachesV16WithPackSize() = runTest {
+        createV3Database()
+        val db = AppDatabase.build(context, dbName)
+        try {
+            val old = db.expenses().getAllWithCategory().single().expense
+            val repo = ru.my.traty.data.items.ExpenseItemRepository(db)
+            repo.replace(old.id, listOf(ru.my.traty.data.items.ExpenseItem(name = "Коктейль молочный 200мл", quantityMilli = 3_000, unit = "шт")))
+            val item = repo.getFor(old.id).single()
+            assertEquals("Коктейль молочный", item.name)
+            assertEquals(200_000L, item.packMilli)
+            assertEquals("мл", repo.getSales(0, Long.MAX_VALUE).single().packUnit)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun migrationChainReachesV9WithRecurringTable() = runTest {
         createV3Database()
         val db = AppDatabase.build(context, dbName)

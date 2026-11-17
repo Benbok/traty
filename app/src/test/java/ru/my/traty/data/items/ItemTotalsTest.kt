@@ -39,8 +39,7 @@ class ItemTotalsTest {
         val milk = ItemTotals.byProduct(sales).single()
         assertEquals(30_000L, milk.totalKopecks)
         assertEquals(3, milk.purchases)
-        assertEquals(4000L, milk.quantityMilli)
-        assertEquals("л", milk.unit)
+        assertEquals("4 л", milk.amounts.known())
         // Последнее написание и магазины по сумме, «пятерочка» и «Пятёрочка» — один магазин
         assertEquals("Молоко", milk.name)
         assertEquals(2, milk.places.size)
@@ -67,9 +66,29 @@ class ItemTotalsTest {
     }
 
     @Test
-    fun quantityOnlyWhenUnitsAgree() {
+    fun weightAndPiecesCountedSeparately() {
         val sales = listOf(sale("яблоки", 20_000, 8, qty = 1000, unit = "кг"), sale("яблоки", 5_000, 9, qty = 3000, unit = "шт"))
-        assertNull(ItemTotals.byProduct(sales).single().quantityMilli)
+        assertEquals("3 шт · 1 кг", ItemTotals.byProduct(sales).single().amounts.known())
+    }
+
+    @Test
+    fun packSizeMultipliesPiecesAndOldNamesWithPackAreOneProduct() {
+        val sales = listOf(
+            // Новая позиция: фасовка в своём поле, 3 шт по 200 мл
+            ItemSale("Молочный коктейль", 27_000, 3000, "шт", 10, 10_000, "Пятёрочка", 1, packMilli = 200_000, packUnit = "мл"),
+            // Старый чек: фасовка только в названии
+            sale("Молочный коктейль 450мл", 12_000, 11),
+        )
+        val shake = ItemTotals.byProduct(sales).single()
+        assertEquals(39_000L, shake.totalKopecks)
+        assertEquals(2, shake.purchases)
+        assertEquals("4 шт · 1,05 л", shake.amounts.known())
+    }
+
+    @Test
+    fun nothingNamedShowsNoQuantity() {
+        val sales = listOf(sale("хлеб", 5_000, 1), sale("хлеб", 5_000, 2))
+        assertNull(ItemTotals.byProduct(sales).single().amounts.known())
     }
 
     @Test

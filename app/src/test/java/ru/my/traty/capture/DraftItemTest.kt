@@ -37,6 +37,29 @@ class DraftItemTest {
     }
 
     @Test
+    fun packFromAiFieldOrFromName() {
+        val d = DraftItem.fromParsed(ParsedItem("молочный коктейль", qty = 3.0, unit = "шт", pack = "200 мл"))
+        assertEquals("200 мл", d.packText)
+        assertEquals("3 шт по 200 мл", d.amountText())
+        val e = d.toExpenseItem()
+        assertEquals(200_000L, e.packMilli)
+        assertEquals("мл", e.packUnit)
+        // ИИ оставил фасовку в названии — в окне проверки она уже отдельно
+        val fromName = DraftItem.fromParsed(ParsedItem("гуляш 500 г", price = 457.0))
+        assertEquals("гуляш", fromName.name)
+        assertEquals("500 г", fromName.packText)
+        assertEquals("500 г", fromName.amountText())
+    }
+
+    @Test
+    fun savedPackRoundTrip() {
+        val d = DraftItem.fromSaved(ExpenseItem(name = "Сок", quantityMilli = 2_000, unit = "шт", packMilli = 1_000, packUnit = "л"))
+        assertEquals("1 л", d.packText)
+        assertEquals(1_000L, d.toExpenseItem().packMilli)
+        assertNull(DraftItem("Сок", packText = "много").toExpenseItem().packMilli)
+    }
+
+    @Test
     fun entryRowCarriesItemsFromParsedEntry() {
         val entry = ParsedEntry(amount = 42000.0, category = "Прочее", items = listOf(ParsedItem("телефон", 40000.0), ParsedItem("чехол", 2000.0)))
         val row = EntryRow.fromParsed(entry, emptyList(), LocalDate.of(2026, 11, 16))

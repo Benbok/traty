@@ -67,6 +67,17 @@ internal fun ItemEditSheet(
                 supportingText = { Text("Сколько заплачено за этот товар целиком. Можно оставить пустой") },
             )
             QuantityRow(item) { item = it }
+            OutlinedTextField(
+                value = item.packText,
+                onValueChange = { item = item.copy(packText = it.take(20)) },
+                label = { Text("Фасовка одной штуки") },
+                placeholder = { Text("200 мл, 500 г, 1 л") },
+                singleLine = true,
+                isError = item.packText.isNotBlank() && item.pack() == null,
+                supportingText = { Text("Объём или вес упаковки: по нему ИИ посчитает литры и килограммы") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = TratyTheme.shapes.small,
+            )
             SheetButtons(isNew, canSave = item.name.isNotBlank(), onDelete = onDelete, onDone = { onDone(item.copy(name = item.name.trim())) })
         }
     }

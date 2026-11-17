@@ -28,7 +28,7 @@ class FullBackupWriterTest {
             Expense(100, 25_000, categoryId = 7, subcategoryId = 40, place = "=SUM(A1)", note = "\"кавычки\"", timestamp = 1, source = "voice"),
             Expense(55, 4_500_000, categoryId = 3, subcategoryId = 41, timestamp = 2, source = "debt"),
         ),
-        expenseItems = listOf(ExpenseItem(9, 55, 0, "Телефон", 4_000_000, 1000, "шт")),
+        expenseItems = listOf(ExpenseItem(9, 55, 0, "Телефон", 4_000_000, 1000, "шт", packMilli = 200_000, packUnit = "г")),
         incomes = listOf(Income(12, 100_000, source = "Зарплата", timestamp = 0, origin = "voice")),
         reconciliations = listOf(Reconciliation(1, 3, 0, 10, -10, expenseId = 100, incomeId = 12, isOpening = false)),
         rules = listOf(Rule(5, "кофейня", 7, 40, 3)),
@@ -48,6 +48,9 @@ class FullBackupWriterTest {
         assertEquals(first, file(restored))
         assertEquals(restored.expenses[1].id, restored.debtPayments.single().expenseId)
         assertEquals(restored.expenses[1].id, restored.expenseItems.single().expenseId)
+        // Фасовка переносится вместе с позицией
+        assertEquals(200_000L, restored.expenseItems.single().packMilli)
+        assertEquals("г", restored.expenseItems.single().packUnit)
         assertEquals(restored.expenses[0].id, restored.reconciliations.single().expenseId)
         assertEquals(restored.incomes[0].id, restored.reconciliations.single().incomeId)
     }

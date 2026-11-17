@@ -37,13 +37,24 @@ class ExpenseItemRepository(private val db: AppDatabase) {
     }
 
     companion object {
+        /**
+         * Фасовку из названия («Коктейль молочный 200мл») переносим в своё поле, название остаётся без неё:
+         * так «коктейль 200 мл» и «коктейль 450 мл» — один товар, а литры считаются по полю.
+         */
         internal fun clean(items: List<ExpenseItem>): List<ExpenseItem> = items.mapNotNull { item ->
-            val name = ItemNames.normalize(item.name) ?: return@mapNotNull null
+            val raw = ItemNames.normalize(item.name) ?: return@mapNotNull null
+            val unit = item.unit?.trim()?.take(MAX_UNIT)?.ifEmpty { null }
+            val quantity = item.quantityMilli?.takeIf { it > 0 }
+            val given = item.packUnit?.let(PackSize::unitOf)?.let { u -> item.packMilli?.takeIf { it > 0 }?.let { Pack(it, u) } }
+            val pack = given ?: PackSize.find(raw)
+            val name = if (pack != null) ItemNames.normalize(PackSize.strip(raw)) ?: raw else raw
             item.copy(
                 name = name,
                 priceKopecks = item.priceKopecks?.takeIf { it > 0 },
-                quantityMilli = item.quantityMilli?.takeIf { it > 0 },
-                unit = item.unit?.trim()?.take(MAX_UNIT)?.ifEmpty { null },
+                quantityMilli = quantity,
+                unit = unit,
+                packMilli = pack?.milli,
+                packUnit = pack?.unit,
             )
         }
 
