@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
@@ -101,6 +102,14 @@ fun AssistantScreen(
     val settings by vm.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var input by rememberSaveable { mutableStateOf("") }
+    var manageProducts by rememberSaveable { mutableStateOf(false) }
+    var productToRemember by remember { mutableStateOf<ru.my.traty.data.RememberedProduct?>(null) }
+    if (manageProducts || productToRemember != null) {
+        RememberedProductsDialog(vm, productToRemember) {
+            manageProducts = false
+            productToRemember = null
+        }
+    }
 
     val recorder = remember { RecordController({ SpeechEngines.create(context, vm.settings.value) }, ChimeRecordCues()) { vm.ask(it) } }
     DisposableEffect(recorder) { onDispose { recorder.cancel() } }
@@ -129,6 +138,11 @@ fun AssistantScreen(
             subtitle = "Спросите о тратах, доходах и подписках",
             icon = Icons.Filled.AutoAwesome,
             actions = {
+                TratyIconButton(
+                    icon = Icons.Filled.Bookmark,
+                    contentDescription = "Сохранённые названия товаров",
+                    onClick = { manageProducts = true },
+                )
                 if (vm.messages.isNotEmpty()) {
                     TratyIconButton(
                         icon = Icons.Filled.DeleteSweep,
@@ -155,6 +169,7 @@ fun AssistantScreen(
                 if (m.fromUser) UserBubble(m.text) else AssistantBubble(
                     m,
                     onShowExpenses = { vm.showExpenses(m.expenseIds) },
+                    onRememberProduct = { productToRemember = m.productToRemember },
                     onShowItemSuggestion = { vm.showItemSuggestion(m.id, it) },
                     onApplyPlan = { vm.applyPlan(m.id, it) },
                     onApplySubscriptions = { vm.applySubscriptions(m.id, it) },
@@ -242,6 +257,7 @@ private fun UserBubble(text: String) {
 private fun AssistantBubble(
     m: ChatMessage,
     onShowExpenses: () -> Unit,
+    onRememberProduct: () -> Unit,
     onShowItemSuggestion: (Set<Int>) -> Unit,
     onApplyPlan: (List<PlanProposal>) -> Unit,
     onApplySubscriptions: (List<SubscriptionChange>) -> Unit,
@@ -285,6 +301,11 @@ private fun AssistantBubble(
             if (m.expenseChanges.isNotEmpty()) {
                 Spacer(Modifier.height(TratyTheme.spacing.sm))
                 ExpenseChanges(m, onApply = onApplyExpenses, onUndo = onUndoExpenses)
+            }
+            if (m.productToRemember != null) {
+                TratyTextButton(onClick = onRememberProduct) {
+                    Text("Запомнить название", style = TratyTheme.typography.labelMedium)
+                }
             }
             if (m.itemSuggestions.isNotEmpty()) {
                 AssistantItemChoices(m.id, m.itemSuggestions, onShowItemSuggestion)

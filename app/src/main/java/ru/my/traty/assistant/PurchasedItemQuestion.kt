@@ -23,12 +23,13 @@ internal object PurchasedItemQuestion {
     private val punctuation = " \t\n,.!?:;«»\""
 
     private fun parts(question: String): Pair<String, String>? {
-        val text = fold(question)
+        val text = fold(question).removePrefix("а ")
         val after = verbFirst.matchEntire(text)
         val match = after ?: itemFirst.matchEntire(text) ?: return null
         val split = scopeStart.split(match.groupValues[1], limit = 2)
         val afterVerb = match.groupValues.getOrNull(2).orEmpty().trim()
-        return split.first() to (split.getOrNull(1) ?: afterVerb)
+        val scope = listOfNotNull(split.getOrNull(1), afterVerb.takeIf { it.isNotEmpty() }).joinToString(" ")
+        return split.first() to scope
     }
 
     fun titleBeforeScope(phrase: String): String =
@@ -42,9 +43,15 @@ internal object PurchasedItemQuestion {
 
     fun placeIn(question: String, modelPlace: String?, today: LocalDate, startDay: Int): String? {
         val scope = parts(question)?.second ?: return null
-        val clause = scopeStart.split(scope, limit = 2).first().trim { it in punctuation }
-        val place = location.matchEntire(clause)?.groupValues?.get(1) ?: return null
-        if (QuestionDates.find(clause, today, startDay).isNotEmpty()) return null
+        return placeFromScope(scope, modelPlace, today, startDay)
+    }
+
+    fun placeFromScope(scope: String, modelPlace: String?, today: LocalDate, startDay: Int): String? {
+        val place = scopeStart.split(scope.removePrefix("только ")).firstNotNullOfOrNull { part ->
+            val clause = part.trim { it in punctuation }.removeSuffix(" только")
+            if (QuestionDates.find(clause, today, startDay).isNotEmpty()) null
+            else location.matchEntire(clause)?.groupValues?.get(1)
+        } ?: return null
         return modelPlace?.takeIf { it.isNotBlank() && SearchText.matches(it, listOf(place)) } ?: place
     }
 }

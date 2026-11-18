@@ -165,6 +165,39 @@ class AssistantItemQuantityTest {
     }
 
     @Test
+    fun rememberedProductUsesCurrentDatesAndShopAndKeepsExactReceiptNames() {
+        val chocolate = ExpenseItem(name = "Чудо коктейль шоколадный 200 мл", priceKopecks = 17_997, quantityMilli = 3_000, unit = "шт")
+        val secondLabel = chocolate.copy(name = "Чудо кокт. шоколад 3%")
+        val inScope = exp(500, 10, null, chocolate, ExpenseItem(name = "Чудо коктейль ванильный"))
+        val anotherShop = exp(700, 11, null, secondLabel).let {
+            it.copy(expense = it.expense.copy(place = "Магнит"))
+        }
+        val anotherMonth = exp(600, 12, null, secondLabel).let {
+            it.copy(expense = it.expense.copy(timestamp = it.expense.timestamp - java.time.Duration.ofDays(31).toMillis()))
+        }
+        val expenses = listOf(inScope, anotherShop, anotherMonth)
+        val saved = ru.my.traty.data.RememberedProduct("чудо молоко", listOf(chocolate.name, secondLabel.name))
+        fun query(question: String) =
+            QuestionRules.rememberedQuery(question, QuestionRules.guess(question, categories), today, 1, listOf(saved))
+
+        val ctx = AssistantContext(expenses, emptyList(), emptyList(), today, 1, ZoneOffset.UTC, categories = categories, expenseItems = items)
+        val selected = AssistantEngine.run(requireNotNull(query("А сколько чудо молока я купил в ноябре в Пятёрочке?")), ctx)
+        assertEquals(listOf(inScope.expense.id), selected.expenseIds)
+        assertEquals("3 шт · 600 мл", selected.headline)
+        assertTrue(selected.direct.orEmpty(), "179,97 ₽" in selected.direct.orEmpty())
+
+        val total = AssistantEngine.run(requireNotNull(query("Сколько потратили на чудо молоко в Магните за ноябрь?")), ctx)
+        assertEquals(listOf(anotherShop.expense.id), total.expenseIds)
+        assertEquals("700 ₽", total.headline)
+
+        val empty = AssistantEngine.run(requireNotNull(query("Сколько чудо молока мы купили в сентябре?")), ctx)
+        assertTrue(empty.direct.orEmpty(), "не нашёл покупок" in empty.direct.orEmpty())
+        assertTrue(empty.expenseIds.isEmpty())
+        assertEquals(null, query("Сколько молока мы купили?"))
+        assertEquals(null, query("Сколько чудо молока без сахара мы купили?"))
+    }
+
+    @Test
     fun fiveWaysToAskForTheChocolateDrink() {
         val chocolate = exp(
             500, 10, null,

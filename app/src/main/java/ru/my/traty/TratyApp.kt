@@ -108,6 +108,7 @@ class AppContainer(
     /** Единая точка выбора языковой модели: экраны берут клиента здесь, тесты подменяют. */
     val llm: (AppSettings) -> LlmClient? = clientProvider
     val settings = SettingsRepository(context)
+    val rememberedProducts = ru.my.traty.data.RememberedProductRepository(context)
     val apartments = ru.my.traty.data.apartments.ApartmentRepository(db)
     val categories = CategoryRepository(db)
     val reconciliations = ReconciliationRepository(db, categories)

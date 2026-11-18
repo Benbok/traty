@@ -93,7 +93,7 @@ internal fun encodeLines(lines: List<String>): String =
 internal fun decodeLines(raw: String?): List<String> =
     raw.orEmpty().split('\n').map { it.trim() }.filter { it.isNotEmpty() }
 
-private val Context.dataStore by preferencesDataStore(name = "settings")
+internal val Context.dataStore by preferencesDataStore(name = "settings")
 
 private const val MAX_DISMISSED = 60
 

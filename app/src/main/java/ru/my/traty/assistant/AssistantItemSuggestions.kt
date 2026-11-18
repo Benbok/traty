@@ -89,7 +89,9 @@ internal object AssistantItemSuggestions {
         dates: ClosedRange<LocalDate>,
         ctx: AssistantContext,
     ): AssistantData? {
-        if (query.intent != Intents.TOTAL || filter.names.isNotEmpty() || filter.terms.isNotEmpty()) return null
+        if (query.intent != Intents.TOTAL) return null
+        query.rememberedProduct?.let { return remembered(it, query, spending, dates, ctx) }
+        if (filter.names.isNotEmpty() || filter.terms.isNotEmpty()) return null
         val item = filter.qualifiedItem
         val quantity = !query.purchasedItem.isNullOrBlank()
         val term = when {
@@ -125,7 +127,8 @@ internal object AssistantItemSuggestions {
                 else -> "$missing Отметьте один или несколько подходящих товаров."
             }
             return AssistantData(
-                facts = "", direct = text, itemSuggestions = choices, combinedItemSuggestions = combinations,
+                facts = "", direct = text, itemSuggestionTerm = term,
+                itemSuggestions = choices, combinedItemSuggestions = combinations,
             )
         }
 
@@ -149,6 +152,29 @@ internal object AssistantItemSuggestions {
             direct = "$missing Есть позиции «${item.baseName}» без указания вкуса. Показать расчёт по ним?",
             itemSuggestions = listOf(summarize(matchedRows, ctx, range, subject, quantityFirst = quantity)),
         )
+    }
+
+    private fun remembered(
+        product: ru.my.traty.data.RememberedProduct,
+        query: AssistantQuery,
+        spending: List<ExpenseWithCategory>,
+        dates: ClosedRange<LocalDate>,
+        ctx: AssistantContext,
+    ): AssistantData {
+        val names = product.receiptNames.map(::fold).toSet()
+        val matches = spending.mapNotNull { row ->
+            if (day(row.expense.timestamp, ctx.zone) !in dates) return@mapNotNull null
+            if (query.place?.let { !SearchText.matches(it, listOf(row.expense.place)) } == true) return@mapNotNull null
+            val items = ctx.expenseItems[row.expense.id].orEmpty()
+            AssistantItems.partForPositions(row, items) { fold(it.name) in names }?.let { row to it }
+        }
+        val range = span(dates.start, dates.endInclusive)
+        val subject = listOfNotNull("«${product.phrase}»", query.place).joinToString(" · ")
+        if (matches.isEmpty()) {
+            return AssistantData(facts = "", direct = "За $range не нашёл покупок по сохранённому названию $subject.")
+        }
+        val result = summarize(matches, ctx, range, subject, quantityFirst = query.purchasedItem != null)
+        return AssistantData(facts = "", direct = result.text, headline = result.headline, caption = result.caption, expenseIds = result.expenseIds)
     }
 
     private fun summarize(

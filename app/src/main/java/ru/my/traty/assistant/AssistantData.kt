@@ -22,6 +22,7 @@ data class AssistantData(
     val debtChanges: List<DebtChange> = emptyList(),
     /** Удаление и перенос трат в другую категорию: только по кнопке. */
     val expenseChanges: List<ExpenseChange> = emptyList(),
+    val itemSuggestionTerm: String? = null,
     val itemSuggestions: List<ItemSuggestion> = emptyList(),
     val combinedItemSuggestions: Map<Set<Int>, ItemSuggestion> = emptyMap(),
 )

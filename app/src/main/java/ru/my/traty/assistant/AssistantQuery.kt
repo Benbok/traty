@@ -41,6 +41,7 @@ data class AssistantQuery(
     val housing: ru.my.traty.assistant.apartments.ApartmentQuestion? = null,
     /** Название товара в явном вопросе о количестве купленного. Заполняется приложением. */
     val purchasedItem: String? = null,
+    @Transient val rememberedProduct: ru.my.traty.data.RememberedProduct? = null,
 )
 
 object Intents {

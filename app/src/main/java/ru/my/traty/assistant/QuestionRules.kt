@@ -74,6 +74,30 @@ object QuestionRules {
         return if (notSubject.containsMatchIn(word)) emptyList() else listOf(word)
     }
 
+    internal fun rememberedQuery(
+        question: String,
+        guessed: AssistantQuery?,
+        today: LocalDate,
+        startDay: Int,
+        products: List<ru.my.traty.data.RememberedProduct>,
+    ): AssistantQuery? {
+        if (guessed?.intent != Intents.TOTAL || products.isEmpty()) return null
+        val text = fold(question)
+        val subject = guessed.purchasedItem ?: subjectIn(text).singleOrNull() ?: return null
+        val product = ru.my.traty.data.RememberedProduct.match(subject, products) ?: return null
+        val place = if (guessed.purchasedItem != null) PurchasedItemQuestion.placeIn(text, null, today, startDay)
+            else {
+                val tail = subjectRe.find(text)?.groupValues?.get(1).orEmpty().removePrefix(subject).trim()
+                PurchasedItemQuestion.placeFromScope(tail, null, today, startDay)
+            }
+        return QuestionDates.apply(
+            question,
+            guessed.copy(categories = emptyList(), place = place, rememberedProduct = product),
+            today,
+            startDay,
+        )
+    }
+
     /** Категории и подкатегории, названные в вопросе: «кафе» → «Кафе и рестораны», «такси» → «Такси». */
     internal fun categoriesIn(text: String, categories: List<CategoryWithSubs>): List<String> {
         val words = stems(text)

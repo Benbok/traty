@@ -25,7 +25,7 @@ import ru.my.traty.assistant.ExpenseChange
 import ru.my.traty.assistant.AssistantAnswers
 import ru.my.traty.assistant.AssistantData
 import ru.my.traty.assistant.Intents
-import ru.my.traty.assistant.ItemSuggestion
+import ru.my.traty.data.RememberedProduct
 import ru.my.traty.assistant.AssistantFallback
 import ru.my.traty.assistant.Balance
 import ru.my.traty.assistant.AssistantEngine
@@ -50,40 +50,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-/** Одна реплика в разговоре с помощником. */
-data class ChatMessage(
-    val id: Long,
-    val fromUser: Boolean,
-    val text: String,
-    /** Крупная цифра под ответом. */
-    val headline: String? = null,
-    val caption: String? = null,
-    /** Траты, на которых построен ответ, — для «Показать траты». */
-    val expenseIds: List<Long> = emptyList(),
-    /** Что именно ушло в ИИ на втором шаге — показывается по кнопке «Что отправлено». */
-    val sentFacts: String? = null,
-    val error: Boolean = false,
-    /** Предложенные строки «Плана трат» — добавляются по кнопке. */
-    val planProposals: List<PlanProposal> = emptyList(),
-    val planMonth: Int? = null,
-    /** Сколько строк уже добавлено в план; null — ещё не добавляли. */
-    val planApplied: Int? = null,
-    /** Предложенные изменения подписок — выполняются по кнопке. */
-    val subscriptionChanges: List<SubscriptionChange> = emptyList(),
-    /** Сколько изменений подписок уже выполнено; null — ещё нет. */
-    val subscriptionsApplied: Int? = null,
-    /** Предложенные изменения покупок частями — выполняются по кнопке. */
-    val debtChanges: List<DebtChange> = emptyList(),
-    /** Сколько изменений покупок уже выполнено; null — ещё нет. */
-    val debtsApplied: Int? = null,
-    /** Предложенные удаления и переносы трат — выполняются по кнопке и возвращаются кнопкой «Вернуть». */
-    val expenseChanges: List<ExpenseChange> = emptyList(),
-    val expensesApplied: Int? = null,
-    val expensesUndone: Boolean = false,
-    val itemSuggestions: List<ItemSuggestion> = emptyList(),
-    val combinedItemSuggestions: Map<Set<Int>, ItemSuggestion> = emptyMap(),
-)
-
 /**
  * Помощник «Спросить ИИ». Ответ строится в два шага: ИИ переводит вопрос в запрос ([AssistantQuery]),
  * приложение считает его по базе на телефоне ([AssistantEngine]), затем ИИ формулирует ответ только по этим цифрам.
@@ -93,6 +59,12 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     private val zone = ZoneId.systemDefault()
 
     val settings: StateFlow<AppSettings> = c.settings.flow.stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
+
+    val rememberedProducts = c.rememberedProducts.products
+    suspend fun saveProduct(product: RememberedProduct, previousPhrase: String?) =
+        c.rememberedProducts.save(product, previousPhrase)
+
+    suspend fun removeProduct(phrase: String) = c.rememberedProducts.remove(phrase)
 
     val messages = mutableStateListOf<ChatMessage>()
     var busy by mutableStateOf(false)
@@ -123,12 +95,16 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 val s = c.settings.current()
                 val today = LocalDate.now()
                 val categories = c.db.categories().getActiveWithSubs().selectable()
+                val guessed = QuestionRules.guess(question, categories)
+                val rememberedQuery = if (guessed?.intent == Intents.TOTAL) {
+                    QuestionRules.rememberedQuery(question, guessed, today, s.periodStartDay, c.rememberedProducts.current())
+                } else null
                 // Шаг 1: вопрос → запрос. Если ИИ не ответил, пробуем понять вопрос правилами
                 var aiDown: Exception? = null
                 val housing = withContext(Dispatchers.IO) { c.apartments.snapshot() }
                 val housingCatalog = ru.my.traty.assistant.apartments.ApartmentPrompts.catalog(housing)
                 val stepOneUser = AssistantPrompts.queryUser(question, history)
-                val fromAi = if (client == null) null else try {
+                val fromAi = if (client == null || rememberedQuery != null) null else try {
                     AssistantQueries.decode(
                         client.complete(
                             system = AssistantPrompts.querySystem(categories, today, s.periodStartDay) + "\n" + housingCatalog,
@@ -142,19 +118,18 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     aiDown = e
                     null
                 }
-                val housingReply = housingConversation.reply(question, fromAi, housing, today, client,
+                val housingReply = if (rememberedQuery != null) null else housingConversation.reply(question, fromAi, housing, today, client,
                     AssistantAnswers.sent(stepOneUser, categories.map { it.category.name }, null) + "\n" + housingCatalog)
                 if (housingReply != null) {
                     messages += ChatMessage(nextId++, false, housingReply.text, sentFacts = housingReply.sentFacts)
                     return@launch
                 }
-                val guessed = QuestionRules.guess(question, categories)
                 if (aiDown != null && guessed == null) throw aiDown
                 val offline = aiDown != null
                 val offlineReason = aiDown?.message
                 // Траты прошлого ответа приложение помнит само: «удали их» относится ровно к ним
                 val previous = history.lastOrNull()?.let { t -> AssistantQueries.decode(t.queryJson)?.copy(ids = t.expenseIds) }
-                val query = QuestionRules.resolve(question, fromAi, guessed, today, s.periodStartDay, previous, categories)
+                val query = rememberedQuery ?: QuestionRules.resolve(question, fromAi, guessed, today, s.periodStartDay, previous, categories)
                 if (client == null && query.intent == Intents.UNKNOWN) {
                     messages += ChatMessage(nextId++, false, AssistantFallback.NO_AI_HINT)
                     return@launch
@@ -201,7 +176,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     headline = data.headline,
                     caption = data.caption,
                     expenseIds = data.expenseIds,
-                    sentFacts = if (client == null || offline) null else AssistantAnswers.sent(
+                    sentFacts = if (client == null || offline || rememberedQuery != null) null else AssistantAnswers.sent(
                         stepOneUser + "\n" + housingCatalog, categories.map { it.category.name }, data.facts.takeIf { asked },
                     ),
                     planProposals = data.planProposals,
@@ -209,6 +184,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     subscriptionChanges = data.subscriptionChanges,
                     debtChanges = data.debtChanges,
                     expenseChanges = data.expenseChanges,
+                    itemSuggestionTerm = data.itemSuggestionTerm,
                     itemSuggestions = data.itemSuggestions,
                     combinedItemSuggestions = data.combinedItemSuggestions,
                 )
@@ -375,7 +351,10 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         if (index == messages.lastIndex && history.isNotEmpty()) {
             history[history.lastIndex] = history.last().copy(expenseIds = suggestion.expenseIds)
         }
+        val names = selected.sorted().mapNotNull { message.itemSuggestions.getOrNull(it)?.itemName }
+        val draft = message.itemSuggestionTerm?.takeIf { names.isNotEmpty() }?.let { RememberedProduct(it, names) }
         messages[index] = message.copy(
+            productToRemember = draft,
             text = suggestion.text,
             headline = suggestion.headline,
             caption = suggestion.caption,
