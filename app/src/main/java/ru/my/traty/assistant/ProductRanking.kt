@@ -22,7 +22,7 @@ internal object ProductRanking {
     private val openQuestion = Regex("""^(?:а\s+)?(?:какие|каких|какого|что|чего|назови|покажи|топ)(?=\s|$)""")
     private val limit = Regex("""(?:топ[\s-]*|первые\s+)(\d{1,2})(?!\d)""")
     private val reference = Regex("""за\s+(?:(?:вот\s+)?этот\s+(?:весь\s+)?период|весь\s+этот\s+период)""")
-    private val storeClause = Regex("""(?:^|\s)((?:в|во|у)\s+(?:«[^»]+»|[\p{L}\p{N}][\p{L}\p{N} .-]*?))(?=\s+(?:за|в|во|у|вчера|сегодня|мы|я|купил|брали|покупал|чаще|больше|по)(?=\s|$)|[?!,]|$)""")
+    private val storeClause = Regex("""(?:^|\s)((?:в|во|у)\s+(?!(?:меня|нас|тебя|вас)(?=\s|$))(?:«[^»]+»|[\p{L}\p{N}][\p{L}\p{N} .-]*?))(?=\s+(?:за|в|во|у|вчера|сегодня|мы|я|купил|брали|покупал|чаще|больше|по)(?=\s|$)|[?!,]|$)""")
 
     fun guess(text: String): AssistantQuery? {
         val hasProduct = product.containsMatchIn(text)
@@ -45,8 +45,7 @@ internal object ProductRanking {
         val dateReference = reference.containsMatchIn(text) && QuestionDates.find(question, today, startDay).isEmpty()
         val localPlace = storeClause.findAll(text).firstNotNullOfOrNull { match ->
             val clause = match.groupValues[1].trim()
-            if (clause in setOf("в принципе", "в целом", "в общем", "в основном", "в штуках") ||
-                QuestionDates.find(clause, today, startDay).isNotEmpty()) null
+            if (QuestionDates.find(clause, today, startDay).isNotEmpty()) null
             else clause.substringAfter(' ').trim(' ', '«', '»', '.', '!')
         }
         val hasHistory = dateReference && (previous?.from != null || previous?.to != null)
