@@ -9,7 +9,12 @@ internal object PurchasedItemQuestion {
     private const val BOUGHT = """(?:купил|покупал|взял|брал)(?:а|и|о)?(?!\p{L})"""
     private val itemFirst = Regex("""^сколько\s+(.+?)\s+(?:$PRONOUN\s+)?$BOUGHT(.*)$""")
     private val verbFirst = Regex("""^сколько\s+(?:$PRONOUN\s+)?$BOUGHT\s+(.+)$""")
-    private val scopeStart = Regex("""\s+(?=(?:за|в|во|у|вчера|сегодня|позавчера)(?=\s|$))""")
+    private const val MONTH = QuestionDates.MONTH
+    private const val START_DATE =
+        """(?:с|от)\s+(?:начала\s+(?:месяца|периода)|(?:начала\s+)?$MONTH|\d{1,2}(?=\s+(?:$MONTH|(?:по|до)\s)))(?=\s|[,.!?]|$)"""
+    private val scopeStart = Regex(
+        """\s+(?=(?:за|в|во|у|вчера|сегодня|позавчера)(?=\s|[,.!?]|$)|$START_DATE)""",
+    )
     private val location = Regex("""^(?:в|во|у)\s+(\p{L}.*)$""")
     private val fillerAndUnits = Regex(
         """^(?:(?:э+|эм+|ну|штук\S*|шт|литр\S*|л|килограмм\S*|кило|кг|грамм\S*|г|пач\S*|упаков\S*|бутыл\S*|банок)\s+)+""",
