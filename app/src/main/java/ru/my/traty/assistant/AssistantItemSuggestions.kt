@@ -125,6 +125,7 @@ internal object AssistantItemSuggestions {
         if (item == null) {
             if (quantity && rows.any { row -> filter.itemPart(row, positions(row)) != null }) return null
             val similar = similarNames(term, positionsInScope)
+            if (!quantity && similar.isEmpty()) return null
             return offer(similar, positionsInScope)
         }
         if (rows.any { row -> positions(row).any(item::confirmedBy) }) return null
