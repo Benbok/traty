@@ -46,7 +46,8 @@ internal object ProductRanking {
         val dateReference = reference.containsMatchIn(text) && QuestionDates.find(question, today, startDay).isEmpty()
         val localPlace = storeClause.findAll(text).firstNotNullOfOrNull { match ->
             val clause = match.groupValues[1].trim()
-            if (QuestionDates.find(clause, today, startDay).isNotEmpty()) null
+            if (clause in setOf("в принципе", "в целом", "в общем", "в основном", "в штуках") ||
+                QuestionDates.find(clause, today, startDay).isNotEmpty()) null
             else clause.substringAfter(' ').trim(' ', '«', '»', '.', '!')
         }
         val hasHistory = dateReference && (previous?.from != null || previous?.to != null)
