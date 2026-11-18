@@ -80,7 +80,7 @@ data class ChatMessage(
     val expenseChanges: List<ExpenseChange> = emptyList(),
     val expensesApplied: Int? = null,
     val expensesUndone: Boolean = false,
-    val itemSuggestion: ItemSuggestion? = null,
+    val itemSuggestions: List<ItemSuggestion> = emptyList(),
 )
 
 /**
@@ -208,7 +208,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     subscriptionChanges = data.subscriptionChanges,
                     debtChanges = data.debtChanges,
                     expenseChanges = data.expenseChanges,
-                    itemSuggestion = data.itemSuggestion,
+                    itemSuggestions = data.itemSuggestions,
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -364,16 +364,16 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         return c.categories.addSubcategory(categoryId, name)
     }
 
-    fun showItemSuggestion(messageId: Long) {
+    fun showItemSuggestion(messageId: Long, optionIndex: Int) {
         val index = messages.indexOfFirst { it.id == messageId }
         val message = messages.getOrNull(index) ?: return
-        val suggestion = message.itemSuggestion ?: return
+        val suggestion = message.itemSuggestions.getOrNull(optionIndex) ?: return
         messages[index] = message.copy(
             text = suggestion.text,
             headline = suggestion.headline,
             caption = suggestion.caption,
             expenseIds = suggestion.expenseIds,
-            itemSuggestion = null,
+            itemSuggestions = emptyList(),
         )
     }
 

@@ -113,10 +113,24 @@ class AssistantItemQuantityTest {
             listOf(inScope, otherShop, otherMonth),
         )
         val reply = answer.direct.orEmpty()
-        assertTrue(reply, "Чудо коктейль молочный шоколад" in reply)
-        assertTrue(reply, "йогурт" !in reply && "творожок" !in reply)
+        assertTrue(reply, "Возможно, вы имели в виду" in reply)
+        val choice = answer.itemSuggestions.single()
+        assertEquals("Чудо коктейль молочный шоколад", choice.itemName)
+        assertEquals(listOf(inScope.expense.id), choice.expenseIds)
+        assertEquals("1 шт", choice.headline)
+        assertTrue(choice.text, "100 ₽" in choice.text)
         assertEquals(null, answer.headline)
         assertTrue(answer.expenseIds.isEmpty())
+    }
+
+    @Test
+    fun ambiguousSpendingQuestionOffersSeparateCalculationsForEachName() {
+        val chocolate = exp(100, 10, null, ExpenseItem(name = "Чудо коктейль шоколадный"))
+        val vanilla = exp(200, 10, null, ExpenseItem(name = "Чудо коктейль ванильный"))
+        val answer = ask("Сколько потратили на чудо молоко в ноябре?", listOf(chocolate, vanilla))
+        assertEquals(listOf("Чудо коктейль шоколадный", "Чудо коктейль ванильный"), answer.itemSuggestions.map { it.itemName })
+        assertEquals(listOf("100 ₽", "200 ₽"), answer.itemSuggestions.map { it.headline })
+        assertEquals(listOf(listOf(chocolate.expense.id), listOf(vanilla.expense.id)), answer.itemSuggestions.map { it.expenseIds })
     }
 
     @Test

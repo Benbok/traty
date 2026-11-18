@@ -26,6 +26,9 @@ internal object PurchasedItemQuestion {
         return split.first() to (split.getOrNull(1) ?: afterVerb)
     }
 
+    fun titleBeforeScope(phrase: String): String =
+        scopeStart.split(phrase, limit = 2).first().trim { it in punctuation }
+
     fun itemIn(question: String): String? {
         val phrase = parts(question)?.first ?: return null
         val item = phrase.replace(fillerAndUnits, "").trim { it in punctuation }

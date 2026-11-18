@@ -45,7 +45,7 @@ class AssistantItemSuggestionsTest {
             Triple("Молочный коктейль 200 мл", today, "Магнит"),
             Triple("Молочный коктейль ванильный 200 мл", today, "Магнит"),
         )
-        assertNull(result.itemSuggestion)
+        assertTrue(result.itemSuggestions.isEmpty())
         assertEquals(listOf(1L), result.expenseIds)
         assertEquals("60 ₽", result.headline?.replace('\u00A0', ' '))
     }
@@ -62,7 +62,7 @@ class AssistantItemSuggestionsTest {
         )
         assertNull(result.headline)
         assertTrue(result.expenseIds.isEmpty())
-        val suggestion = requireNotNull(result.itemSuggestion)
+        val suggestion = result.itemSuggestions.single()
         assertEquals(listOf(1L), suggestion.expenseIds)
         assertEquals("60 ₽", suggestion.headline?.replace('\u00A0', ' '))
         assertTrue(suggestion.text, "200 мл" in suggestion.text)
@@ -76,7 +76,7 @@ class AssistantItemSuggestionsTest {
             Triple("Молочный коктейль ванильный 200 мл", today, "Магнит"),
             Triple("Молочный коктейль 500 мл", today, "Магнит"),
         )
-        assertNull(result.itemSuggestion)
+        assertTrue(result.itemSuggestions.isEmpty())
         assertTrue(result.direct.orEmpty().contains("не нашёл в чеках"))
     }
 

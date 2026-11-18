@@ -60,7 +60,7 @@ object QuestionRules {
         else -> GroupBy.MONTH
     }
 
-    private val subjectRe = Regex("""(?:потрат\S*|трач\S*|ушл\S*|уход\S*|отдал\S*|заплатил\S*|вышл\S*)\s+(?:я\s+)?на\s+(\p{L}{3,})""")
+    private val subjectRe = Regex("""(?:потрат\S*|трач\S*|ушл\S*|уход\S*|отдал\S*|заплатил\S*|вышл\S*)\s+(?:я\s+)?на\s+(\p{L}.*)""")
     private val notSubject = Regex("""^(?:эт|прошл|прошед|последн|текущ|недел|месяц|год|квартал|сегодн|вчера|себя|что|чт|вс[её]|январ|феврал|март|апрел|ма[йяе]|июн|июл|август|сентябр|октябр|ноябр|декабр)""")
 
     /**
@@ -69,7 +69,8 @@ object QuestionRules {
      * Приложение поищет его в списках товаров, местах и заметках ([Filter.of]).
      */
     internal fun subjectIn(text: String): List<String> {
-        val word = subjectRe.find(text)?.groupValues?.get(1) ?: PurchasedItemQuestion.itemIn(text) ?: return emptyList()
+        val word = subjectRe.find(text)?.groupValues?.get(1)?.let(PurchasedItemQuestion::titleBeforeScope)
+            ?: PurchasedItemQuestion.itemIn(text) ?: return emptyList()
         return if (notSubject.containsMatchIn(word)) emptyList() else listOf(word)
     }
 
@@ -107,6 +108,8 @@ object QuestionRules {
             )
             base.intent == Intents.TOTAL && qualifiedSubject != null &&
                 base.place == null && base.categories.size <= 1 -> base.copy(categories = listOf(qualifiedSubject), purchasedItem = null)
+            base.intent == Intents.TOTAL && base.categories.isEmpty() && base.place == null && guessed?.intent == Intents.TOTAL ->
+                base.copy(categories = guessed.categories, purchasedItem = null)
             else -> base.copy(purchasedItem = null)
         }
         val corrected = AssistantQueries.correct(question, query, previous, categories)
