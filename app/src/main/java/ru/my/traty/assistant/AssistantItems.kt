@@ -36,18 +36,30 @@ internal class ItemPart(
     val note: String? = null,
 )
 
+internal data class ItemQuantity(val headline: String, val line: String)
+
 internal object AssistantItems {
     /**
      * Доля траты для товаров [terms]; null — трата к ним не относится.
      * Если у траты есть позиции, решают они: в заметке такой покупки обычно тот же список, и по ней
      * засчиталась бы вся сумма чека. По заметке и месту ищем только у трат без позиций.
      */
-    fun part(r: ExpenseWithCategory, items: List<ExpenseItem>, terms: List<String>, mentions: (String) -> Boolean): ItemPart? {
+    fun part(
+        r: ExpenseWithCategory,
+        items: List<ExpenseItem>,
+        terms: List<String>,
+        useSearchWords: Boolean = false,
+        mentions: (String) -> Boolean,
+    ): ItemPart? {
         if (terms.isEmpty()) return null
         if (items.isEmpty()) {
             return if (terms.any(mentions)) ItemPart(r.expense.amountKopecks, emptyList(), whole = true, note = r.expense.note) else null
         }
-        return partForPositions(r, items) { item -> terms.any { item.mentionsItem(it) } }
+        return partForPositions(r, items) { item ->
+            terms.any { phrase ->
+                if (useSearchWords) SearchText.matches(phrase, listOf(item.name)) else item.mentionsItem(phrase)
+            }
+        }
     }
 
     fun partForPositions(r: ExpenseWithCategory, items: List<ExpenseItem>, matches: (ExpenseItem) -> Boolean): ItemPart? {
@@ -63,14 +75,14 @@ internal object AssistantItems {
      * Пояснения к сумме по товару: сколько позиций, что не посчитано и что засчитано целиком.
      * Пусто, если вопрос не про товар.
      */
-    fun notes(parts: List<ItemPart>): List<String> {
+    fun notes(parts: List<ItemPart>, includeQuantity: Boolean = true): List<String> {
         if (parts.isEmpty()) return emptyList()
         val withItems = parts.filter { it.items.isNotEmpty() }
         val out = ArrayList<String>()
         if (withItems.isNotEmpty()) {
             out += "Это цена самих товаров, без остальных покупок в тех же чеках: позиций ${withItems.sumOf { it.items.size }} в ${withItems.size} ${purchasesWord(withItems.size)}."
         }
-        quantity(parts)?.let(out::add)
+        if (includeQuantity) quantity(parts)?.let(out::add)
         val unpriced = parts.sumOf { it.unpriced }
         if (unpriced > 0) out += "У $unpriced ${positionsWord(unpriced)} не записана цена, в сумму они не вошли."
         val whole = parts.filter { it.whole }
@@ -86,7 +98,9 @@ internal object AssistantItems {
      * 3 шт по 200 мл = 0,6 л, весовой товар — по весу. У покупки без списка товаров берётся фасовка
      * из заметки («гуляш 500 г»), а если её нет — такая покупка в количество не входит, об этом пишем.
      */
-    fun quantity(parts: List<ItemPart>): String? {
+    fun quantity(parts: List<ItemPart>): String? = quantitySummary(parts)?.line
+
+    fun quantitySummary(parts: List<ItemPart>): ItemQuantity? {
         if (parts.isEmpty()) return null
         var total = ItemAmounts()
         var unknown = 0
@@ -98,14 +112,16 @@ internal object AssistantItems {
             }
         }
         if (total.isEmpty) return null
-        return buildString {
-            append("Количество: ${total.text()}")
+        val headline = total.text()
+        val line = buildString {
+            append("Количество: $headline")
             if (total.assumedPieces > 0) {
                 append(" (у ${total.assumedPieces} ${positionsWord(total.assumedPieces)} количество не названо, ${if (total.assumedPieces == 1) "посчитана" else "посчитаны"} как 1 шт)")
             }
             append('.')
             if (unknown > 0) append(" Ещё в $unknown ${purchasesWord(unknown)} без списка товаров количество не названо, они не вошли.")
         }
+        return ItemQuantity(headline, line)
     }
 
     /** Строка для списка: сами товары с ценами, а не вся сумма чека. */

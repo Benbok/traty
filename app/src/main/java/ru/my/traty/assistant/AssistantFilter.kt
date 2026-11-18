@@ -53,6 +53,7 @@ internal class Filter(
     /** Термины, которые нашлись в именах товарных позиций (а не в месте/заметке и не в категории). */
     val itemTerms: List<String> = emptyList(),
     val qualifiedItem: ItemFlavor? = null,
+    private val useSearchWords: Boolean = false,
 ) {
     val isEmpty get() = names.isEmpty() && terms.isEmpty() && place == null && itemTerms.isEmpty()
 
@@ -67,7 +68,10 @@ internal class Filter(
     fun itemPart(r: ExpenseWithCategory, items: List<ExpenseItem>): ItemPart? {
         if (itemTerms.isEmpty() || wholeMatch(r)) return null
         return if (qualifiedItem != null) AssistantItems.partForPositions(r, items, qualifiedItem::confirmedBy)
-        else AssistantItems.part(r, items, itemTerms) { r.mentions(it) }
+        else AssistantItems.part(r, items, itemTerms, useSearchWords) { phrase ->
+            if (useSearchWords) SearchText.matches(phrase, listOf(r.expense.note, r.expense.place))
+            else r.mentions(phrase)
+        }
     }
 
     /** Трата попадает в ответ: по категории, по слову в месте или заметке или по товару внутри покупки. */
@@ -111,11 +115,18 @@ internal class Filter(
             categories: List<CategoryWithSubs>,
             expenseItems: Map<Long, List<ExpenseItem>> = emptyMap(),
         ): Filter {
+            val placeFromQuery = q.place?.trim()?.lowercase(RU)?.takeIf { it.isNotEmpty() }
+            q.purchasedItem?.takeIf { q.intent == Intents.TOTAL && it.isNotBlank() }?.let { item ->
+                return Filter(
+                    emptySet(), emptyList(), placeFromQuery, itemTerms = listOf(item),
+                    qualifiedItem = ItemFlavor.parse(item), useSearchWords = true,
+                )
+            }
             val known = HashSet<String>()
             rows.forEach { r -> known += r.categoryName.lowercase(RU); r.subcategoryName?.let { known += it.lowercase(RU) } }
             categories.forEach { c -> known += c.category.name.lowercase(RU); c.subs.forEach { known += it.name.lowercase(RU) } }
             val asked = q.categories.map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase(RU) }
-            var place = q.place?.trim()?.lowercase(RU)?.takeIf { it.isNotEmpty() }
+            var place = placeFromQuery
             val found = HashSet<String>()
             // ИИ записал категорию местом («кофе»), а таких мест в записях нет — считаем по категории
             place?.let { p ->

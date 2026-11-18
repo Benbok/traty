@@ -38,10 +38,14 @@ object QuestionRules {
     fun guess(question: String, categories: List<CategoryWithSubs>): AssistantQuery? {
         val text = fold(question)
         ItemFlavor.allTimeSubject(text)?.let { return AssistantQuery(intent = Intents.TOTAL, categories = listOf(it)) }
-        val intent = RULES.firstOrNull { it.regex.containsMatchIn(text) }?.intent ?: return null
+        val item = PurchasedItemQuestion.itemIn(text)
+        val intent = RULES.firstOrNull { it.regex.containsMatchIn(text) }?.intent
+            ?: if (item != null) Intents.TOTAL else return null
         return AssistantQuery(
             intent = intent,
+            purchasedItem = item.takeIf { intent == Intents.TOTAL },
             categories = broadPetCategory(text, intent, categories)?.let(::listOf)
+                ?: item?.takeIf { intent == Intents.TOTAL }?.let(::listOf)
                 ?: categoriesIn(text, categories).ifEmpty { subjectIn(text) },
             amount = if (intent == Intents.AFFORD) AssistantQueries.amountIn(text) else null,
             limit = if (intent == Intents.TOP) Regex("""топ[\s-]*(\d{1,2})""").find(text)?.groupValues?.get(1)?.toIntOrNull() else null,
@@ -56,9 +60,7 @@ object QuestionRules {
         else -> GroupBy.MONTH
     }
 
-    private val subjectRe = Regex("""(?:потрат\S*|трач\S*|ушл\S*|уход\S*|отдал\S*|заплатил\S*|вышл\S*)\s+(?:я\s+)?на\s+(\p{L}{3,})""")
-    // «сколько литров молока я купил» → «молока», «сколько коктейлей я взял» → «коктейлей»
-    private val boughtRe = Regex("""сколько\s+(?:(?:штук\S*|шт|литр\S*|л|килограмм\S*|кило|кг|грамм\S*|г|пач\S*|упаков\S*|бутыл\S*|банок|бан\S*)\s+)?(\p{L}{3,})\s+(?:\p{L}+\s+)?(?:купил|покупал|взял|брал)""")
+    private val subjectRe = Regex("""(?:потрат\S*|трач\S*|ушл\S*|уход\S*|отдал\S*|заплатил\S*|вышл\S*)\s+(?:я\s+)?на\s+(\p{L}.*)""")
     private val notSubject = Regex("""^(?:эт|прошл|прошед|последн|текущ|недел|месяц|год|квартал|сегодн|вчера|себя|что|чт|вс[её]|январ|феврал|март|апрел|ма[йяе]|июн|июл|август|сентябр|октябр|ноябр|декабр)""")
 
     /**
@@ -67,7 +69,8 @@ object QuestionRules {
      * Приложение поищет его в списках товаров, местах и заметках ([Filter.of]).
      */
     internal fun subjectIn(text: String): List<String> {
-        val word = subjectRe.find(text)?.groupValues?.get(1) ?: boughtRe.find(text)?.groupValues?.get(1) ?: return emptyList()
+        val word = subjectRe.find(text)?.groupValues?.get(1)?.let(PurchasedItemQuestion::titleBeforeScope)
+            ?: PurchasedItemQuestion.itemIn(text) ?: return emptyList()
         return if (notSubject.containsMatchIn(word)) emptyList() else listOf(word)
     }
 
@@ -95,9 +98,20 @@ object QuestionRules {
     ): AssistantQuery {
         val base = fromAi?.takeIf { it.intent != Intents.UNKNOWN } ?: guessed ?: fromAi ?: AssistantQuery(intent = Intents.UNKNOWN)
         val qualifiedSubject = ItemFlavor.allTimeSubject(question)
-        val query = if (base.intent == Intents.TOTAL && qualifiedSubject != null &&
-            base.place == null && base.categories.size <= 1
-        ) base.copy(categories = listOf(qualifiedSubject)) else base
+        val item = guessed?.purchasedItem
+        val query = when {
+            item != null && (base.intent == Intents.TOTAL || base.intent == Intents.LIST) -> base.copy(
+                intent = Intents.TOTAL,
+                categories = emptyList(),
+                purchasedItem = item,
+                place = PurchasedItemQuestion.placeIn(question, base.place, today, startDay),
+            )
+            base.intent == Intents.TOTAL && qualifiedSubject != null &&
+                base.place == null && base.categories.size <= 1 -> base.copy(categories = listOf(qualifiedSubject), purchasedItem = null)
+            base.intent == Intents.TOTAL && base.categories.isEmpty() && base.place == null && guessed?.intent == Intents.TOTAL ->
+                base.copy(categories = guessed.categories, purchasedItem = null)
+            else -> base.copy(purchasedItem = null)
+        }
         val corrected = AssistantQueries.correct(question, query, previous, categories)
         val broadPet = broadPetCategory(fold(question), corrected.intent, categories)
         val scoped = if (broadPet == null) corrected else corrected.copy(

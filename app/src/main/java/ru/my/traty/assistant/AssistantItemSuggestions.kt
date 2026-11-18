@@ -8,12 +8,13 @@ import ru.my.traty.data.items.PackSize
 import ru.my.traty.data.search.SearchText
 import java.time.LocalDate
 
-/** Позиции с тем же названием товара, но без сведений о запрошенном вкусе. */
+/** Расчёт по варианту товара, который можно показать после выбора пользователя. */
 data class ItemSuggestion(
     val text: String,
     val headline: String?,
     val caption: String?,
     val expenseIds: List<Long>,
+    val itemName: String? = null,
 )
 
 internal class ItemFlavor private constructor(
@@ -22,12 +23,13 @@ internal class ItemFlavor private constructor(
     private val pack: Pack?,
 ) {
     fun confirmedBy(item: ExpenseItem): Boolean {
-        val words = SearchText.queryWords(item.name)
-        return !negation.containsMatchIn(fold(item.name)) &&
-            flavor in flavorsIn(words) &&
-            SearchText.matches(baseName, listOf(item.name)) &&
-            samePack(item)
+        return hasRequestedFlavor(item) && SearchText.matches(baseName, listOf(item.name))
     }
+
+    fun hasRequestedFlavor(item: ExpenseItem): Boolean =
+        !negation.containsMatchIn(fold(item.name)) &&
+            flavor in flavorsIn(SearchText.queryWords(item.name)) &&
+            samePack(item)
 
     fun canSuggest(item: ExpenseItem): Boolean {
         // Для подсказки требуем совпадения названий в обе стороны: добавочные слова
@@ -81,34 +83,89 @@ internal class ItemFlavor private constructor(
 
 internal object AssistantItemSuggestions {
     fun find(
+        query: AssistantQuery,
         filter: Filter,
         spending: List<ExpenseWithCategory>,
         dates: ClosedRange<LocalDate>,
         ctx: AssistantContext,
     ): AssistantData? {
-        if (filter.names.isNotEmpty() || filter.terms.isNotEmpty() || filter.unknownNames.isNotEmpty()) return null
-        val item = filter.qualifiedItem ?: return null
-        val term = filter.itemTerms.single()
+        if (query.intent != Intents.TOTAL || filter.names.isNotEmpty() || filter.terms.isNotEmpty()) return null
+        val item = filter.qualifiedItem
+        val quantity = !query.purchasedItem.isNullOrBlank()
+        val term = when {
+            filter.unknownNames.isEmpty() && (quantity || item != null) -> filter.itemTerms.singleOrNull()
+            filter.itemTerms.isEmpty() -> filter.unknownNames.singleOrNull()
+            else -> null
+        } ?: return null
         val rows = spending.filter { row ->
             day(row.expense.timestamp, ctx.zone) in dates && (filter.place?.let(row::mentions) ?: true)
         }
         fun positions(row: ExpenseWithCategory) = ctx.expenseItems[row.expense.id].orEmpty()
+        val range = span(dates.start, dates.endInclusive)
+        val missing = "За $range не нашёл в чеках «$term»."
+        val positionsInScope = rows.asSequence().flatMap { positions(it).asSequence() }
+        fun offer(names: List<String>): AssistantData {
+            val choices = names.map { name ->
+                val normalized = fold(name)
+                val matchedRows = rows.mapNotNull { row ->
+                    AssistantItems.partForPositions(row, positions(row)) { fold(it.name) == normalized }?.let { row to it }
+                }
+                summarize(matchedRows, ctx, range, "«$name»", quantityFirst = quantity).copy(itemName = name)
+            }
+            val text = if (choices.isEmpty()) missing else "$missing Возможно, вы имели в виду один из этих товаров?"
+            return AssistantData(facts = "", direct = text, itemSuggestions = choices)
+        }
+
+        if (item == null) {
+            if (quantity && rows.any { row -> filter.itemPart(row, positions(row)) != null }) return null
+            val similar = similarNames(term, positionsInScope)
+            return if (similar.isEmpty() && !quantity) null else offer(similar)
+        }
         if (rows.any { row -> positions(row).any(item::confirmedBy) }) return null
 
         val matchedRows = rows.mapNotNull { row ->
             AssistantItems.partForPositions(row, positions(row), item::canSuggest)?.let { row to it }
         }
-        val range = span(dates.start, dates.endInclusive)
-        val missing = "За $range не нашёл в чеках «$term»."
-        if (matchedRows.isEmpty()) return AssistantData(facts = "", direct = missing)
+        if (matchedRows.isEmpty()) {
+            return offer(similarNames(item.baseName, positionsInScope.filter(item::hasRequestedFlavor)))
+        }
 
         val subject = "«${item.baseName}» без указания вкуса"
-        val picked = Picked(matchedRows.map { it.first }, matchedRows.associate { (row, part) -> row.expense.id to part }, ctx.zone)
-        val summary = AssistantSpending.total(picked, unfiltered = false, range, subject, base = "")
         return AssistantData(
             facts = "",
             direct = "$missing Есть позиции «${item.baseName}» без указания вкуса. Показать расчёт по ним?",
-            itemSuggestion = ItemSuggestion(summary.facts.trim(), summary.headline, summary.caption, summary.expenseIds),
+            itemSuggestions = listOf(summarize(matchedRows, ctx, range, subject, quantityFirst = quantity)),
         )
+    }
+
+    private fun summarize(
+        matchedRows: List<Pair<ExpenseWithCategory, ItemPart>>,
+        ctx: AssistantContext,
+        range: String,
+        subject: String,
+        quantityFirst: Boolean,
+    ): ItemSuggestion {
+        val picked = Picked(matchedRows.map { it.first }, matchedRows.associate { (row, part) -> row.expense.id to part }, ctx.zone)
+        val summary = AssistantSpending.total(picked, unfiltered = false, range, subject, base = "", quantityFirst = quantityFirst)
+        return ItemSuggestion(summary.facts.trim(), summary.headline, summary.caption, summary.expenseIds)
+    }
+
+    private fun similarNames(term: String, items: Sequence<ExpenseItem>): List<String> {
+        val words = SearchText.queryWords(PackSize.strip(term)).filter { it.length >= 4 }.distinct()
+        if (words.isEmpty()) return emptyList()
+        val candidates = items.map { it.name.trim() }.distinctBy(::fold).mapNotNull { name ->
+            val title = SearchText.queryWords(name)
+            val scores = words.map { word ->
+                when {
+                    SearchText.matches(word, listOf(name)) -> 2
+                    word.length >= 5 && title.any { it.length >= 5 && it.startsWith(word.take(4)) } -> 1
+                    else -> 0
+                }
+            }
+            // Одно слово может отличаться, но основная часть запроса должна дать совпадение.
+            name.takeIf { scores.count { it > 0 } >= maxOf(1, words.size - 1) }?.let { it to scores.sum() }
+        }.toList()
+        val best = candidates.maxOfOrNull { it.second } ?: return emptyList()
+        return candidates.asSequence().filter { it.second == best }.map { it.first }.take(3).toList()
     }
 }
