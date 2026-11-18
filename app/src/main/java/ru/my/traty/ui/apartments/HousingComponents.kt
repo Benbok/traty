@@ -126,11 +126,17 @@ internal fun HousingCard(
 }
 
 @Composable
-internal fun HousingField(value: String, label: String, onChange: (String) -> Unit) {
+internal fun HousingField(
+    value: String,
+    label: String,
+    trailingIcon: (@Composable () -> Unit)? = null,
+    onChange: (String) -> Unit,
+) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
+        trailingIcon = trailingIcon,
         modifier = Modifier.fillMaxWidth(),
         shape = TratyTheme.shapes.medium,
         singleLine = true,

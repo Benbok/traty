@@ -1,11 +1,15 @@
 package ru.my.traty.ui.apartments
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.my.traty.capture.meter.MeterVoiceParser
 import ru.my.traty.data.apartments.*
+import ru.my.traty.ui.designsystem.components.TratyIconButton
+import ru.my.traty.ui.home.DatePickerModal
 import java.time.LocalDate
 
 @Composable
@@ -21,12 +25,14 @@ internal fun ReadingEditorDialog(
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var lastVoice by rememberSaveable { mutableStateOf<String?>(null) }
     var voiceBusy by remember { mutableStateOf(false) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var fields by rememberSaveable { mutableStateOf(registers.associate { it.id to
         (if (existing?.registerId == it.id) ReadingValues.format(existing.valueMilli) else "") }) }
     var confirmedHigh by remember(fields, day) { mutableStateOf(false) }
     val snapshot by vm.snapshot.collectAsStateWithLifecycle()
     val history = snapshot.readings.filter { it.id != existing?.id }
-    val date = runCatching { ReadingDates.encode(HousingDates.parse(day)) }.getOrNull()
+    val parsedDay = remember(day) { runCatching { HousingDates.parse(day) }.getOrNull() }
+    val date = parsedDay?.let(ReadingDates::encode)
     val checks = registers.mapNotNull { reg ->
         val value = ReadingValues.parseMilli(fields[reg.id].orEmpty())
         if (value == null || date == null) null else reg to
@@ -61,7 +67,29 @@ internal fun ReadingEditorDialog(
     ) {
         HousingHint("Можно сказать «123 запятая 05» или «тариф один — 5200, тариф два — 1800».")
         lastVoice?.let { Text("Распознано: «" + it + "»") }
-        HousingField(day, "Дата снятия: дд.мм.гггг") { day = it; error = null }
+        HousingField(
+            day,
+            "Дата снятия: дд.мм.гггг",
+            trailingIcon = {
+                TratyIconButton(
+                    icon = Icons.Filled.DateRange,
+                    contentDescription = "Выбрать дату снятия",
+                    onClick = { showDatePicker = true },
+                    enabled = !vm.busy && !voiceBusy,
+                )
+            },
+        ) { day = it; error = null }
+        if (showDatePicker) {
+            DatePickerModal(
+                initialDate = parsedDay,
+                latestDate = LocalDate.now(),
+                onDateSelected = {
+                    day = HousingDates.format(it)
+                    error = null
+                },
+                onDismiss = { showDatePicker = false },
+            )
+        }
         registers.forEach { reg ->
             HousingField(fields[reg.id].orEmpty(), if (reg.code == "TOTAL") "Показание" else "Показание " + reg.code) {
                 fields = fields + (reg.id to it); error = null

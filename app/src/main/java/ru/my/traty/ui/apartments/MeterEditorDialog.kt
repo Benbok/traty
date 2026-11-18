@@ -1,6 +1,8 @@
 package ru.my.traty.ui.apartments
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Text
@@ -10,6 +12,7 @@ import androidx.compose.ui.Modifier
 import ru.my.traty.data.apartments.*
 import ru.my.traty.ui.designsystem.components.*
 import ru.my.traty.ui.designsystem.theme.TratyTheme
+import ru.my.traty.ui.home.DatePickerModal
 import java.time.LocalDate
 
 @Composable
@@ -26,6 +29,7 @@ internal fun MeterEditorScreen(value: Meter, existingCodes: List<String>, vm: Ap
     var to by rememberSaveable(value.id) { mutableStateOf(value.accountingTo?.let { HousingDates.format(it) }.orEmpty()) }
     var archived by rememberSaveable(value.id) { mutableStateOf(value.archived) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
+    var choosingStart by rememberSaveable(value.id) { mutableStateOf<Boolean?>(null) }
     HousingEditorPage(
         title = if (isNew) "Новый счётчик" else value.name,
         subtitle = if (isNew) "Создание счётчика" else "Редактирование счётчика",
@@ -116,9 +120,15 @@ internal fun MeterEditorScreen(value: Meter, existingCodes: List<String>, vm: Ap
         HousingSectionTitle("Период учёта")
         TratyCard(Modifier.fillMaxWidth()) {
             Column(Modifier.fillMaxWidth()) {
-                TratyInlineRow("Начало", from, placeholder = "дд.мм.гггг", enabled = !vm.busy) { from = it; error = null }
+                AccountingDateRow("Начало", from, !vm.busy, { choosingStart = true }) {
+                    from = it
+                    error = null
+                }
                 TratyRowDivider()
-                TratyInlineRow("Окончание", to, placeholder = "дд.мм.гггг", enabled = !vm.busy) { to = it; error = null }
+                AccountingDateRow("Окончание", to, !vm.busy, { choosingStart = false }) {
+                    to = it
+                    error = null
+                }
                 if (!isNew) {
                     TratyRowDivider()
                     TratySwitchRow(
@@ -138,5 +148,34 @@ internal fun MeterEditorScreen(value: Meter, existingCodes: List<String>, vm: Ap
             style = TratyTheme.typography.bodySmall,
             color = TratyTheme.colors.onSurfaceVariant,
         )
+    }
+    choosingStart?.let { start ->
+        DatePickerModal(
+            initialDate = runCatching { HousingDates.parse(if (start) from else to) }.getOrNull(),
+            onDateSelected = {
+                if (start) from = HousingDates.format(it) else to = HousingDates.format(it)
+                error = null
+            },
+            onDismiss = { choosingStart = null },
+        )
+    }
+}
+
+@Composable
+private fun AccountingDateRow(
+    label: String,
+    value: String,
+    enabled: Boolean,
+    onPick: () -> Unit,
+    onChange: (String) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(end = TratyTheme.spacing.sm),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        Box(Modifier.weight(1f)) {
+            TratyInlineRow(label, value, placeholder = "дд.мм.гггг", enabled = enabled, onChange = onChange)
+        }
+        TratyIconButton(Icons.Filled.DateRange, "Выбрать дату: $label учёта", onPick, enabled = enabled)
     }
 }

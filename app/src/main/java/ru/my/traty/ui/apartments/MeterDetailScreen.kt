@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -14,6 +15,7 @@ import ru.my.traty.data.apartments.*
 import ru.my.traty.ui.designsystem.components.*
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import java.time.Instant
+import java.time.YearMonth
 import java.time.ZoneId
 
 @Composable
@@ -33,6 +35,15 @@ fun MeterDetailScreen(meterId: Long, onBack: () -> Unit, vm: MeterDetailViewMode
     var submitting by rememberSaveable(meterId) { mutableStateOf(false) }
     var editMeter by rememberSaveable(meterId) { mutableStateOf(false) }
     var section by rememberSaveable(meterId) { mutableStateOf(0) }
+    val chartState = rememberSaveableStateHolder()
+    var measuredMonth by rememberSaveable(meterId) { mutableStateOf<Int?>(null) }
+    var choosingMeasuredMonth by rememberSaveable(meterId) { mutableStateOf(false) }
+    val selectedMonth = measuredMonth?.let { YearMonth.of(it / 100, it % 100) }
+    val submissions = remember(s.submissions, meterId) { s.submissions.filter { it.meterId == meterId } }
+    val passedByReading = remember(submissions, s.submissionReadings) {
+        submissionsByReading(submissions, s.submissionReadings)
+    }
+    val visibleReadings = remember(readings, selectedMonth) { readingsForMonth(readings, selectedMonth) }
     if (editMeter && meter != null) {
         MeterEditorScreen(
             meter, registers.map { it.code },
@@ -102,14 +113,35 @@ fun MeterDetailScreen(meterId: Long, onBack: () -> Unit, vm: MeterDetailViewMode
         when (section) {
             0 -> {
                 item { HousingSectionTitle("История показаний") }
-                if (readings.isEmpty()) item { HousingHint("Внесите показания — они появятся здесь с датой снятия и отметкой передачи.") }
+                item {
+                    TratyCard(Modifier.fillMaxWidth()) {
+                        Column {
+                            TratyPickRow(
+                                label = "Месяц снятия",
+                                value = selectedMonth?.let(HousingDates::formatMonth) ?: "Все месяцы",
+                                onClick = { choosingMeasuredMonth = true },
+                            )
+                            if (selectedMonth != null) {
+                                TratyTextButton(
+                                    onClick = { measuredMonth = null },
+                                    modifier = Modifier.padding(horizontal = TratyTheme.spacing.sm),
+                                ) { Text("Показать все месяцы") }
+                            }
+                        }
+                    }
+                }
+                if (visibleReadings.isEmpty()) item {
+                    HousingHint(
+                        if (selectedMonth == null) "Внесите показания — они появятся здесь с датой снятия и отметкой передачи."
+                        else "За выбранный месяц показаний нет.",
+                    )
+                }
                 items(
-                    readings.sortedWith(compareByDescending<MeterReading> { it.measuredAt }.thenBy { it.registerId }),
+                    visibleReadings.sortedWith(compareByDescending<MeterReading> { it.measuredAt }.thenBy { it.registerId }),
                     key = { it.id },
                 ) { reading ->
                     val reg = registers.firstOrNull { it.id == reading.registerId }
-                    val links = s.submissionReadings.filter { it.readingId == reading.id }.map { it.submissionId }.toSet()
-                    val passed = s.submissions.filter { it.id in links }
+                    val passed = passedByReading[reading.id].orEmpty()
                     TratyCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(TratyTheme.spacing.md), verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -144,6 +176,11 @@ fun MeterDetailScreen(meterId: Long, onBack: () -> Unit, vm: MeterDetailViewMode
                 }
             }
             1 -> {
+                item(key = "consumption-chart") {
+                    chartState.SaveableStateProvider(meterId) {
+                        MeterConsumptionChart(series, unit)
+                    }
+                }
                 item { ConsumptionCard(ConsumptionGroups.lastComparison(series), unit) }
                 registers.forEach { reg ->
                     val intervals = Consumption.intervals(
@@ -178,7 +215,21 @@ fun MeterDetailScreen(meterId: Long, onBack: () -> Unit, vm: MeterDetailViewMode
         adding = false; editing = it
     }) { adding = false }
     editing?.let { r -> ReadingEditorDialog(registers.filter { it.id == r.registerId }, r, vm) { editing = null } }
-    if (submitting) SubmissionDialog(meterId, readings, registers, vm) { submitting = false }
+    if (submitting) {
+        val pending = remember(readings, passedByReading) { unsubmittedReadings(readings, passedByReading.keys) }
+        SubmissionDialog(meterId, pending, registers, vm) { submitting = false }
+    }
+    if (choosingMeasuredMonth) {
+        SubmissionMonthPicker(
+            initial = selectedMonth ?: YearMonth.now(),
+            onPick = {
+                measuredMonth = it.year * 100 + it.monthValue
+                choosingMeasuredMonth = false
+            },
+            onDismiss = { choosingMeasuredMonth = false },
+            title = "Выберите месяц снятия показаний",
+        )
+    }
     deleting?.let { r ->
         AlertDialog(
             onDismissRequest = { deleting = null },

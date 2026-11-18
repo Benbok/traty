@@ -22,7 +22,7 @@ internal val ResourceType.symbol: ImageVector get() = when (this) {
     ResourceType.GAS -> Icons.Filled.LocalFireDepartment
 }
 
-internal fun registerTitle(code: String) = if (code == "TOTAL") "Общий" else "Тариф $code"
+internal fun registerTitle(code: String) = if (code == "TOTAL") "Общее показание" else "Тариф $code"
 
 @Composable
 internal fun HousingBadge(icon: ImageVector) {

@@ -5,6 +5,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
@@ -24,15 +25,26 @@ fun DatePickerModal(
     initialDate: LocalDate?,
     onDateSelected: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
+    latestDate: LocalDate? = null,
 ) {
-    val initialMillis = remember(initialDate) {
-        (initialDate ?: LocalDate.now())
+    val initialMillis = remember(initialDate, latestDate) {
+        val date = initialDate ?: LocalDate.now()
+        (latestDate?.let { minOf(date, it) } ?: date)
             .atStartOfDay(ZoneOffset.UTC)
             .toInstant()
             .toEpochMilli()
     }
+    val selectableDates = remember(latestDate) {
+        if (latestDate == null) DatePickerDefaults.AllDates else object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                utcTimeMillis <= latestDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+
+            override fun isSelectableYear(year: Int): Boolean = year <= latestDate.year
+        }
+    }
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = initialMillis,
+        selectableDates = selectableDates,
     )
 
     DatePickerDialog(
@@ -56,6 +68,7 @@ fun DatePickerModal(
         dismissButton = {
             Row {
                 TratyTextButton(
+                    enabled = selectableDates.isSelectableDate(LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()),
                     onClick = {
                         onDateSelected(LocalDate.now())
                         onDismiss()

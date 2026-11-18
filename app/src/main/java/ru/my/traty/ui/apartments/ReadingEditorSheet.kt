@@ -23,7 +23,7 @@ internal fun ReadingEditorSheet(
     error: String?,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
-    voice: @Composable () -> Unit,
+    voice: @Composable () -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val busyNow by rememberUpdatedState(busy)
