@@ -22,6 +22,7 @@ object IntentRegistry {
         IntentSpec(ru.my.traty.assistant.apartments.ApartmentIntents.COMPARE, IntentKind.QUESTION, "сравни потребление ресурсов, без периода два последних завершённых интервала, заполни housing"),
         IntentSpec(ru.my.traty.assistant.apartments.ApartmentIntents.TREND, IntentKind.QUESTION, "история и динамика потребления ресурсов, заполни housing"),
         IntentSpec(Intents.TOTAL, IntentKind.QUESTION, """сколько потрачено (всего, на категорию, в месте)"""),
+        IntentSpec(Intents.PRODUCT_RANK, IntentKind.QUESTION, "рейтинг товаров из позиций чеков: «что я покупал чаще всего», «какие продукты самые популярные», «на какие товары ушло больше всего денег». productRankBy: frequency (число покупок, по умолчанию), pieces (штуки), spending (сумма). limit — число товаров. Слово «продукты» само по себе обозначает предмет рейтинга, заполняй categories только при явном ограничении категории."),
         IntentSpec(Intents.TOP, IntentKind.QUESTION, """самые крупные траты (limit — сколько, по умолчанию 5)"""),
         IntentSpec(Intents.BREAKDOWN, IntentKind.QUESTION, """на что ушли деньги, разбивка по категориям"""),
         IntentSpec(Intents.PLACES, IntentKind.QUESTION, """где (в каких магазинах, местах) больше всего тратится"""),

@@ -130,6 +130,7 @@ object AssistantEngine {
         val span = span(from, to)
         val subject = filter.describe()
         val base = header(ctx) + (if (filter.unknownNames.isNotEmpty()) "Не найдены в записях: ${filter.unknownNames.joinToString(", ")}.\n" else "")
+        if (q.intent == Intents.PRODUCT_RANK) return ProductRanking.answer(q, rows, ctx.expenseItems, span)
         val picked = Picked(rows, filter, ctx)
 
         return when (q.intent) {
