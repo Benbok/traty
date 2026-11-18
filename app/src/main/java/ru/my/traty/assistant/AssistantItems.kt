@@ -104,9 +104,16 @@ internal object AssistantItems {
         if (parts.isEmpty()) return null
         var total = ItemAmounts()
         var unknown = 0
+        var piecesWithoutMeasure = 0L
         parts.forEach { p ->
             when {
-                p.items.isNotEmpty() -> p.items.forEach { total += ItemMeasure.of(it) }
+                p.items.isNotEmpty() -> p.items.forEach {
+                    val amount = ItemMeasure.of(it)
+                    total += amount
+                    if (amount.mlMilli == 0L && amount.gramsMilli == 0L) {
+                        piecesWithoutMeasure += amount.piecesMilli
+                    }
+                }
                 PackSize.find(p.note) != null -> total += ItemMeasure.of(p.note.orEmpty(), null, null, null, null)
                 else -> unknown++
             }
@@ -119,6 +126,12 @@ internal object AssistantItems {
                 append(" (у ${total.assumedPieces} ${positionsWord(total.assumedPieces)} количество не названо, ${if (total.assumedPieces == 1) "посчитана" else "посчитаны"} как 1 шт)")
             }
             append('.')
+            if (piecesWithoutMeasure > 0 && total.mlMilli > 0) {
+                append(" У ${ItemMeasure.number(piecesWithoutMeasure)} шт. объём упаковки не указан.")
+            }
+            if (piecesWithoutMeasure > 0 && total.gramsMilli > 0) {
+                append(" У ${ItemMeasure.number(piecesWithoutMeasure)} шт. вес упаковки не указан.")
+            }
             if (unknown > 0) append(" Ещё в $unknown ${purchasesWord(unknown)} без списка товаров количество не названо, они не вошли.")
         }
         return ItemQuantity(headline, line)

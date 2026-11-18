@@ -242,7 +242,7 @@ private fun UserBubble(text: String) {
 private fun AssistantBubble(
     m: ChatMessage,
     onShowExpenses: () -> Unit,
-    onShowItemSuggestion: (Int) -> Unit,
+    onShowItemSuggestion: (Set<Int>) -> Unit,
     onApplyPlan: (List<PlanProposal>) -> Unit,
     onApplySubscriptions: (List<SubscriptionChange>) -> Unit,
     onApplyDebts: (List<DebtChange>) -> Unit,
@@ -286,10 +286,8 @@ private fun AssistantBubble(
                 Spacer(Modifier.height(TratyTheme.spacing.sm))
                 ExpenseChanges(m, onApply = onApplyExpenses, onUndo = onUndoExpenses)
             }
-            m.itemSuggestions.forEachIndexed { index, suggestion ->
-                TratyTextButton(onClick = { onShowItemSuggestion(index) }) {
-                    Text(suggestion.itemName ?: "Показать расчёт", style = TratyTheme.typography.labelMedium)
-                }
+            if (m.itemSuggestions.isNotEmpty()) {
+                AssistantItemChoices(m.id, m.itemSuggestions, onShowItemSuggestion)
             }
             if (m.expenseIds.isNotEmpty() || m.sentFacts != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {
