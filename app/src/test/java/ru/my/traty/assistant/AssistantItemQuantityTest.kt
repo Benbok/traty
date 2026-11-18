@@ -218,6 +218,7 @@ class AssistantItemQuantityTest {
         val bySpending = AssistantEngine.run(resolve("На какие товары ушло больше всего денег?"), ctx).direct.orEmpty()
         assertTrue(bySpending, "1. Сыр" in bySpending)
         assertEquals(QuestionDates.ALL_TIME.toString(), resolve("Что я покупал чаще всего за всё время?").from)
+        assertEquals(Intents.TOP, resolve("Топ крупных трат на продукты").intent)
         assertEquals("пятерочке", resolve("Какие товары чаще всего покупал в Пятёрочке?").place)
     }
 }

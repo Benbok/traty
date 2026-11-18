@@ -18,6 +18,7 @@ internal object ProductRanking {
     private val spending = Regex("""потрат|тратил|ушло|по\s+сумме|по\s+расходам|обошл""")
     private val pieces = Regex("""в\s+штуках|по\s+количеству|больше\s+всего\s+штук""")
     private val superlative = Regex("""больше\s+всего|больше\s+всех|(?:^|\s)топ""")
+    private val productTop = Regex("""топ(?:[\s-]+\d+)?\s+(?:товар|продукт)""")
     private val bought = Regex("""(?:^|[^\p{L}])(?:купил|покупал|беру|брал|покупаю)\p{L}*""")
     private val openQuestion = Regex("""^(?:а\s+)?(?:какие|каких|какого|что|чего|назови|покажи|топ)(?=\s|$)""")
     private val limit = Regex("""(?:топ[\s-]*|первые\s+)(\d{1,2})(?!\d)""")
@@ -28,10 +29,10 @@ internal object ProductRanking {
         val hasProduct = product.containsMatchIn(text)
         val asksWhat = openQuestion.containsMatchIn(text)
         val metric = when {
-            pieces.containsMatchIn(text) && (asksWhat || hasProduct) -> PIECES
+            pieces.containsMatchIn(text) && (asksWhat || productTop.containsMatchIn(text)) -> PIECES
             hasProduct && spending.containsMatchIn(text) && superlative.containsMatchIn(text) -> SPENDING
             frequency.containsMatchIn(text) && (hasProduct || (asksWhat && bought.containsMatchIn(text))) -> FREQUENCY
-            hasProduct && superlative.containsMatchIn(text) && asksWhat -> FREQUENCY
+            productTop.containsMatchIn(text) -> FREQUENCY
             else -> return null
         }
         return AssistantQuery(intent = Intents.PRODUCT_RANK, productRankBy = metric,
