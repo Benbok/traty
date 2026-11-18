@@ -73,11 +73,18 @@ internal object ProductRanking {
     }
 
     fun answer(query: AssistantQuery, rows: List<ExpenseWithCategory>, expenseItems: Map<Long, List<ExpenseItem>>,
-        span: String): AssistantData {
+        span: String, mixed: List<ExpenseWithCategory> = emptyList()): AssistantData {
         val groceryOnly = query.categories.any { fold(it) == "продукты" }
-        val sales = rows.flatMap { row ->
+        val knownGroceries = if (mixed.isEmpty()) emptySet() else rows.flatMap { row ->
+            expenseItems[row.expense.id].orEmpty().map { ItemNames.familyKey(it.name) }
+        }.toSet()
+        val additional = mixed.associate { row ->
+            row.expense.id to expenseItems[row.expense.id].orEmpty().filter { ItemNames.familyKey(it.name) in knownGroceries }
+        }
+        val receipts = rows + mixed.filter { !additional[it.expense.id].isNullOrEmpty() }
+        val sales = receipts.flatMap { row ->
             val expense = row.expense
-            expenseItems[expense.id].orEmpty().filterNot { groceryOnly && petFood.containsMatchIn(fold(it.name)) }.map { item ->
+            (additional[expense.id] ?: expenseItems[expense.id]).orEmpty().filterNot { groceryOnly && petFood.containsMatchIn(fold(it.name)) }.map { item ->
                 ItemSale(item.name, item.priceKopecks, item.quantityMilli, item.unit, expense.id,
                     expense.timestamp, expense.place, expense.categoryId, item.packMilli, item.packUnit)
             }
@@ -131,7 +138,7 @@ internal object ProductRanking {
                 appendLine("• ${ItemNames.familyName(entry.name)} — ${details.joinToString(" · ")}$pricing")
             }
             if (top.size < ranked.size) appendLine("Показано ${top.size} из ${ranked.size} товаров.")
-            if (withoutItems > 0) append("Состав чека известен для ${rows.size - withoutItems} из ${rows.size} покупок.")
+            if (withoutItems > 0) append("Состав чека известен для ${receipts.size - withoutItems} из ${receipts.size} покупок.")
         }
         return AssistantData(facts = "", direct = report.trimEnd(), expenseIds = receiptIds)
     }

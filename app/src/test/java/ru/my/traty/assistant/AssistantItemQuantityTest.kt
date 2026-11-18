@@ -259,7 +259,7 @@ class AssistantItemQuantityTest {
         val first = ExpenseItem(name = "Чудо Коктейль молочный шоколад 3%", priceKopecks = 4_999, unit = "шт", quantityMilli = 1_000)
         val second = first.copy(name = "Чудо коктейль молочный стерилизованный с шоколадом 200 мл", priceKopecks = 5_999)
         val older = exp(300, 16, null, first, first, first, first).let {
-            it.copy(expense = it.expense.copy(timestamp = it.expense.timestamp - 31L * 86_400_000))
+            it.copy(expense = it.expense.copy(categoryId = 2, timestamp = it.expense.timestamp - 31L * 86_400_000), categoryName = "Супермаркет")
         }
         val newer = exp(300, 17, null, second, second, second)
         val distractors = exp(400, 17, null, ExpenseItem(name = "Чипсы"), first.copy(name = "Чудо коктейль молочный ваниль"))
