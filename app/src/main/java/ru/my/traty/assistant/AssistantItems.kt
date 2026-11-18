@@ -44,12 +44,22 @@ internal object AssistantItems {
      * Если у траты есть позиции, решают они: в заметке такой покупки обычно тот же список, и по ней
      * засчиталась бы вся сумма чека. По заметке и месту ищем только у трат без позиций.
      */
-    fun part(r: ExpenseWithCategory, items: List<ExpenseItem>, terms: List<String>, mentions: (String) -> Boolean): ItemPart? {
+    fun part(
+        r: ExpenseWithCategory,
+        items: List<ExpenseItem>,
+        terms: List<String>,
+        useSearchWords: Boolean = false,
+        mentions: (String) -> Boolean,
+    ): ItemPart? {
         if (terms.isEmpty()) return null
         if (items.isEmpty()) {
             return if (terms.any(mentions)) ItemPart(r.expense.amountKopecks, emptyList(), whole = true, note = r.expense.note) else null
         }
-        return partForPositions(r, items) { item -> terms.any { item.mentionsItem(it) } }
+        return partForPositions(r, items) { item ->
+            terms.any { phrase ->
+                if (useSearchWords) SearchText.matches(phrase, listOf(item.name)) else item.mentionsItem(phrase)
+            }
+        }
     }
 
     fun partForPositions(r: ExpenseWithCategory, items: List<ExpenseItem>, matches: (ExpenseItem) -> Boolean): ItemPart? {
