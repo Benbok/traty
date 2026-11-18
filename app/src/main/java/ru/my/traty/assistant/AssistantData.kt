@@ -23,5 +23,6 @@ data class AssistantData(
     /** Удаление и перенос трат в другую категорию: только по кнопке. */
     val expenseChanges: List<ExpenseChange> = emptyList(),
     val itemSuggestions: List<ItemSuggestion> = emptyList(),
-    val combinedItemSuggestions: Map<Set<Int>, ItemSuggestion> = emptyMap(),
+    val candidateNames: List<String> = emptyList(),
+    val calculateItems: ((List<String>) -> ItemSuggestion)? = null,
 )
