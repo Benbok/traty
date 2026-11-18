@@ -47,7 +47,11 @@ internal object AssistantItems {
         if (items.isEmpty()) {
             return if (terms.any(mentions)) ItemPart(r.expense.amountKopecks, emptyList(), whole = true, note = r.expense.note) else null
         }
-        val matched = items.filter { item -> terms.any { item.mentionsItem(it) } }
+        return partForPositions(r, items) { item -> terms.any { item.mentionsItem(it) } }
+    }
+
+    fun partForPositions(r: ExpenseWithCategory, items: List<ExpenseItem>, matches: (ExpenseItem) -> Boolean): ItemPart? {
+        val matched = items.filter(matches)
         if (matched.isEmpty()) return null
         // В чеке только этот товар — это и есть вся покупка, даже если цену у позиции не записали
         if (matched.size == items.size) return ItemPart(r.expense.amountKopecks, matched, whole = false)

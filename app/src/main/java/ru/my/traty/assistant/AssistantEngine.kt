@@ -80,6 +80,7 @@ data class AssistantData(
     val debtChanges: List<DebtChange> = emptyList(),
     /** Удаление и перенос трат в другую категорию: только по кнопке. */
     val expenseChanges: List<ExpenseChange> = emptyList(),
+    val itemSuggestion: ItemSuggestion? = null,
 )
 
 /** Предложенная строка плана трат. Сумму считает приложение, ИИ её не меняет. */
@@ -142,12 +143,8 @@ object AssistantEngine {
         if (q.intent == Intents.SET_PLAN && filter.names.isEmpty() && filter.unknownNames.isNotEmpty()) {
             return setPlanNewSub(q, ctx, period, spending, filter.unknownNames.first())
         }
-        if (filter.unknownNames.isNotEmpty() && filter.names.isEmpty() && filter.terms.isEmpty() && filter.itemTerms.isEmpty()) {
-            val known = spending.map { it.categoryName }.distinct().sorted().joinToString(", ")
-            return AssistantData(
-                facts = header(ctx) + "Категорий «${filter.unknownNames.joinToString("», «")}» в записях нет. Есть категории: $known.",
-            )
-        }
+        AssistantItemSuggestions.find(filter, spending, from..to, ctx)?.let { return it }
+        filter.unresolvedAnswer(spending, ctx)?.let { return it }
 
         fun rowsIn(a: LocalDate, b: LocalDate) = spending.filter { r ->
             val d = day(r.expense.timestamp, ctx.zone)
@@ -161,7 +158,7 @@ object AssistantEngine {
         val picked = Picked(rows, filter, ctx)
 
         return when (q.intent) {
-            Intents.TOTAL -> AssistantSpending.total(picked, filter, span, subject, base)
+            Intents.TOTAL -> AssistantSpending.total(picked, filter.isEmpty, span, subject, base)
 
             Intents.TOP -> AssistantSpending.top(picked, (q.limit ?: DEFAULT_TOP).coerceIn(1, MAX_TOP), span, subject, base)
 

@@ -25,6 +25,7 @@ import ru.my.traty.assistant.ExpenseChange
 import ru.my.traty.assistant.AssistantAnswers
 import ru.my.traty.assistant.AssistantData
 import ru.my.traty.assistant.Intents
+import ru.my.traty.assistant.ItemSuggestion
 import ru.my.traty.assistant.AssistantFallback
 import ru.my.traty.assistant.Balance
 import ru.my.traty.assistant.AssistantEngine
@@ -79,6 +80,7 @@ data class ChatMessage(
     val expenseChanges: List<ExpenseChange> = emptyList(),
     val expensesApplied: Int? = null,
     val expensesUndone: Boolean = false,
+    val itemSuggestion: ItemSuggestion? = null,
 )
 
 /**
@@ -206,6 +208,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     subscriptionChanges = data.subscriptionChanges,
                     debtChanges = data.debtChanges,
                     expenseChanges = data.expenseChanges,
+                    itemSuggestion = data.itemSuggestion,
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -359,6 +362,19 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         c.db.categories().getActiveWithSubs().firstOrNull { it.category.id == categoryId }
             ?.subs?.firstOrNull { it.name.equals(name, ignoreCase = true) }?.let { return it.id }
         return c.categories.addSubcategory(categoryId, name)
+    }
+
+    fun showItemSuggestion(messageId: Long) {
+        val index = messages.indexOfFirst { it.id == messageId }
+        val message = messages.getOrNull(index) ?: return
+        val suggestion = message.itemSuggestion ?: return
+        messages[index] = message.copy(
+            text = suggestion.text,
+            headline = suggestion.headline,
+            caption = suggestion.caption,
+            expenseIds = suggestion.expenseIds,
+            itemSuggestion = null,
+        )
     }
 
     fun showExpenses(ids: List<Long>) = viewModelScope.launch {

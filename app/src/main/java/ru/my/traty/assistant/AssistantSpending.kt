@@ -6,26 +6,31 @@ package ru.my.traty.assistant
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.ui.formatRub
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /** Траты, попавшие в ответ, и сколько из каждой засчитывается ([Filter.itemPart]). */
-internal class Picked(val rows: List<ExpenseWithCategory>, private val filter: Filter, private val ctx: AssistantContext) {
-    private val parts = rows.associate { it.expense.id to filter.itemPart(it, itemsOf(it)) }
-
-    private fun itemsOf(r: ExpenseWithCategory) = ctx.expenseItems[r.expense.id].orEmpty()
+internal class Picked(
+    val rows: List<ExpenseWithCategory>,
+    private val parts: Map<Long, ItemPart?>,
+    private val zone: ZoneId,
+) {
+    constructor(rows: List<ExpenseWithCategory>, filter: Filter, ctx: AssistantContext) : this(
+        rows, rows.associate { it.expense.id to filter.itemPart(it, ctx.expenseItems[it.expense.id].orEmpty()) }, ctx.zone,
+    )
 
     fun amount(r: ExpenseWithCategory): Long = parts[r.expense.id]?.amount ?: r.expense.amountKopecks
 
     val sum: Long get() = rows.sumOf(::amount)
 
     /** Вопрос про товар: суммы — цены позиций, а не чеки целиком. */
-    val byItem: Boolean get() = filter.itemTerms.isNotEmpty() && parts.values.any { it != null }
+    val byItem: Boolean get() = parts.values.any { it != null }
 
     fun notes(): List<String> = AssistantItems.notes(parts.values.filterNotNull())
 
     fun line(r: ExpenseWithCategory, withNote: Boolean = true): String =
-        parts[r.expense.id]?.let { AssistantItems.line(r, it, ctx.zone) } ?: describe(r, ctx.zone, withNote)
+        parts[r.expense.id]?.let { AssistantItems.line(r, it, zone) } ?: describe(r, zone, withNote)
 
     fun byCategory(): List<Pair<String, Long>> =
         rows.groupBy { it.categoryName }.map { (k, v) -> k to v.sumOf(::amount) }.sortedByDescending { it.second }
@@ -36,14 +41,14 @@ internal object AssistantSpending {
 
     private fun about(subject: String?) = subject?.let { " ($it)" }.orEmpty()
 
-    fun total(p: Picked, filter: Filter, span: String, subject: String?, base: String): AssistantData {
+    fun total(p: Picked, unfiltered: Boolean, span: String, subject: String?, base: String): AssistantData {
         val sum = p.sum
         val count = if (p.byItem) "покупок с этим товаром" else "покупок"
         val facts = buildString {
             append(base)
             appendLine("Потрачено за $span${about(subject)}: ${formatRub(sum)}, $count: ${p.rows.size}.")
             p.notes().forEach(::appendLine)
-            if (filter.isEmpty && p.rows.isNotEmpty()) {
+            if (unfiltered && p.rows.isNotEmpty()) {
                 appendLine("Больше всего:")
                 p.byCategory().take(5).forEach { (name, s) -> appendLine("- $name: ${formatRub(s)} (${share(s, sum)})") }
             }
