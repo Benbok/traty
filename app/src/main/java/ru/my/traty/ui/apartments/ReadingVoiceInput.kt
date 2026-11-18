@@ -6,6 +6,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -16,6 +18,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.CancellationException
@@ -36,6 +41,8 @@ internal fun ReadingVoiceInput(
     onBusy: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     val textCallback by rememberUpdatedState(onText)
     val errorCallback by rememberUpdatedState(onError)
     val busyCallback by rememberUpdatedState(onBusy)
@@ -56,6 +63,8 @@ internal fun ReadingVoiceInput(
     LaunchedEffect(state) { onBusy(state is RecordState.Listening || state is RecordState.Recognizing) }
     fun toggleRecording() {
         try {
+            focus.clearFocus()
+            keyboard?.hide()
             recorder.toggle()
             busyCallback(recorder.state.value is RecordState.Listening || recorder.state.value is RecordState.Recognizing)
         } catch (_: Exception) {
@@ -68,8 +77,9 @@ internal fun ReadingVoiceInput(
         if (granted && enabledNow && settingsNow != null) toggleRecording()
         else if (!granted) errorCallback("Для голосового ввода нужен доступ к микрофону")
     }
-    Column(verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {
         TratyTonalButton(
+            modifier = Modifier.fillMaxWidth().heightIn(min = TratyTheme.spacing.huge),
             enabled = enabled && settings != null && state !is RecordState.Recognizing,
             onClick = {
                 try {
@@ -90,8 +100,11 @@ internal fun ReadingVoiceInput(
             is RecordState.Listening -> s.partial.ifBlank { "Назовите показание. Для нескольких тарифов назовите каждый тариф" }
             is RecordState.Recognizing -> s.partial
             is RecordState.Error -> s.message
-            else -> "Например: «123 запятая 05» или «тариф один — 5200, тариф два — 1800»"
+            else -> "Скажите показание или назовите каждый тариф"
         }
-        Text(caption, style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
+        Text(
+            caption, style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant,
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+        )
     }
 }
