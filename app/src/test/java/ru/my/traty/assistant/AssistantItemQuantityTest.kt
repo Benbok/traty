@@ -210,15 +210,48 @@ class AssistantItemQuantityTest {
         assertEquals("2026-11-08", popular.to)
         assertEquals(null, popular.place)
         val frequency = AssistantEngine.run(popular, ctx).direct.orEmpty()
-        assertTrue(frequency, "1. Хлеб — покупок — 2 · 3 шт" in frequency)
+        assertTrue(frequency, "• Хлеб — 2 покупки · 3 шт" in frequency)
         assertTrue(frequency, "Йогурт" !in frequency)
 
         val byPieces = AssistantEngine.run(resolve("Чего купил больше всего в штуках?"), ctx).direct.orEmpty()
-        assertTrue(byPieces, "1. Йогурт" in byPieces)
+        assertTrue(byPieces, byPieces.substringAfter('\n').startsWith("• Йогурт"))
         val bySpending = AssistantEngine.run(resolve("На какие товары ушло больше всего денег?"), ctx).direct.orEmpty()
-        assertTrue(bySpending, "1. Сыр" in bySpending)
+        assertTrue(bySpending, bySpending.substringAfter('\n').startsWith("• Сыр"))
         assertEquals(QuestionDates.ALL_TIME.toString(), resolve("Что я покупал чаще всего за всё время?").from)
         assertEquals(Intents.TOP, resolve("Топ крупных трат на продукты").intent)
         assertEquals("пятерочке", resolve("Какие товары чаще всего покупал в Пятёрочке?").place)
+    }
+
+    @Test
+    fun groceryRankingExplainsSinglePurchasesAndUsesTheContentsOfGroceryReceipts() {
+        val chips = ExpenseItem(name = "Чипсы", priceKopecks = 13_999)
+        val milk = ExpenseItem(name = "Молоко", priceKopecks = 9_999)
+        val petFood = ExpenseItem(name = "SHEBA Корм для кошек", priceKopecks = 6_598)
+        val basket = exp(320, 8, null, chips, milk, petFood)
+        val uncatalogued = exp(100, 9, "молоко")
+        val otherCategory = exp(500, 10, null, ExpenseItem(name = "Шампунь")).let {
+            it.copy(expense = it.expense.copy(categoryId = 2), categoryName = "Красота и уход")
+        }
+        val question = "Какие продукты я покупаю чаще всего?"
+        val query = QuestionRules.resolve(
+            question, AssistantQuery(Intents.PRODUCT_RANK, place = "магазине"),
+            QuestionRules.guess(question, categories), today, 1, categories = categories,
+        )
+        assertEquals(null, query.place)
+        val receipts = listOf(basket, uncatalogued, otherCategory)
+        fun report(rows: List<ExpenseWithCategory>) = AssistantEngine.run(
+            query, AssistantContext(rows, emptyList(), emptyList(), today, 1, ZoneOffset.UTC,
+                categories = categories, expenseItems = items),
+        ).direct.orEmpty()
+
+        val tied = report(receipts)
+        assertTrue(tied, "каждый найденный товар встречается в одной покупке" in tied)
+        assertTrue(tied, "• Чипсы — 1 покупка" in tied)
+        assertTrue(tied, "Состав чека известен для 1 из 2 покупок" in tied)
+        assertTrue(tied, "SHEBA" !in tied && "Шампунь" !in tied && "1. Чипсы" !in tied)
+
+        val repeated = report(receipts + exp(100, 11, null, milk))
+        assertTrue(repeated, "• Молоко — 2 покупки" in repeated)
+        assertTrue(repeated, "Чипсы" !in repeated)
     }
 }
