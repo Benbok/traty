@@ -254,4 +254,22 @@ class AssistantItemQuantityTest {
         assertTrue(repeated, "• Молоко — 2 покупки" in repeated)
         assertTrue(repeated, "Чипсы" !in repeated)
     }
+    @Test
+    fun habitualRankingCombinesReceiptNamesAcrossMonthsBeforeTakingTop() {
+        val first = ExpenseItem(name = "Чудо Коктейль молочный шоколад 3%", priceKopecks = 4_999, unit = "шт", quantityMilli = 1_000)
+        val second = first.copy(name = "Чудо коктейль молочный стерилизованный с шоколадом 200 мл", priceKopecks = 5_999)
+        val older = exp(300, 16, null, first, first, first, first).let {
+            it.copy(expense = it.expense.copy(timestamp = it.expense.timestamp - 31L * 86_400_000))
+        }
+        val newer = exp(300, 17, null, second, second, second)
+        val distractors = exp(400, 17, null, ExpenseItem(name = "Чипсы"), first.copy(name = "Чудо коктейль молочный ваниль"))
+        val receipts = listOf(distractors, newer, older)
+        val answer = ask("Какие продукты я покупаю чаще всего?", receipts)
+        val reply = answer.direct.orEmpty()
+        assertTrue(reply, "2 покупки · 7 шт" in reply && "379,93 ₽" in reply)
+        assertTrue(reply, "Чипсы" !in reply && "ваниль" !in reply)
+        assertEquals(setOf(older.expense.id, newer.expense.id), answer.expenseIds.toSet())
+        val november = ask("Какие продукты я покупаю чаще всего в ноябре?", receipts)
+        assertTrue(november.direct.orEmpty(), "7 шт" !in november.direct.orEmpty())
+    }
 }

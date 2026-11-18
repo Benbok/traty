@@ -61,7 +61,13 @@ internal object ProductRanking {
             productRankBy = local?.productRankBy ?: rank?.productRankBy,
             limit = local?.limit ?: rank?.limit,
             place = rank?.place?.trim()?.takeUnless { genericStore.matches(fold(it)) } ?: localPlace,
-            from = if (hasHistory) previous?.from else model?.from.takeUnless { dateReference },
+            from = when {
+                hasHistory -> previous?.from
+                dateReference -> null
+                model?.from != null || model?.to != null -> model?.from
+                (local?.productRankBy ?: rank?.productRankBy ?: FREQUENCY) == FREQUENCY -> QuestionDates.ALL_TIME.toString()
+                else -> null
+            },
             to = if (hasHistory) previous?.to else model?.to.takeUnless { dateReference },
         ), today, startDay)
     }
@@ -76,7 +82,7 @@ internal object ProductRanking {
                     expense.timestamp, expense.place, expense.categoryId, item.packMilli, item.packUnit)
             }
         }
-        val totals = ItemTotals.byProduct(sales)
+        val totals = ItemTotals.byProduct(sales, keyOf = ItemNames::familyKey)
         val metric = when (query.productRankBy) {
             PIECES -> "по количеству штук"
             SPENDING -> "по сумме"
@@ -105,7 +111,7 @@ internal object ProductRanking {
         val withoutItems = rows.count { expenseItems[it.expense.id].isNullOrEmpty() }
         val noRepeatedPurchases = byFrequency && !hasRepeatedPurchases
         val keys = top.map { it.key }.toSet()
-        val receiptIds = sales.filter { ItemNames.key(it.name) in keys }.map { it.expenseId }.distinct()
+        val receiptIds = sales.filter { ItemNames.familyKey(it.name) in keys }.map { it.expenseId }.distinct()
         val report = buildString {
             if (noRepeatedPurchases) {
                 appendLine("За $span$location каждый найденный товар встречается в одной покупке.")
@@ -122,7 +128,7 @@ internal object ProductRanking {
                     else -> listOfNotNull(purchases, quantity, total)
                 }
                 val pricing = if (entry.unpriced > 0) " · без цены: ${entry.unpriced} поз." else ""
-                appendLine("• ${entry.name} — ${details.joinToString(" · ")}$pricing")
+                appendLine("• ${ItemNames.familyName(entry.name)} — ${details.joinToString(" · ")}$pricing")
             }
             if (top.size < ranked.size) appendLine("Показано ${top.size} из ${ranked.size} товаров.")
             if (withoutItems > 0) append("Состав чека известен для ${rows.size - withoutItems} из ${rows.size} покупок.")
