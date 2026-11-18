@@ -105,15 +105,28 @@ internal object AssistantItemSuggestions {
         val missing = "За $range не нашёл в чеках «$term»."
         val positionsInScope = rows.asSequence().flatMap { positions(it).asSequence() }
         fun offer(names: List<String>): AssistantData {
-            val choices = names.map { name ->
-                val normalized = fold(name)
+            fun calculate(selected: List<String>): ItemSuggestion {
+                val normalized = selected.map(::fold).toSet()
                 val matchedRows = rows.mapNotNull { row ->
-                    AssistantItems.partForPositions(row, positions(row)) { fold(it.name) == normalized }?.let { row to it }
+                    AssistantItems.partForPositions(row, positions(row)) { fold(it.name) in normalized }?.let { row to it }
                 }
-                summarize(matchedRows, ctx, range, "«$name»", quantityFirst = quantity).copy(itemName = name)
+                val subject = selected.joinToString(", ") { "«$it»" }
+                return summarize(matchedRows, ctx, range, subject, quantityFirst = quantity)
             }
-            val text = if (choices.isEmpty()) missing else "$missing Возможно, вы имели в виду один из этих товаров?"
-            return AssistantData(facts = "", direct = text, itemSuggestions = choices)
+
+            val choices = names.map { name -> calculate(listOf(name)).copy(itemName = name) }
+            // Поиск предлагает до трёх названий. Расчёт каждой комбинации проходит по строкам чеков один раз.
+            val combinations = names.indices.fold(listOf(emptySet<Int>())) { subsets, index ->
+                subsets + subsets.map { it + index }
+            }.filter { it.size > 1 }.associateWith { indices -> calculate(indices.map(names::get)) }
+            val text = when (choices.size) {
+                0 -> missing
+                1 -> "$missing Возможно, вы имели в виду этот товар?"
+                else -> "$missing Отметьте один или несколько подходящих товаров."
+            }
+            return AssistantData(
+                facts = "", direct = text, itemSuggestions = choices, combinedItemSuggestions = combinations,
+            )
         }
 
         if (item == null) {

@@ -149,6 +149,22 @@ class AssistantItemQuantityTest {
     }
 
     @Test
+    fun selectedNamesAreCalculatedTogetherEvenInTheSameReceipt() {
+        val receipt = exp(
+            500, 10, null,
+            ExpenseItem(name = "Чудо Коктейль молочный шоколад 3%", priceKopecks = 19_996, quantityMilli = 4_000, unit = "шт"),
+            ExpenseItem(name = "Чудо коктейль молочный с шоколадом 200 мл", priceKopecks = 17_997, quantityMilli = 3_000, unit = "шт"),
+            ExpenseItem(name = "Хлеб", priceKopecks = 12_007),
+        )
+        val answer = ask("Сколько шоколадного молока я купил?", listOf(receipt))
+        val selected = answer.combinedItemSuggestions.getValue(setOf(0, 1))
+        assertEquals("7 шт · 600 мл", selected.headline)
+        assertTrue(selected.text, "379,93 ₽" in selected.text)
+        assertTrue(selected.text, "У 4 шт. объём упаковки не указан." in selected.text)
+        assertEquals(listOf(receipt.expense.id), selected.expenseIds)
+    }
+
+    @Test
     fun fiveWaysToAskForTheChocolateDrink() {
         val chocolate = exp(
             500, 10, null,

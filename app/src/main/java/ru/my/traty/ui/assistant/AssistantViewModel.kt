@@ -81,6 +81,7 @@ data class ChatMessage(
     val expensesApplied: Int? = null,
     val expensesUndone: Boolean = false,
     val itemSuggestions: List<ItemSuggestion> = emptyList(),
+    val combinedItemSuggestions: Map<Set<Int>, ItemSuggestion> = emptyMap(),
 )
 
 /**
@@ -209,6 +210,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     debtChanges = data.debtChanges,
                     expenseChanges = data.expenseChanges,
                     itemSuggestions = data.itemSuggestions,
+                    combinedItemSuggestions = data.combinedItemSuggestions,
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -364,16 +366,22 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         return c.categories.addSubcategory(categoryId, name)
     }
 
-    fun showItemSuggestion(messageId: Long, optionIndex: Int) {
+    fun showItemSuggestion(messageId: Long, selected: Set<Int>) {
         val index = messages.indexOfFirst { it.id == messageId }
         val message = messages.getOrNull(index) ?: return
-        val suggestion = message.itemSuggestions.getOrNull(optionIndex) ?: return
+        val suggestion = if (selected.size == 1) message.itemSuggestions.getOrNull(selected.single())
+            else message.combinedItemSuggestions[selected]
+        if (suggestion == null) return
+        if (index == messages.lastIndex && history.isNotEmpty()) {
+            history[history.lastIndex] = history.last().copy(expenseIds = suggestion.expenseIds)
+        }
         messages[index] = message.copy(
             text = suggestion.text,
             headline = suggestion.headline,
             caption = suggestion.caption,
             expenseIds = suggestion.expenseIds,
             itemSuggestions = emptyList(),
+            combinedItemSuggestions = emptyMap(),
         )
     }
 
