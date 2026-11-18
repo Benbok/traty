@@ -27,7 +27,10 @@ internal class Picked(
     /** Вопрос про товар: суммы — цены позиций, а не чеки целиком. */
     val byItem: Boolean get() = parts.values.any { it != null }
 
-    fun notes(): List<String> = AssistantItems.notes(parts.values.filterNotNull())
+    fun notes(includeQuantity: Boolean = true): List<String> =
+        AssistantItems.notes(parts.values.filterNotNull(), includeQuantity)
+
+    fun quantity(): ItemQuantity? = AssistantItems.quantitySummary(parts.values.filterNotNull())
 
     fun line(r: ExpenseWithCategory, withNote: Boolean = true): String =
         parts[r.expense.id]?.let { AssistantItems.line(r, it, zone) } ?: describe(r, zone, withNote)
@@ -41,19 +44,24 @@ internal object AssistantSpending {
 
     private fun about(subject: String?) = subject?.let { " ($it)" }.orEmpty()
 
-    fun total(p: Picked, unfiltered: Boolean, span: String, subject: String?, base: String): AssistantData {
+    fun total(
+        p: Picked, unfiltered: Boolean, span: String, subject: String?, base: String, quantityFirst: Boolean = false,
+    ): AssistantData {
         val sum = p.sum
         val count = if (p.byItem) "покупок с этим товаром" else "покупок"
+        val quantity = if (quantityFirst) p.quantity() else null
         val facts = buildString {
             append(base)
+            if (quantityFirst) appendLine(quantity?.line ?: "В записях не указано количество товара.")
             appendLine("Потрачено за $span${about(subject)}: ${formatRub(sum)}, $count: ${p.rows.size}.")
-            p.notes().forEach(::appendLine)
+            p.notes(includeQuantity = !quantityFirst).forEach(::appendLine)
             if (unfiltered && p.rows.isNotEmpty()) {
                 appendLine("Больше всего:")
                 p.byCategory().take(5).forEach { (name, s) -> appendLine("- $name: ${formatRub(s)} (${share(s, sum)})") }
             }
         }
-        return AssistantData(facts, formatRub(sum), listOfNotNull(subject, span).joinToString(" · "), ids(p.rows))
+        val headline = if (quantityFirst) quantity?.headline else formatRub(sum)
+        return AssistantData(facts, headline, listOfNotNull(subject, span).joinToString(" · "), ids(p.rows))
     }
 
     fun top(p: Picked, limit: Int, span: String, subject: String?, base: String): AssistantData {

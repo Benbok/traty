@@ -68,4 +68,69 @@ class AssistantItemQuantityTest {
         val line = AssistantItems.quantity(listOf(ItemPart(0, rows[0].let { items.getValue(it.expense.id).take(1) }, whole = false)))
         assertEquals("Количество: 3 шт · 600 мл.", line)
     }
+
+    private fun ask(
+        question: String,
+        expenses: List<ExpenseWithCategory>,
+        ai: AssistantQuery? = AssistantQuery(intent = Intents.TOTAL),
+    ): AssistantData {
+        val guessed = QuestionRules.guess(question, categories)
+        val query = QuestionRules.resolve(question, ai, guessed, today, 1, categories = categories)
+        return AssistantEngine.run(
+            query,
+            AssistantContext(expenses, emptyList(), emptyList(), today, 1, ZoneOffset.UTC, categories = categories, expenseItems = items),
+        )
+    }
+
+    @Test
+    fun spokenQuantityKeepsProductEvenWhenModelReturnsACategory() {
+        val receipt = exp(
+            500, 10, null,
+            ExpenseItem(name = "Чудо Коктейль молочный шоколад 3%", priceKopecks = 19_996, quantityMilli = 4_000, unit = "шт"),
+            ExpenseItem(name = "Чудо коктейль молочный стерилизованный с шоколадом 200 мл", priceKopecks = 17_997, quantityMilli = 3_000, unit = "шт"),
+            ExpenseItem(name = "Чудо коктейль молочный ванильный", priceKopecks = 4_500),
+            ExpenseItem(name = "Хлеб", priceKopecks = 3_000),
+        )
+        val answer = ask(
+            "Сколько э молочных коктейлей шоколад мы купили?",
+            rows + receipt, AssistantQuery(intent = Intents.TOTAL, categories = listOf("Продукты")),
+        )
+        assertTrue(answer.headline.orEmpty(), answer.headline.orEmpty().startsWith("7 шт"))
+        assertTrue(answer.facts, "379,93" in answer.facts)
+        assertEquals(listOf(receipt.expense.id), answer.expenseIds)
+        assertTrue(AssistantAnswers.template(Intents.TOTAL, answer).orEmpty().startsWith("Количество:"))
+    }
+
+    @Test
+    fun ambiguousProductShowsCandidatesFromTheRequestedShopAndPeriod() {
+        val inScope = exp(100, 10, null, ExpenseItem(name = "Чудо коктейль молочный шоколад"))
+        val otherShop = exp(200, 10, null, ExpenseItem(name = "Чудо йогурт клубничный"))
+            .let { it.copy(expense = it.expense.copy(place = "Магнит")) }
+        val otherMonth = exp(300, 10, null, ExpenseItem(name = "Чудо творожок ванильный"))
+            .let { it.copy(expense = it.expense.copy(timestamp = it.expense.timestamp - 31L * 24 * 60 * 60 * 1000)) }
+        val answer = ask(
+            "Сколько чудо молока мы купили в Пятёрочке в ноябре?",
+            listOf(inScope, otherShop, otherMonth),
+        )
+        val reply = answer.direct.orEmpty()
+        assertTrue(reply, "Чудо коктейль молочный шоколад" in reply)
+        assertTrue(reply, "йогурт" !in reply && "творожок" !in reply)
+        assertEquals(null, answer.headline)
+        assertTrue(answer.expenseIds.isEmpty())
+    }
+
+    @Test
+    fun unknownProductDoesNotBecomeTotalSpendingEvenOffline() {
+        val answer = ask("Сколько мы купили фисташкового крема?", rows, ai = null)
+        assertTrue(answer.direct.orEmpty(), "фисташкового крема" in answer.direct.orEmpty())
+        assertTrue(answer.expenseIds.isEmpty())
+        assertEquals(null, answer.headline)
+    }
+
+    @Test
+    fun unscopedSpendingQuestionStillReturnsMoney() {
+        val answer = ask("Сколько потратили в ноябре?", rows)
+        assertTrue(answer.headline.orEmpty(), answer.headline.orEmpty().endsWith("₽"))
+        assertEquals(rows.asReversed().map { it.expense.id }, answer.expenseIds)
+    }
 }

@@ -143,7 +143,7 @@ object AssistantEngine {
         if (q.intent == Intents.SET_PLAN && filter.names.isEmpty() && filter.unknownNames.isNotEmpty()) {
             return setPlanNewSub(q, ctx, period, spending, filter.unknownNames.first())
         }
-        AssistantItemSuggestions.find(filter, spending, from..to, ctx)?.let { return it }
+        AssistantItemSuggestions.find(q, filter, spending, from..to, ctx)?.let { return it }
         filter.unresolvedAnswer(spending, ctx)?.let { return it }
 
         fun rowsIn(a: LocalDate, b: LocalDate) = spending.filter { r ->
@@ -158,7 +158,7 @@ object AssistantEngine {
         val picked = Picked(rows, filter, ctx)
 
         return when (q.intent) {
-            Intents.TOTAL -> AssistantSpending.total(picked, filter.isEmpty, span, subject, base)
+            Intents.TOTAL -> AssistantSpending.total(picked, filter.isEmpty, span, subject, base, quantityFirst = q.purchasedItem != null)
 
             Intents.TOP -> AssistantSpending.top(picked, (q.limit ?: DEFAULT_TOP).coerceIn(1, MAX_TOP), span, subject, base)
 

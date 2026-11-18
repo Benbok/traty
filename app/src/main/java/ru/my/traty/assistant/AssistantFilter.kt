@@ -111,11 +111,15 @@ internal class Filter(
             categories: List<CategoryWithSubs>,
             expenseItems: Map<Long, List<ExpenseItem>> = emptyMap(),
         ): Filter {
+            val placeFromQuery = q.place?.trim()?.lowercase(RU)?.takeIf { it.isNotEmpty() }
+            q.purchasedItem?.takeIf { q.intent == Intents.TOTAL && it.isNotBlank() }?.let { item ->
+                return Filter(emptySet(), emptyList(), placeFromQuery, itemTerms = listOf(item), qualifiedItem = ItemFlavor.parse(item))
+            }
             val known = HashSet<String>()
             rows.forEach { r -> known += r.categoryName.lowercase(RU); r.subcategoryName?.let { known += it.lowercase(RU) } }
             categories.forEach { c -> known += c.category.name.lowercase(RU); c.subs.forEach { known += it.name.lowercase(RU) } }
             val asked = q.categories.map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase(RU) }
-            var place = q.place?.trim()?.lowercase(RU)?.takeIf { it.isNotEmpty() }
+            var place = placeFromQuery
             val found = HashSet<String>()
             // ИИ записал категорию местом («кофе»), а таких мест в записях нет — считаем по категории
             place?.let { p ->

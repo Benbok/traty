@@ -81,34 +81,54 @@ internal class ItemFlavor private constructor(
 
 internal object AssistantItemSuggestions {
     fun find(
+        query: AssistantQuery,
         filter: Filter,
         spending: List<ExpenseWithCategory>,
         dates: ClosedRange<LocalDate>,
         ctx: AssistantContext,
     ): AssistantData? {
         if (filter.names.isNotEmpty() || filter.terms.isNotEmpty() || filter.unknownNames.isNotEmpty()) return null
-        val item = filter.qualifiedItem ?: return null
-        val term = filter.itemTerms.single()
+        val item = filter.qualifiedItem
+        if (item == null && (query.intent != Intents.TOTAL || query.purchasedItem.isNullOrBlank())) return null
+        val term = filter.itemTerms.singleOrNull() ?: return null
         val rows = spending.filter { row ->
             day(row.expense.timestamp, ctx.zone) in dates && (filter.place?.let(row::mentions) ?: true)
         }
         fun positions(row: ExpenseWithCategory) = ctx.expenseItems[row.expense.id].orEmpty()
+        val range = span(dates.start, dates.endInclusive)
+        val missing = "За $range не нашёл в чеках «$term»."
+        if (item == null) {
+            if (rows.any { row -> filter.itemPart(row, positions(row)) != null }) return null
+            val similar = similarNames(term, rows.asSequence().flatMap { positions(it).asSequence() })
+            val text = if (similar.isEmpty()) missing else
+                "$missing Нашёл похожие позиции: ${similar.joinToString { "«$it»" }}. Уточните название товара в вопросе."
+            return AssistantData(facts = "", direct = text)
+        }
         if (rows.any { row -> positions(row).any(item::confirmedBy) }) return null
 
         val matchedRows = rows.mapNotNull { row ->
             AssistantItems.partForPositions(row, positions(row), item::canSuggest)?.let { row to it }
         }
-        val range = span(dates.start, dates.endInclusive)
-        val missing = "За $range не нашёл в чеках «$term»."
         if (matchedRows.isEmpty()) return AssistantData(facts = "", direct = missing)
 
         val subject = "«${item.baseName}» без указания вкуса"
         val picked = Picked(matchedRows.map { it.first }, matchedRows.associate { (row, part) -> row.expense.id to part }, ctx.zone)
-        val summary = AssistantSpending.total(picked, unfiltered = false, range, subject, base = "")
+        val summary = AssistantSpending.total(picked, unfiltered = false, range, subject, base = "", quantityFirst = query.purchasedItem != null)
         return AssistantData(
             facts = "",
             direct = "$missing Есть позиции «${item.baseName}» без указания вкуса. Показать расчёт по ним?",
             itemSuggestion = ItemSuggestion(summary.facts.trim(), summary.headline, summary.caption, summary.expenseIds),
         )
+    }
+
+    private fun similarNames(term: String, items: Sequence<ExpenseItem>): List<String> {
+        val words = SearchText.queryWords(PackSize.strip(term)).filter { it.length >= 4 }.distinct()
+        if (words.size < 2) return emptyList()
+        return items
+            .map { it.name.trim() }
+            .filter { name -> words.count { SearchText.matches(it, listOf(name)) } >= words.size - 1 }
+            .distinctBy(::fold)
+            .take(3)
+            .toList()
     }
 }
