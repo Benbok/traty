@@ -147,4 +147,32 @@ class AssistantItemQuantityTest {
         assertTrue(answer.headline.orEmpty(), answer.headline.orEmpty().endsWith("₽"))
         assertEquals(rows.asReversed().map { it.expense.id }, answer.expenseIds)
     }
+
+    @Test
+    fun fiveWaysToAskForTheChocolateDrink() {
+        val chocolate = exp(
+            500, 10, null,
+            ExpenseItem(name = "Чудо Коктейль молочный шоколад 3%", priceKopecks = 19_996, quantityMilli = 4_000, unit = "шт"),
+            ExpenseItem(name = "Хлеб", priceKopecks = 30_004),
+        )
+        val secondLabel = exp(
+            180, 11, null,
+            ExpenseItem(name = "Чудо коктейль молочный стерилизованный с шоколадом 200 мл", quantityMilli = 3_000, unit = "шт"),
+        )
+        val otherProduct = exp(200, 12, null, ExpenseItem(name = "Чудо йогурт ванильный"))
+        val expenses = listOf(chocolate, secondLabel, otherProduct)
+        val expected = setOf(chocolate.expense.id, secondLabel.expense.id)
+
+        for (phrase in listOf("шоколадное молочко", "чудо молоко", "шоколадное молоко", "чудо коктель")) {
+            val answer = ask("Сколько $phrase мы купили?", expenses)
+            assertEquals(phrase, expected, answer.itemSuggestions.flatMap { it.expenseIds }.toSet())
+            assertTrue(phrase, answer.expenseIds.isEmpty())
+            assertEquals(phrase, setOf("4 шт", "3 шт · 600 мл"), answer.itemSuggestions.map { it.headline }.toSet())
+        }
+
+        val broad = ask("Сколько молочный коктейль мы купили?", expenses)
+        assertEquals(expected, broad.expenseIds.toSet())
+        assertTrue(broad.headline.orEmpty(), broad.headline.orEmpty().startsWith("7 шт"))
+        assertTrue(broad.itemSuggestions.isEmpty())
+    }
 }

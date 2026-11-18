@@ -23,12 +23,13 @@ internal class ItemFlavor private constructor(
     private val pack: Pack?,
 ) {
     fun confirmedBy(item: ExpenseItem): Boolean {
-        val words = SearchText.queryWords(item.name)
-        return !negation.containsMatchIn(fold(item.name)) &&
-            flavor in flavorsIn(words) &&
-            SearchText.matches(baseName, listOf(item.name)) &&
-            samePack(item)
+        return hasRequestedFlavor(item) && SearchText.matches(baseName, listOf(item.name))
     }
+
+    fun hasRequestedFlavor(item: ExpenseItem): Boolean =
+        !negation.containsMatchIn(fold(item.name)) &&
+            flavor in flavorsIn(SearchText.queryWords(item.name)) &&
+            samePack(item)
 
     fun canSuggest(item: ExpenseItem): Boolean {
         // Для подсказки требуем совпадения названий в обе стороны: добавочные слова
@@ -102,26 +103,32 @@ internal object AssistantItemSuggestions {
         fun positions(row: ExpenseWithCategory) = ctx.expenseItems[row.expense.id].orEmpty()
         val range = span(dates.start, dates.endInclusive)
         val missing = "За $range не нашёл в чеках «$term»."
-        if (item == null) {
-            if (quantity && rows.any { row -> filter.itemPart(row, positions(row)) != null }) return null
-            val similar = similarNames(term, rows.asSequence().flatMap { positions(it).asSequence() })
-            val options = similar.map { name ->
+        val positionsInScope = rows.asSequence().flatMap { positions(it).asSequence() }
+        fun offer(names: List<String>): AssistantData {
+            val choices = names.map { name ->
                 val normalized = fold(name)
                 val matchedRows = rows.mapNotNull { row ->
                     AssistantItems.partForPositions(row, positions(row)) { fold(it.name) == normalized }?.let { row to it }
                 }
                 summarize(matchedRows, ctx, range, "«$name»", quantityFirst = quantity).copy(itemName = name)
             }
-            if (options.isEmpty() && !quantity) return null
-            val text = if (options.isEmpty()) missing else "$missing Возможно, вы имели в виду один из этих товаров?"
-            return AssistantData(facts = "", direct = text, itemSuggestions = options)
+            val text = if (choices.isEmpty()) missing else "$missing Возможно, вы имели в виду один из этих товаров?"
+            return AssistantData(facts = "", direct = text, itemSuggestions = choices)
+        }
+
+        if (item == null) {
+            if (quantity && rows.any { row -> filter.itemPart(row, positions(row)) != null }) return null
+            val similar = similarNames(term, positionsInScope)
+            return if (similar.isEmpty() && !quantity) null else offer(similar)
         }
         if (rows.any { row -> positions(row).any(item::confirmedBy) }) return null
 
         val matchedRows = rows.mapNotNull { row ->
             AssistantItems.partForPositions(row, positions(row), item::canSuggest)?.let { row to it }
         }
-        if (matchedRows.isEmpty()) return AssistantData(facts = "", direct = missing)
+        if (matchedRows.isEmpty()) {
+            return offer(similarNames(item.baseName, positionsInScope.filter(item::hasRequestedFlavor)))
+        }
 
         val subject = "«${item.baseName}» без указания вкуса"
         return AssistantData(
@@ -145,12 +152,20 @@ internal object AssistantItemSuggestions {
 
     private fun similarNames(term: String, items: Sequence<ExpenseItem>): List<String> {
         val words = SearchText.queryWords(PackSize.strip(term)).filter { it.length >= 4 }.distinct()
-        if (words.size < 2) return emptyList()
-        return items
-            .map { it.name.trim() }
-            .filter { name -> words.count { SearchText.matches(it, listOf(name)) } >= words.size - 1 }
-            .distinctBy(::fold)
-            .take(3)
-            .toList()
+        if (words.isEmpty()) return emptyList()
+        val candidates = items.map { it.name.trim() }.distinctBy(::fold).mapNotNull { name ->
+            val title = SearchText.queryWords(name)
+            val scores = words.map { word ->
+                when {
+                    SearchText.matches(word, listOf(name)) -> 2
+                    word.length >= 5 && title.any { it.length >= 5 && it.startsWith(word.take(4)) } -> 1
+                    else -> 0
+                }
+            }
+            // Одно слово может отличаться, но основная часть запроса должна дать совпадение.
+            name.takeIf { scores.count { it > 0 } >= maxOf(1, words.size - 1) }?.let { it to scores.sum() }
+        }.toList()
+        val best = candidates.maxOfOrNull { it.second } ?: return emptyList()
+        return candidates.asSequence().filter { it.second == best }.map { it.first }.take(3).toList()
     }
 }
