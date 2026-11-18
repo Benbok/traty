@@ -104,7 +104,7 @@ internal object AssistantItemSuggestions {
         val range = span(dates.start, dates.endInclusive)
         val missing = "За $range не нашёл в чеках «$term»."
         val positionsInScope = rows.asSequence().flatMap { positions(it).asSequence() }
-        fun offer(names: List<String>): AssistantData {
+        fun offer(names: List<String>, eligible: Sequence<ExpenseItem>): AssistantData {
             fun calculate(selected: List<String>): ItemSuggestion {
                 val normalized = selected.map(::fold).toSet()
                 val matchedRows = rows.mapNotNull { row ->
@@ -115,24 +115,17 @@ internal object AssistantItemSuggestions {
             }
 
             val choices = names.map { name -> calculate(listOf(name)).copy(itemName = name) }
-            // Поиск предлагает до трёх названий. Расчёт каждой комбинации проходит по строкам чеков один раз.
-            val combinations = names.indices.fold(listOf(emptySet<Int>())) { subsets, index ->
-                subsets + subsets.map { it + index }
-            }.filter { it.size > 1 }.associateWith { indices -> calculate(indices.map(names::get)) }
-            val text = when (choices.size) {
-                0 -> missing
-                1 -> "$missing Возможно, вы имели в виду этот товар?"
-                else -> "$missing Отметьте один или несколько подходящих товаров."
-            }
+            val catalog = eligible.map { it.name.trim() }.filter { it.isNotEmpty() }.distinctBy(::fold).take(49).toList()
+            val candidates = if (catalog.size <= 48) catalog else names
             return AssistantData(
-                facts = "", direct = text, itemSuggestions = choices, combinedItemSuggestions = combinations,
+                facts = "", direct = missing, itemSuggestions = choices, candidateNames = candidates, calculateItems = ::calculate,
             )
         }
 
         if (item == null) {
             if (quantity && rows.any { row -> filter.itemPart(row, positions(row)) != null }) return null
             val similar = similarNames(term, positionsInScope)
-            return if (similar.isEmpty() && !quantity) null else offer(similar)
+            return offer(similar, positionsInScope)
         }
         if (rows.any { row -> positions(row).any(item::confirmedBy) }) return null
 
@@ -140,13 +133,14 @@ internal object AssistantItemSuggestions {
             AssistantItems.partForPositions(row, positions(row), item::canSuggest)?.let { row to it }
         }
         if (matchedRows.isEmpty()) {
-            return offer(similarNames(item.baseName, positionsInScope.filter(item::hasRequestedFlavor)))
+            val eligible = positionsInScope.filter(item::hasRequestedFlavor)
+            return offer(similarNames(item.baseName, eligible), eligible)
         }
 
         val subject = "«${item.baseName}» без указания вкуса"
         return AssistantData(
             facts = "",
-            direct = "$missing Есть позиции «${item.baseName}» без указания вкуса. Показать расчёт по ним?",
+            direct = "$missing Есть позиции «${item.baseName}» без указания вкуса. Расчёт по этим позициям приведён отдельно.",
             itemSuggestions = listOf(summarize(matchedRows, ctx, range, subject, quantityFirst = quantity)),
         )
     }

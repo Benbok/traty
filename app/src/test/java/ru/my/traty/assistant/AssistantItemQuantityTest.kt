@@ -113,7 +113,7 @@ class AssistantItemQuantityTest {
             listOf(inScope, otherShop, otherMonth),
         )
         val reply = answer.direct.orEmpty()
-        assertTrue(reply, "Возможно, вы имели в виду" in reply)
+        assertTrue(reply, "не нашёл в чеках" in reply)
         val choice = answer.itemSuggestions.single()
         assertEquals("Чудо коктейль молочный шоколад", choice.itemName)
         assertEquals(listOf(inScope.expense.id), choice.expenseIds)
@@ -157,10 +157,11 @@ class AssistantItemQuantityTest {
             ExpenseItem(name = "Хлеб", priceKopecks = 12_007),
         )
         val answer = ask("Сколько шоколадного молока я купил?", listOf(receipt))
-        val selected = answer.combinedItemSuggestions.getValue(setOf(0, 1))
+        val indexes = answer.candidateNames.indices.filter { answer.candidateNames[it].startsWith("Чудо") }
+        val selected = ProductResolution.answer(answer, """{"status":"matched","ids":${indexes}}""")
         assertEquals("7 шт · 600 мл", selected.headline)
-        assertTrue(selected.text, "379,93 ₽" in selected.text)
-        assertTrue(selected.text, "У 4 шт. объём упаковки не указан." in selected.text)
+        assertTrue(selected.direct.orEmpty(), "379,93 ₽" in selected.direct.orEmpty())
+        assertTrue(selected.direct.orEmpty(), "У 4 шт. объём упаковки не указан." in selected.direct.orEmpty())
         assertEquals(listOf(receipt.expense.id), selected.expenseIds)
     }
 

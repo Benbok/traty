@@ -155,7 +155,6 @@ fun AssistantScreen(
                 if (m.fromUser) UserBubble(m.text) else AssistantBubble(
                     m,
                     onShowExpenses = { vm.showExpenses(m.expenseIds) },
-                    onShowItemSuggestion = { vm.showItemSuggestion(m.id, it) },
                     onApplyPlan = { vm.applyPlan(m.id, it) },
                     onApplySubscriptions = { vm.applySubscriptions(m.id, it) },
                     onApplyDebts = { vm.applyDebts(m.id, it) },
@@ -242,7 +241,6 @@ private fun UserBubble(text: String) {
 private fun AssistantBubble(
     m: ChatMessage,
     onShowExpenses: () -> Unit,
-    onShowItemSuggestion: (Set<Int>) -> Unit,
     onApplyPlan: (List<PlanProposal>) -> Unit,
     onApplySubscriptions: (List<SubscriptionChange>) -> Unit,
     onApplyDebts: (List<DebtChange>) -> Unit,
@@ -285,9 +283,6 @@ private fun AssistantBubble(
             if (m.expenseChanges.isNotEmpty()) {
                 Spacer(Modifier.height(TratyTheme.spacing.sm))
                 ExpenseChanges(m, onApply = onApplyExpenses, onUndo = onUndoExpenses)
-            }
-            if (m.itemSuggestions.isNotEmpty()) {
-                AssistantItemChoices(m.id, m.itemSuggestions, onShowItemSuggestion)
             }
             if (m.expenseIds.isNotEmpty() || m.sentFacts != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {

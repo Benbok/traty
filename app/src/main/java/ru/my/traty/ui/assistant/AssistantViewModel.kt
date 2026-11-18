@@ -25,7 +25,7 @@ import ru.my.traty.assistant.ExpenseChange
 import ru.my.traty.assistant.AssistantAnswers
 import ru.my.traty.assistant.AssistantData
 import ru.my.traty.assistant.Intents
-import ru.my.traty.assistant.ItemSuggestion
+import ru.my.traty.assistant.ProductResolution
 import ru.my.traty.assistant.AssistantFallback
 import ru.my.traty.assistant.Balance
 import ru.my.traty.assistant.AssistantEngine
@@ -80,8 +80,6 @@ data class ChatMessage(
     val expenseChanges: List<ExpenseChange> = emptyList(),
     val expensesApplied: Int? = null,
     val expensesUndone: Boolean = false,
-    val itemSuggestions: List<ItemSuggestion> = emptyList(),
-    val combinedItemSuggestions: Map<Set<Int>, ItemSuggestion> = emptyMap(),
 )
 
 /**
@@ -168,7 +166,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 val budgets = c.db.budgets().getAll()
                 val debts = c.debts.activeWithPayments(zone).map { (d, paid) -> DebtWithPaid(d, paid) }
-                val data = withContext(Dispatchers.Default) {
+                val calculated = withContext(Dispatchers.Default) {
                     val expenses = c.db.expenses().getAllWithCategory()
                     val expenseItems = c.db.expenseItems().getForAll(expenses.map { it.expense.id })
                         .groupBy { it.expenseId }
@@ -187,6 +185,16 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     )
                     AssistantEngine.run(query, ctx)
                 }
+                val matching = ProductResolution.prompt(question, calculated)
+                val sentMatching = matching?.takeIf { client != null && !offline }
+                val decision = if (sentMatching != null && client != null) try {
+                    client.complete(ProductResolution.SYSTEM, sentMatching, jsonMode = true)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                } else null
+                val data = withContext(Dispatchers.Default) { ProductResolution.answer(calculated, decision) }
                 val remembered = data.expenseIds.ifEmpty { data.expenseChanges.map { it.id } }
                 history.lastIndex.takeIf { it >= 0 }?.let { history[it] = history[it].copy(expenseIds = remembered) }
                 val template = AssistantAnswers.template(query.intent, data)
@@ -203,14 +211,12 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     expenseIds = data.expenseIds,
                     sentFacts = if (client == null || offline) null else AssistantAnswers.sent(
                         stepOneUser + "\n" + housingCatalog, categories.map { it.category.name }, data.facts.takeIf { asked },
-                    ),
+                    ) + sentMatching?.let { "\nСопоставление товаров:\n$it" }.orEmpty(),
                     planProposals = data.planProposals,
                     planMonth = data.planMonth,
                     subscriptionChanges = data.subscriptionChanges,
                     debtChanges = data.debtChanges,
                     expenseChanges = data.expenseChanges,
-                    itemSuggestions = data.itemSuggestions,
-                    combinedItemSuggestions = data.combinedItemSuggestions,
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -364,25 +370,6 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
         c.db.categories().getActiveWithSubs().firstOrNull { it.category.id == categoryId }
             ?.subs?.firstOrNull { it.name.equals(name, ignoreCase = true) }?.let { return it.id }
         return c.categories.addSubcategory(categoryId, name)
-    }
-
-    fun showItemSuggestion(messageId: Long, selected: Set<Int>) {
-        val index = messages.indexOfFirst { it.id == messageId }
-        val message = messages.getOrNull(index) ?: return
-        val suggestion = if (selected.size == 1) message.itemSuggestions.getOrNull(selected.single())
-            else message.combinedItemSuggestions[selected]
-        if (suggestion == null) return
-        if (index == messages.lastIndex && history.isNotEmpty()) {
-            history[history.lastIndex] = history.last().copy(expenseIds = suggestion.expenseIds)
-        }
-        messages[index] = message.copy(
-            text = suggestion.text,
-            headline = suggestion.headline,
-            caption = suggestion.caption,
-            expenseIds = suggestion.expenseIds,
-            itemSuggestions = emptyList(),
-            combinedItemSuggestions = emptyMap(),
-        )
     }
 
     fun showExpenses(ids: List<Long>) = viewModelScope.launch {
