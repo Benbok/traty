@@ -22,6 +22,7 @@ object QuestionDates {
 
     /** «за всё время»: дальше движок заменит эту дату первой записью. */
     val ALL_TIME: LocalDate = LocalDate.of(2000, 1, 1)
+    internal const val ALL_TIME_WORDS = """за\s+(?:вс[её]\s+время|всю\s+историю|весь\s+период)"""
 
     fun apply(question: String, q: AssistantQuery, today: LocalDate, startDay: Int): AssistantQuery {
         if (q.intent !in DATED) return q
@@ -194,7 +195,7 @@ object QuestionDates {
                 val y = m.groupValues[1].toInt()
                 if (y in 2000..today.year) DateSpan(LocalDate.of(y, 1, 1), LocalDate.of(y, 12, 31)) else null
             },
-            Rule("за\\s+вс[её]\\s+время|за\\s+всю\\s+историю") { DateSpan(ALL_TIME, today) },
+            Rule(ALL_TIME_WORDS) { DateSpan(ALL_TIME, today) },
             // «в октябре», «октябрь 2025», «в марте прошлого года»
             Rule("$MONTH$year(\\s+прошлого\\s+года)?") { m ->
                 val month = monthOf(m.groupValues[1])

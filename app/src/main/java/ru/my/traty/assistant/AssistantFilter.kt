@@ -32,7 +32,7 @@ internal fun stems(text: String): List<String> =
 private val PREPOSITIONS = setOf("в", "во", "на", "из", "у", "за", "по", "до", "от", "со")
 
 /** Фраза есть в месте или заметке траты: все основы слов встречаются в тексте, а «Озон» находит и «Ozon». */
-private fun ExpenseWithCategory.mentions(phrase: String): Boolean {
+internal fun ExpenseWithCategory.mentions(phrase: String): Boolean {
     val words = stems(phrase)
     if (words.isEmpty()) return false
     val text = fold(listOfNotNull(expense.place, expense.note).joinToString(" "))
@@ -52,6 +52,7 @@ internal class Filter(
     val terms: List<String> = emptyList(),
     /** Термины, которые нашлись в именах товарных позиций (а не в месте/заметке и не в категории). */
     val itemTerms: List<String> = emptyList(),
+    val qualifiedItem: ItemFlavor? = null,
 ) {
     val isEmpty get() = names.isEmpty() && terms.isEmpty() && place == null && itemTerms.isEmpty()
 
@@ -63,8 +64,11 @@ internal class Filter(
     }
 
     /** Какая часть траты относится к товарам из вопроса; null — вопрос не про товар или трата прошла целиком. */
-    fun itemPart(r: ExpenseWithCategory, items: List<ExpenseItem>): ItemPart? =
-        if (itemTerms.isEmpty() || wholeMatch(r)) null else AssistantItems.part(r, items, itemTerms) { r.mentions(it) }
+    fun itemPart(r: ExpenseWithCategory, items: List<ExpenseItem>): ItemPart? {
+        if (itemTerms.isEmpty() || wholeMatch(r)) return null
+        return if (qualifiedItem != null) AssistantItems.partForPositions(r, items, qualifiedItem::confirmedBy)
+        else AssistantItems.part(r, items, itemTerms) { r.mentions(it) }
+    }
 
     /** Трата попадает в ответ: по категории, по слову в месте или заметке или по товару внутри покупки. */
     fun matches(r: ExpenseWithCategory, items: List<ExpenseItem> = emptyList()): Boolean {
@@ -88,6 +92,12 @@ internal class Filter(
         place?.let { "«$it»" },
     ).joinToString(", ").ifEmpty { null }
 
+    fun unresolvedAnswer(rows: List<ExpenseWithCategory>, ctx: AssistantContext): AssistantData? {
+        if (unknownNames.isEmpty() || names.isNotEmpty() || terms.isNotEmpty() || itemTerms.isNotEmpty()) return null
+        val known = rows.map { it.categoryName }.distinct().sorted().joinToString(", ")
+        return AssistantData(facts = header(ctx) + "Категорий «${unknownNames.joinToString("», «")}» в записях нет. Есть категории: $known.")
+    }
+
     companion object {
         /** В этих вопросах незнакомое слово ищем в местах и заметках; в плане трат оно — новая подкатегория. */
         private val TEXT_SEARCH = setOf(
@@ -109,7 +119,11 @@ internal class Filter(
             val found = HashSet<String>()
             // ИИ записал категорию местом («кофе»), а таких мест в записях нет — считаем по категории
             place?.let { p ->
-                val asCategory = if (p in known) p else closest(p, known)
+                val asCategory = when {
+                    p in known -> p
+                    q.intent == Intents.TOTAL && ItemFlavor.parse(p) != null -> null
+                    else -> closest(p, known)
+                }
                 if (asCategory != null && rows.none { it.mentions(p) }) { found += asCategory; place = null }
             }
             val terms = ArrayList<String>()
@@ -117,22 +131,34 @@ internal class Filter(
             // ИИ записал товар местом («шоколадки»), а такого места нет — ищем товар в покупках
             place?.let { p ->
                 val isPlace = rows.any { r -> r.expense.place?.let { stems(p).all { w -> w in fold(it) } } == true }
-                if (q.intent in TEXT_SEARCH && !isPlace && hasItem(expenseItems, p)) { itemTerms += p; place = null }
+                if (q.intent in TEXT_SEARCH && !isPlace &&
+                    (hasItem(expenseItems, p) || (q.intent == Intents.TOTAL && ItemFlavor.parse(p) != null))
+                ) {
+                    itemTerms += p
+                    place = null
+                }
             }
             val missing = ArrayList<String>()
             for (a in asked) {
                 val n = a.lowercase(RU)
-                val hit = if (n in known) n else closest(n, known)
+                val hit = when {
+                    n in known -> n
+                    q.intent == Intents.TOTAL && ItemFlavor.parse(a) != null -> null
+                    else -> closest(n, known)
+                }
                 when {
                     hit != null -> found += hit
                     // Товар из списков покупок проверяем раньше заметок: в заметке такой покупки тот же список,
                     // и по ней засчиталась бы вся сумма чека, а не цена товара
+                    q.intent == Intents.TOTAL && ItemFlavor.parse(a) != null -> itemTerms += n
                     q.intent in TEXT_SEARCH && hasItem(expenseItems, a) -> itemTerms += n
                     q.intent in TEXT_SEARCH && rows.any { it.mentions(a) } -> terms += n
                     else -> missing += a
                 }
             }
-            return Filter(found, missing, place, terms, itemTerms.distinct())
+            val distinctItems = itemTerms.distinct()
+            val qualifiedItem = distinctItems.singleOrNull()?.takeIf { q.intent == Intents.TOTAL }?.let(ItemFlavor::parse)
+            return Filter(found, missing, place, terms, distinctItems, qualifiedItem)
         }
 
         private fun hasItem(expenseItems: Map<Long, List<ExpenseItem>>, phrase: String) =
