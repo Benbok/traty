@@ -37,6 +37,7 @@ object QuestionRules {
     /** Запрос по ключевым словам; null — в вопросе нет ничего про деньги. */
     fun guess(question: String, categories: List<CategoryWithSubs>): AssistantQuery? {
         val text = fold(question)
+        ProductRanking.guess(text)?.let { return it }
         ItemFlavor.allTimeSubject(text)?.let { return AssistantQuery(intent = Intents.TOTAL, categories = listOf(it)) }
         val item = PurchasedItemQuestion.itemIn(text)
         val intent = RULES.firstOrNull { it.regex.containsMatchIn(text) }?.intent
@@ -96,6 +97,9 @@ object QuestionRules {
         previous: AssistantQuery? = null,
         categories: List<CategoryWithSubs> = emptyList(),
     ): AssistantQuery {
+        if (guessed?.intent == Intents.PRODUCT_RANK || fromAi?.intent == Intents.PRODUCT_RANK) {
+            return ProductRanking.scope(question, fromAi, guessed, previous, today, startDay)
+        }
         val base = fromAi?.takeIf { it.intent != Intents.UNKNOWN } ?: guessed ?: fromAi ?: AssistantQuery(intent = Intents.UNKNOWN)
         val qualifiedSubject = ItemFlavor.allTimeSubject(question)
         val item = guessed?.purchasedItem

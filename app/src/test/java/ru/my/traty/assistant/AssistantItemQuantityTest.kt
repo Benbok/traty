@@ -192,4 +192,32 @@ class AssistantItemQuantityTest {
         assertTrue(broad.headline.orEmpty(), broad.headline.orEmpty().startsWith("7 шт"))
         assertTrue(broad.itemSuggestions.isEmpty())
     }
+
+    @Test
+    fun productRankChangesMetricAndPreservesReferencedDates() {
+        val bread = ExpenseItem(name = "Хлеб", quantityMilli = 1_000, unit = "шт", priceKopecks = 5_000)
+        val yogurt = ExpenseItem(name = "Йогурт", quantityMilli = 10_000, unit = "шт", priceKopecks = 30_000)
+        val cheese = ExpenseItem(name = "Сыр", quantityMilli = 1_000, unit = "шт", priceKopecks = 50_000)
+        val receipts = listOf(exp(100, 4, null, bread, bread), exp(100, 8, null, bread), exp(800, 9, null, yogurt, cheese))
+        val ctx = AssistantContext(receipts, emptyList(), emptyList(), today, 1, ZoneOffset.UTC, categories = categories, expenseItems = items)
+        fun resolve(question: String, previous: AssistantQuery? = null) = QuestionRules.resolve(
+            question, AssistantQuery(Intents.TOP), QuestionRules.guess(question, categories), today, 1, previous, categories,
+        )
+
+        val popular = resolve("Какие самые популярные продукты из трат у меня были в принципе за вот этот весь период?",
+            AssistantQuery(Intents.TOTAL, from = "2026-11-01", to = "2026-11-08"))
+        assertEquals(Intents.PRODUCT_RANK, popular.intent)
+        assertEquals("2026-11-08", popular.to)
+        assertEquals(null, popular.place)
+        val frequency = AssistantEngine.run(popular, ctx).direct.orEmpty()
+        assertTrue(frequency, "1. Хлеб — покупок — 2 · 3 шт" in frequency)
+        assertTrue(frequency, "Йогурт" !in frequency)
+
+        val byPieces = AssistantEngine.run(resolve("Чего купил больше всего в штуках?"), ctx).direct.orEmpty()
+        assertTrue(byPieces, "1. Йогурт" in byPieces)
+        val bySpending = AssistantEngine.run(resolve("На какие товары ушло больше всего денег?"), ctx).direct.orEmpty()
+        assertTrue(bySpending, "1. Сыр" in bySpending)
+        assertEquals(QuestionDates.ALL_TIME.toString(), resolve("Что я покупал чаще всего за всё время?").from)
+        assertEquals("пятерочке", resolve("Какие товары чаще всего покупал в Пятёрочке?").place)
+    }
 }

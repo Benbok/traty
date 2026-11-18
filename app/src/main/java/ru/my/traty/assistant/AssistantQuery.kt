@@ -41,6 +41,7 @@ data class AssistantQuery(
     val housing: ru.my.traty.assistant.apartments.ApartmentQuestion? = null,
     /** Название товара в явном вопросе о количестве купленного. Заполняется приложением. */
     val purchasedItem: String? = null,
+    val productRankBy: String? = null,
 )
 
 object Intents {
@@ -50,6 +51,7 @@ object Intents {
     const val RESOURCE_TREND = "resource_trend"
     const val TOTAL = "total"
     const val TOP = "top"
+    const val PRODUCT_RANK = "product_rank"
     const val BREAKDOWN = "breakdown"
     const val PLACES = "places"
     const val COMPARE = "compare"
