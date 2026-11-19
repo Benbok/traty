@@ -13,6 +13,15 @@ data class WhatsNewEntry(val version: String, val items: List<WhatsNewItem>)
 object WhatsNew {
     val entries: List<WhatsNewEntry> = listOf(
         WhatsNewEntry(
+            version = "0.3.6",
+            items = listOf(
+                WhatsNewItem("У стандартных категорий расходов появились новые значки. Они также видны на диаграмме в «Статистике».", "stats"),
+                WhatsNewItem("Обновлены значки квартир, ресурсов и счётчиков.", "apartments"),
+                WhatsNewItem("Ассистент объединяет разные написания одного товара в чеках и точнее определяет, какие товары покупали чаще всего.", "assistant"),
+                WhatsNewItem("При подсчёте товара ассистент учитывает его и в чеках с другими покупками за выбранный период и в указанном магазине.", "assistant"),
+            ),
+        ),
+        WhatsNewEntry(
             version = "0.3.5",
             items = listOf(
                 WhatsNewItem("В ассистенте появился топ товаров из чеков по частоте покупок, количеству штук или сумме трат. Можно указать период и магазин.", "assistant"),
