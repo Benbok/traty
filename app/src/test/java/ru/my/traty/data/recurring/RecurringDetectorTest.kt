@@ -155,6 +155,14 @@ class RecurringDetectorTest {
     }
 
     @Test
+    fun regularContributionsAreIgnored() {
+        val items = (0 until 3).map {
+            exp(LocalDate.of(2026, 9 + it, 5), 39_900, "Отложено на наушники", source = ExpenseSource.PURCHASE_CONTRIBUTION)
+        }
+        assertTrue(detect(items).isEmpty())
+    }
+
+    @Test
     fun twoPurchasesOnOneDayCountOnce() {
         val items = monthly(3) + exp(LocalDate.of(2026, 11, 5), 39_900)
         assertEquals(3, detect(items).single().charges)

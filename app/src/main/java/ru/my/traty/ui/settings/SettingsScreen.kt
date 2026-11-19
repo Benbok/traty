@@ -1,7 +1,5 @@
 package ru.my.traty.ui.settings
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Column
@@ -20,11 +18,6 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import android.Manifest
-import android.os.Build
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.platform.LocalContext
-import ru.my.traty.data.recurring.canNotify
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -210,39 +203,7 @@ fun SettingsScreen(
             }
         }
 
-        // Секция: Итог дня
-        val digestOn = saved.dailyDigestEnabled
-        val context = LocalContext.current
-        val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-        // Android 13+: без разрешения вечернее уведомление не покажется; спрашиваем, когда итог включён
-        LaunchedEffect(digestOn) {
-            if (digestOn && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !context.canNotify()) {
-                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
-        TratyCard(
-            modifier = Modifier.fillMaxWidth(),
-            backgroundColor = TratyTheme.colors.surface,
-        ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .toggleable(value = digestOn, role = Role.Switch, onValueChange = { vm.setDailyDigestEnabled(it) })
-                    .padding(TratyTheme.spacing.lg),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Итог дня в 20:00", style = TratyTheme.typography.titleMedium)
-                    Spacer(Modifier.height(TratyTheme.spacing.xs))
-                    Text(
-                        "Вечером приложение подскажет, потратили вы сегодня меньше или больше обычного, и сколько поступило.",
-                        style = TratyTheme.typography.bodySmall,
-                        color = TratyTheme.colors.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = digestOn, onCheckedChange = null)
-            }
-        }
+        DailyDigestSettingsCard(enabled = saved.dailyDigestEnabled, time = saved.dailyDigestTime)
 
         // Секция: Метки на тратах
         val labelsOn = saved.labelsEnabled

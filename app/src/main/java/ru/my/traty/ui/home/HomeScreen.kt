@@ -1,61 +1,48 @@
 package ru.my.traty.ui.home
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ReceiptLong
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.InputChip
-import androidx.compose.material3.InputChipDefaults
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.ui.reconcile.ReconcileCard
 import ru.my.traty.ui.reconcile.ReconcilePromptViewModel
+import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.ExpenseWithCategory
+import ru.my.traty.data.isUserEditable
 import ru.my.traty.data.Income
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.rememberKeyboardOpen
 import ru.my.traty.ui.capture.RecordState
-import ru.my.traty.ui.designsystem.components.TratyHeaderCard
-import ru.my.traty.ui.designsystem.components.TratyIconButton
-import ru.my.traty.ui.designsystem.components.TratyMonthPicker
-import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.budget.PlanSummaryCard
 import ru.my.traty.ui.weekly.WeeklyTasksHomeCard
-import ru.my.traty.ui.formatDate
-import ru.my.traty.ui.formatPeriod
-import ru.my.traty.ui.formatRub
-import ru.my.traty.ui.income.DeleteIncomeConfirmDialog
-import ru.my.traty.ui.income.IncomeDetailsDialog
 import ru.my.traty.ui.income.IncomeViewModel
+import ru.my.traty.ui.purchases.PurchaseForm
+import ru.my.traty.ui.purchases.PurchaseGoalForms
+import ru.my.traty.ui.purchases.PurchaseGoalsHomeBlock
+import ru.my.traty.ui.purchases.PurchaseGoalViewModel
+import ru.my.traty.ui.purchases.activeGoals
+import ru.my.traty.ui.purchases.purchaseGoalToday
 import ru.my.traty.ui.update.UpdateBanner
 import ru.my.traty.ui.update.UpdateViewModel
 import java.time.Instant
@@ -80,6 +67,10 @@ fun HomeScreen(
     searchVm: FeedSearchViewModel = viewModel(),
     updateVm: UpdateViewModel = viewModel(),
     itemsVm: FeedItemsViewModel = viewModel(),
+    purchasesVm: PurchaseGoalViewModel = viewModel(),
+    onOpenPurchases: () -> Unit = {},
+    revealPurchaseGoals: Boolean = false,
+    onPurchaseGoalsRevealed: () -> Unit = {},
 ) {
     // Сколько товаров в покупках: в строке ленты «5 товаров» вместо длинного списка в заметке
     val itemCounts by itemsVm.counts.collectAsStateWithLifecycle()
@@ -152,7 +143,7 @@ fun HomeScreen(
     }
     // Заголовки дней нужны в общей ленте; внутри одного выбранного дня они только повторяли бы дату
     val dayHeaders = remember(feed, selectedDate) { if (selectedDate == null) feed.dayHeaders(zone) else emptyMap() }
-    val today = remember { LocalDate.now(zone) }
+    val today by purchaseGoalToday()
     val totalExpense = remember(displayedExpenses) { displayedExpenses.sumOf { it.expense.amountKopecks } }
     val totalIncome = remember(displayedIncomes) { displayedIncomes.sumOf { it.amountKopecks } }
 
@@ -170,88 +161,82 @@ fun HomeScreen(
     val waitingCount = remember(pending) { pending.count { it.status == PendingStatus.WAITING } }
     val parsedPending = remember(pending) { pending.filter { it.status == PendingStatus.PARSED } }
 
+    val purchaseGoals by purchasesVm.goals.collectAsStateWithLifecycle()
+    val purchases = purchaseGoals.orEmpty()
+    val activePurchases = remember(purchases, today) { purchases.activeGoals(today) }
+    val editableContributions = remember(activePurchases) {
+        activePurchases.flatMap { it.contributions }.mapTo(mutableSetOf()) { it.id }
+    }
+    var purchaseForm by remember { mutableStateOf<PurchaseForm?>(null) }
+    var purchasesExpanded by rememberSaveable { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    val openPurchaseForm: (PurchaseForm) -> Unit = {
+        purchasesVm.clearError()
+        purchaseForm = it
+    }
+    val normalFeed = selectedDate == null && searchQuery.isBlank()
+    val showObservations = selectedDate == null && today in period
+    val showBalance = totalIncome > 0L || totalExpense > 0L
+    val showPlan = (plans.isNotEmpty() || totalLimit != null) && normalFeed
+    val showPurchaseGoals = normalFeed && !searchActive && today in period && purchases.isNotEmpty()
+    val purchaseItemIndex = parsedPending.size + listOf(
+        update != null, showReconcileCard, waitingCount > 0, showBalance, showPlan, normalFeed,
+    ).count { it } + if (showObservations) observations.size else 0
+
+    LaunchedEffect(revealPurchaseGoals) {
+        if (revealPurchaseGoals) {
+            searchActive = false
+            searchQuery = ""
+            vm.selectDate(today)
+            vm.clearSelectedDate()
+            purchasesExpanded = true
+        }
+    }
+    LaunchedEffect(revealPurchaseGoals, showPurchaseGoals, purchaseGoals != null, purchaseItemIndex) {
+        if (revealPurchaseGoals && showPurchaseGoals) {
+            listState.scrollToItem(purchaseItemIndex)
+            onPurchaseGoalsRevealed()
+        } else if (revealPurchaseGoals && purchaseGoals != null && activePurchases.isEmpty()) {
+            onPurchaseGoalsRevealed()
+        }
+    }
+    val openExpense: (ExpenseWithCategory) -> Unit = { item ->
+        when {
+            item.expense.id in editableContributions ->
+                openPurchaseForm(PurchaseForm.EditContribution(item.expense.id))
+            item.expense.source == ExpenseSource.PURCHASE_CONTRIBUTION ||
+                item.expense.source == ExpenseSource.PURCHASE_SETTLEMENT -> onOpenPurchases()
+            else -> vm.editing = item
+        }
+    }
+
     Column(Modifier.fillMaxSize().imePadding()) {
-        TratyHeaderCard(
-            title = "Траты",
-            subtitle = if (selectedDate != null) "День: ${formatDate(selectedDate!!)}" else "Учёт расходов и доходов",
-            icon = Icons.AutoMirrored.Filled.ReceiptLong,
-            actions = {
-                TratyIconButton(
-                    icon = Icons.Filled.Search,
-                    contentDescription = "Поиск",
-                    onClick = { searchActive = !searchActive; if (!searchActive) searchQuery = "" },
-                    containerColor = if (searchActive) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
-                    tint = if (searchActive) TratyTheme.colors.primary else TratyTheme.colors.onSurfaceVariant,
-                    modifier = Modifier.size(40.dp),
+        HomeBrowseHeader(
+            selectedDate = selectedDate,
+            period = period,
+            periodStartDay = settings.periodStartDay,
+            totalExpense = totalExpense,
+            searchActive = searchActive,
+            onToggleSearch = {
+                searchActive = !searchActive
+                if (!searchActive) searchQuery = ""
+            },
+            searchContent = {
+                FeedSearchField(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    mic = searchMic,
+                    micEnabled = mic.state is RecordState.Idle && !vm.busy,
                 )
             },
-            content = if (searchActive) {
-                {
-                    FeedSearchField(
-                        query = searchQuery,
-                        onQueryChange = { searchQuery = it },
-                        mic = searchMic,
-                        micEnabled = mic.state is RecordState.Idle && !vm.busy,
-                    )
-                }
-            } else null,
-        )
-
-        TratyMonthPicker(
-            periodLabel = formatPeriod(period, settings.periodStartDay),
-            totalKopecks = totalExpense,
-            selectedDate = selectedDate,
-            onPrev = vm::prevPeriod,
+            onPrevious = vm::prevPeriod,
             onNext = vm::nextPeriod,
-            onDateClick = { showDatePicker = true },
-            onClearDate = { vm.clearSelectedDate() },
+            onPickDate = { showDatePicker = true },
+            onClearDate = vm::clearSelectedDate,
+            onCreatePurchase = { openPurchaseForm(PurchaseForm.Create) },
         )
 
-        // Чип активного фильтра по конкретной дате
-        if (selectedDate != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xxs),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                InputChip(
-                    selected = true,
-                    onClick = { showDatePicker = true },
-                    label = { Text("Дата: ${formatDate(selectedDate!!)}") },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Filled.FilterList,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    },
-                    trailingIcon = {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = "Сбросить фильтр",
-                            modifier = Modifier.size(16.dp),
-                        )
-                    },
-                    colors = InputChipDefaults.inputChipColors(
-                        selectedContainerColor = TratyTheme.colors.primaryContainer,
-                        selectedLabelColor = TratyTheme.colors.primary,
-                        selectedLeadingIconColor = TratyTheme.colors.primary,
-                        selectedTrailingIconColor = TratyTheme.colors.primary,
-                    ),
-                    shape = TratyTheme.shapes.small,
-                )
-
-                TratyTextButton(
-                    onClick = vm::clearSelectedDate,
-                ) {
-                    Text("Весь период", style = TratyTheme.typography.labelSmall)
-                }
-            }
-        }
-
-        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState) {
             update?.let { u ->
                 item(key = "update-banner", contentType = "update-banner") {
                     UpdateBanner(
@@ -280,7 +265,7 @@ fun HomeScreen(
                 )
             }
             // Наблюдения показываем только в текущем периоде и на всём периоде, не на выбранном дне
-            if (selectedDate == null && LocalDate.now() in period) {
+            if (showObservations) {
                 items(observations, key = { "observation-${it.key}" }, contentType = { "observation" }) { o ->
                     ObservationCard(
                         o,
@@ -292,13 +277,13 @@ fun HomeScreen(
                 }
             }
             // Шапка «потрачено / пополнено / баланс»
-            if (totalIncome > 0 || totalExpense > 0) {
+            if (showBalance) {
                 item(key = "balance-header", contentType = "balance-header") {
                     BalanceSummaryRow(totalExpense = totalExpense, totalIncome = totalIncome)
                 }
             }
             // План трат — за весь период, поэтому при фильтре по дню или поиске не показываем
-            if ((plans.isNotEmpty() || totalLimit != null) && selectedDate == null && searchQuery.isBlank()) {
+            if (showPlan) {
                 item(key = "plan", contentType = "plan") {
                     PlanSummaryCard(
                         items = plans,
@@ -312,10 +297,23 @@ fun HomeScreen(
                     )
                 }
             }
-            if (selectedDate == null && searchQuery.isBlank()) {
+            if (normalFeed) {
                 item(key = "weekly", contentType = "weekly") {
                     WeeklyTasksHomeCard(
                         onOpen = onOpenWeekly,
+                        modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
+                    )
+                }
+            }
+            if (showPurchaseGoals) {
+                item(key = "purchase-goals", contentType = "purchase-goals") {
+                    PurchaseGoalsHomeBlock(
+                        goals = activePurchases,
+                        today = today,
+                        expanded = purchasesExpanded,
+                        onToggle = { purchasesExpanded = !purchasesExpanded },
+                        onOpen = onOpenPurchases,
+                        onAction = openPurchaseForm,
                         modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
                     )
                 }
@@ -336,8 +334,16 @@ fun HomeScreen(
                             labels = labels[item.data.expense.id].orEmpty(),
                             matchedItems = FeedSearch.matchedItems(searchItems[item.data.expense.id].orEmpty(), searchQuery),
                             itemCount = itemCounts[item.data.expense.id] ?: 0,
-                            onClick = { vm.editing = item.data },
-                            onDelete = { expenseToDelete = item.data },
+                            onClick = { openExpense(item.data) },
+                            canDelete = item.data.expense.isUserEditable || item.data.expense.id in editableContributions,
+                            onDelete = {
+                                val expenseId = item.data.expense.id
+                                if (expenseId in editableContributions) {
+                                    openPurchaseForm(PurchaseForm.DeleteContribution(expenseId))
+                                } else {
+                                    expenseToDelete = item.data
+                                }
+                            },
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -359,7 +365,7 @@ fun HomeScreen(
                 groups = elsewhere,
                 startDay = settings.periodStartDay,
                 currentEmpty = feed.isEmpty(),
-                onExpenseClick = { vm.editing = it },
+                onExpenseClick = openExpense,
                 onIncomeClick = { incomeOpened = it },
                 itemsByExpense = searchItems,
                 query = searchQuery,
@@ -375,47 +381,24 @@ fun HomeScreen(
         }
     }
 
-    if (showDatePicker) {
-        DatePickerModal(
-            initialDate = selectedDate ?: LocalDate.now(),
-            onDateSelected = { pickedDate ->
-                vm.selectDate(pickedDate)
-                showDatePicker = false
-            },
-            onDismiss = { showDatePicker = false },
-        )
-    }
+    HomeFeedDialogs(
+        pickerDate = if (showDatePicker) selectedDate ?: today else null,
+        onPickDate = {
+            vm.selectDate(it)
+            showDatePicker = false
+        },
+        onDismissPicker = { showDatePicker = false },
+        openedIncome = incomeOpened,
+        onDismissIncome = { incomeOpened = null },
+        incomeToDelete = incomeToDelete,
+        onDismissIncomeDelete = { incomeToDelete = null },
+        onDeleteIncome = { incomeVm.delete(it) },
+        expenseToDelete = expenseToDelete,
+        onDismissExpenseDelete = { expenseToDelete = null },
+        onDeleteExpense = { vm.delete(it) },
+    )
 
-    incomeOpened?.let { inc ->
-        IncomeDetailsDialog(
-            income = inc,
-            onDelete = {
-                incomeVm.delete(inc)
-                incomeOpened = null
-            },
-            onDismiss = { incomeOpened = null },
-        )
-    }
-
-    incomeToDelete?.let { inc ->
-        DeleteIncomeConfirmDialog(
-            income = inc,
-            onConfirm = {
-                incomeVm.delete(inc)
-                incomeToDelete = null
-            },
-            onDismiss = { incomeToDelete = null },
-        )
-    }
-
-    expenseToDelete?.let { item ->
-        DeleteExpenseConfirmDialog(
-            item = item,
-            onConfirm = {
-                vm.delete(item.expense)
-                expenseToDelete = null
-            },
-            onDismiss = { expenseToDelete = null },
-        )
+    purchaseForm?.let { form ->
+        PurchaseGoalForms(form, purchases, today, purchasesVm, onDismiss = { purchaseForm = null })
     }
 }

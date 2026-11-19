@@ -29,6 +29,7 @@ object FullBackupWriter {
         val expenseKey = s.expenses.mapIndexed { i, e -> e.id to (i + 1).toLong() }.toMap()
         val incomeKey = s.incomes.mapIndexed { i, e -> e.id to (i + 1).toLong() }.toMap()
         val debtKey = s.debts.mapIndexed { i, d -> d.id to (i + 1).toLong() }.toMap()
+        val goalKey = s.purchaseGoals.mapIndexed { i, goal -> goal.id to (i + 1L) }.toMap()
         fun cat(id: Long): String = catName[id] ?: throw FullBackupException("Не удалось сохранить копию: в базе нарушены связи категорий.")
         fun sub(id: Long?): String? = id?.let { subName[it] }
 
@@ -98,10 +99,21 @@ object FullBackupWriter {
                 BackupDebtPayment(debt, expense, p.part)
             },
             pendingPhrases = s.pendingPhrases.map { BackupPendingPhrase(it.text, it.createdAt) },
+            purchaseGoals = s.purchaseGoals.map { goal ->
+                BackupPurchaseGoal(goalKey.getValue(goal.id), goal.title, goal.targetKopecks, goal.dueEpochDay, goal.actualPriceKopecks, goal.hidden)
+            },
+            purchaseContributions = s.purchaseContributions.map { contribution ->
+                val goal = goalKey[contribution.goalId] ?: brokenPurchaseLink()
+                val expense = expenseKey[contribution.expenseId] ?: brokenPurchaseLink()
+                BackupPurchaseContribution(goal, expense)
+            }.sortedBy { it.expense },
             housing = ApartmentBackupCodec.portable(s.housing),
             settings = settings,
         )
     }
+
+    private fun brokenPurchaseLink(): Nothing =
+        throw FullBackupException("Не удалось сохранить копию: в базе нарушены связи взносов с покупками.")
 
     fun encode(b: FullBackup): String = json.encodeToString(FullBackup.serializer(), b)
 

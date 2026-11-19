@@ -8,12 +8,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import ru.my.traty.TratyApp
 import ru.my.traty.data.CategoryTotal
 import ru.my.traty.data.ExpenseWithCategory
+import ru.my.traty.data.PeriodComparison
+import ru.my.traty.data.period.BillingPeriod
+import ru.my.traty.data.reporting.reportTotals
 import ru.my.traty.ui.charts.customChartRange
 import java.time.LocalDate
 import java.time.ZoneId
@@ -40,7 +45,7 @@ class StatsRangeViewModel(app: Application) : AndroidViewModel(app) {
     val expenses: StateFlow<List<ExpenseWithCategory>> = _range
         .flatMapLatest { r ->
             if (r == null) flowOf(emptyList())
-            else customChartRange(r.first, r.second, zone).let { c.db.expenses().observeRange(it.startMillis, it.endMillis) }
+            else customChartRange(r.first, r.second, zone).let { c.financialReports.expenses(it.startMillis, it.endMillis) }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -52,7 +57,27 @@ class StatsRangeViewModel(app: Application) : AndroidViewModel(app) {
     private fun totalsFor(r: Pair<LocalDate, LocalDate>?): Flow<List<CategoryTotal>> {
         if (r == null) return flowOf(emptyList())
         val cr = customChartRange(r.first, r.second, zone)
-        return c.db.expenses().observeTotals(cr.startMillis, cr.endMillis)
+        return c.financialReports.expenses(cr.startMillis, cr.endMillis).map(::reportTotals)
+    }
+
+    internal fun observePeriod(period: BillingPeriod, startDay: Int): Flow<StatsPeriodReport> {
+        val previous = period.previous(startDay)
+        val comparable = PeriodComparison.comparableWindow(period, previous, LocalDate.now(zone))
+        val comparableEnd = comparable.second.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val reports = c.financialReports
+        return combine(
+            reports.expenses(period.startMillis(zone), period.endMillisExclusive(zone)),
+            reports.expenses(previous.startMillis(zone), previous.endMillisExclusive(zone)),
+        ) { current, prior ->
+            StatsPeriodReport(
+                expenses = current,
+                previousExpenses = prior,
+                totals = reportTotals(current),
+                previousTotals = reportTotals(prior),
+                comparableTotals = reportTotals(prior.filter { it.expense.timestamp < comparableEnd }),
+                comparableWindow = comparable,
+            )
+        }
     }
 
     /** Включить режим «Даты»; перепутанные даты меняются местами. */
@@ -71,3 +96,12 @@ class StatsRangeViewModel(app: Application) : AndroidViewModel(app) {
         _range.value = shiftRange(r.first, r.second, direction)
     }
 }
+
+internal data class StatsPeriodReport(
+    val expenses: List<ExpenseWithCategory> = emptyList(),
+    val previousExpenses: List<ExpenseWithCategory> = emptyList(),
+    val totals: List<CategoryTotal> = emptyList(),
+    val previousTotals: List<CategoryTotal> = emptyList(),
+    val comparableTotals: List<CategoryTotal> = emptyList(),
+    val comparableWindow: Pair<LocalDate, LocalDate> = LocalDate.now().let { it to it },
+)

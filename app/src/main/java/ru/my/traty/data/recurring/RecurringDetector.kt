@@ -3,6 +3,7 @@ package ru.my.traty.data.recurring
 import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.Places
+import ru.my.traty.data.isPurchaseGoalEntry
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -75,8 +76,9 @@ object RecurringDetector {
         relaxedCategoryIds: Set<Long> = emptySet(),
     ): List<RecurringCandidate> {
         val groups = expenses
-            // Сверка и платежи по покупкам частями — не подписки (у рассрочки свой график)
-            .filter { it.expense.source != ExpenseSource.RECONCILE && it.expense.source != ExpenseSource.DEBT }
+            .filterNot { (expense) ->
+                expense.source == ExpenseSource.RECONCILE || expense.source == ExpenseSource.DEBT || expense.isPurchaseGoalEntry
+            }
             .groupBy { keyOf(it.expense.categoryId, it.expense.place, it.expense.note) }
         val result = mutableListOf<RecurringCandidate>()
         for ((key, items) in groups) {

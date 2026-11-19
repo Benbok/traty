@@ -87,11 +87,11 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private val expensesFlow = rangeFlow.flatMapLatest { r ->
-        c.db.expenses().observeRange(r.startMillis, r.endMillis)
+        c.financialReports.expenses(r.startMillis, r.endMillis)
     }
 
     private val incomesFlow = rangeFlow.flatMapLatest { r ->
-        c.db.incomes().observeRange(r.startMillis, r.endMillis)
+        c.financialReports.incomes(r.startMillis, r.endMillis)
     }
 
     private val selection = combine(billingPeriod, startDay) { bp, d -> bp to d }

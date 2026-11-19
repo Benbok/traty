@@ -3,6 +3,7 @@ package ru.my.traty.backup
 import ru.my.traty.data.Category
 import ru.my.traty.data.DefaultCategories
 import ru.my.traty.data.Expense
+import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.Income
 import ru.my.traty.data.PendingPhrase
 import ru.my.traty.data.PendingStatus
@@ -17,8 +18,11 @@ import ru.my.traty.data.budget.MonthBudget
 import ru.my.traty.data.debt.Debt
 import ru.my.traty.data.debt.DebtPayment
 import ru.my.traty.data.items.ExpenseItem
+import ru.my.traty.data.purchases.PurchaseContribution
+import ru.my.traty.data.purchases.PurchaseGoal
 import ru.my.traty.data.sameName
 import ru.my.traty.data.weekly.WeeklyTask
+import java.time.LocalDate
 
 /**
  * Файл копии → записи для пустой базы, с новыми id по порядку (1, 2, 3…). Чистая функция.
@@ -59,6 +63,7 @@ object FullBackupRestore {
         }
         if (payments.map { it.expenseId }.toSet().size != payments.size) damaged("одна трата в двух платежах")
 
+        val (purchaseGoals, purchaseContributions) = restorePurchases(b, expenseId)
         val housing = ApartmentBackupCodec.checked(b.housing)
         return DbSnapshot(
             housing = housing,
@@ -116,7 +121,42 @@ object FullBackupRestore {
             },
             debtPayments = payments,
             pendingPhrases = b.pendingPhrases.map { PendingPhrase(0, it.text, it.createdAt, PendingStatus.WAITING) },
+            purchaseGoals = purchaseGoals,
+            purchaseContributions = purchaseContributions,
         )
+    }
+
+    private fun restorePurchases(
+        backup: FullBackup,
+        expenseIds: Map<Long, Long>,
+    ): Pair<List<PurchaseGoal>, List<PurchaseContribution>> {
+        val goalIds = keys(backup.purchaseGoals.map { it.key }, "накопления на покупки")
+        val validDays = LocalDate.MIN.toEpochDay()..LocalDate.MAX.toEpochDay()
+        val goals = backup.purchaseGoals.map { goal ->
+            if (goal.title.isBlank() || goal.targetKopecks <= 0 ||
+                goal.dueEpochDay !in validDays || (goal.actualPriceKopecks ?: 1L) <= 0
+            ) damaged("некорректная цель покупки")
+            PurchaseGoal(goalIds.getValue(goal.key), goal.title, goal.targetKopecks, goal.dueEpochDay, goal.actualPriceKopecks, goal.hidden)
+        }
+
+        val linkedExpenses = backup.expenses.filter { it.source == ExpenseSource.PURCHASE_CONTRIBUTION }
+            .associateBy { it.key }
+        val links = backup.purchaseContributions
+        if (links.size != linkedExpenses.size || links.map { it.expense }.toSet() != linkedExpenses.keys) {
+            damaged("неверные связи взносов с покупками")
+        }
+        val totals = mutableMapOf<Long, Long>()
+        val contributions = links.map { link ->
+            val goalId = goalIds[link.goal] ?: damaged("взнос без цели покупки")
+            val expense = linkedExpenses.getValue(link.expense)
+            val total = totals.getOrDefault(goalId, 0L)
+            if (expense.currency != "RUB" || expense.amountKopecks <= 0 || expense.amountKopecks > Long.MAX_VALUE - total) {
+                damaged("некорректная сумма взноса")
+            }
+            totals[goalId] = total + expense.amountKopecks
+            PurchaseContribution(expenseId = expenseIds.getValue(link.expense), goalId = goalId)
+        }
+        return goals to contributions
     }
 
     /** Локальный ключ файла → новый id. Повтор ключа — повреждение. */

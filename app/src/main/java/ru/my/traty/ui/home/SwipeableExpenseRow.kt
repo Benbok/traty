@@ -19,10 +19,11 @@ fun SwipeableExpenseRow(
     matchedItems: List<ExpenseItem> = emptyList(),
     /** Сколько товаров в покупке (пишется вместо длинной заметки). */
     itemCount: Int = 0,
+    canDelete: Boolean = item.expense.isUserEditable,
 ) {
     SwipeToDeleteRow(
         key = item.expense.id,
-        canDelete = item.expense.isUserEditable,
+        canDelete = canDelete,
         onDelete = onDelete,
         modifier = modifier,
     ) {

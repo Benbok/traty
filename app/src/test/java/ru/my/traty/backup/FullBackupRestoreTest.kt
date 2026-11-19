@@ -52,6 +52,24 @@ class FullBackupRestoreTest {
     }
 
     @Test
+    fun purchaseContributionCannotPointToMissingGoal() {
+        val contribution = base.expenses[0].copy(source = "purchase_contribution")
+        val backup = base.copy(
+            expenses = listOf(contribution, base.expenses[1]),
+            purchaseGoals = listOf(BackupPurchaseGoal(100, "Наушники", 1_200_000, 20_000)),
+            purchaseContributions = listOf(BackupPurchaseContribution(goal = 101, expense = contribution.key)),
+        )
+        assertDamaged(backup)
+    }
+
+    @Test
+    fun purchaseContributionMustBeLinked() {
+        val contribution = base.expenses[0].copy(source = "purchase_contribution")
+        val backup = base.copy(expenses = listOf(contribution, base.expenses[1]))
+        assertDamaged(backup)
+    }
+
+    @Test
     fun brokenLinksAreDamage() {
         assertDamaged(base.copy(expenses = base.expenses + base.expenses[0].copy(key = 30, category = "Нет")))
         assertDamaged(base.copy(expenses = base.expenses + base.expenses[0].copy(key = 30, subcategory = "Нет")))

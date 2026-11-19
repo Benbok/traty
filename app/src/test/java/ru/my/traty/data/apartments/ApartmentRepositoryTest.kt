@@ -48,7 +48,10 @@ class ApartmentRepositoryTest {
         val original = AppDatabase.build(context, name)
         original.categories().insert(Category(name = "Не потерять", emoji = "✓"))
         val sql = original.openHelper.writableDatabase
-        listOf("submission_readings", "reading_submissions", "meter_readings", "meter_registers", "meters", "apartments").forEach { sql.execSQL("DROP TABLE `$it`") }
+        listOf(
+            "purchase_contributions", "purchase_goals",
+            "submission_readings", "reading_submissions", "meter_readings", "meter_registers", "meters", "apartments",
+        ).forEach { sql.execSQL("DROP TABLE `$it`") }
         sql.version = 16
         original.close()
         val migrated = AppDatabase.build(context, name)

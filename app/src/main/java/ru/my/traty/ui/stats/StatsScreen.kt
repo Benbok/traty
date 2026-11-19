@@ -107,16 +107,20 @@ fun StatsScreen(
 ) {
     val period by vm.period.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
-    val periodTotals by vm.totals.collectAsStateWithLifecycle()
-    val periodPrev by vm.prevTotals.collectAsStateWithLifecycle()
-    val periodComparable by vm.comparableTotals.collectAsStateWithLifecycle()
-    val comparableWindow by vm.comparableWindow.collectAsStateWithLifecycle()
+    val reportingPeriod = remember(period, settings.periodStartDay) {
+        rangeVm.observePeriod(period, settings.periodStartDay)
+    }
+    val periodReport by reportingPeriod.collectAsStateWithLifecycle(initialValue = StatsPeriodReport())
+    val periodTotals = periodReport.totals
+    val periodPrev = periodReport.previousTotals
+    val periodComparable = periodReport.comparableTotals
+    val comparableWindow = periodReport.comparableWindow
     val range by rangeVm.range.collectAsStateWithLifecycle()
     val customTotals by rangeVm.totals.collectAsStateWithLifecycle()
     val customPrev by rangeVm.prevTotals.collectAsStateWithLifecycle()
-    val periodExpenses by vm.expenses.collectAsStateWithLifecycle()
+    val periodExpenses = periodReport.expenses
     val customExpenses by rangeVm.expenses.collectAsStateWithLifecycle()
-    val prevExpenses by vm.prevExpenses.collectAsStateWithLifecycle()
+    val prevExpenses = periodReport.previousExpenses
     val plans by vm.plans.collectAsStateWithLifecycle()
     val totalLimit by vm.totalLimit.collectAsStateWithLifecycle()
     // План категории целиком — для строки «План … · осталось …» под категорией
@@ -461,7 +465,7 @@ fun StatsScreen(
                             modifier = Modifier.size(28.dp),
                         )
                     } else {
-                        TratyButton(onClick = vm::requestInsight) {
+                        TratyButton(onClick = { vm.requestInsight(periodTotals, periodPrev) }) {
                             Text(if (vm.insight == null) "Получить анализ" else "Обновить анализ")
                         }
                     }

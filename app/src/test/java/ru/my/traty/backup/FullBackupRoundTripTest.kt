@@ -16,11 +16,15 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.AppSettings
+import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.DB_SCHEMA_VERSION
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.backup.BackupRepository
 import ru.my.traty.data.backup.DbSnapshot
 import ru.my.traty.data.portable
+import ru.my.traty.data.purchases.PurchaseGoal
+import ru.my.traty.data.purchases.PurchaseGoalRepository
+import java.time.LocalDate
 
 @RunWith(RobolectricTestRunner::class)
 class FullBackupRoundTripTest {
@@ -92,6 +96,40 @@ class FullBackupRoundTripTest {
         val pending = target.pendingPhrases().getByStatus(PendingStatus.WAITING)
         assertEquals(listOf("такси 400", "хлеб 60"), pending.map { it.text })
         assertTrue(pending.all { it.resultJson == null && it.error == null })
+    }
+
+    @Test
+    fun purchaseGoalsSurviveExportAndRestoreWithNewIds() = runTest {
+        fillAllTables(source)
+        val due = LocalDate.now().plusDays(30)
+        source.purchaseGoals().insertGoals(listOf(PurchaseGoal(80, "Черновик", 10_000, due.toEpochDay())))
+        target.purchaseGoals().insertGoals(listOf(PurchaseGoal(70, "Старая цель", 10_000, due.toEpochDay())))
+        val goals = PurchaseGoalRepository(source, CategoryRepository(source))
+        val activeId = goals.create("Наушники", 1_200_000, due)
+        goals.contribute(activeId, 100_000)
+        val closedId = goals.create("Чехол", 50_000, due)
+        goals.contribute(closedId, 50_000)
+        goals.finish(closedId, 45_000)
+        goals.hideCompleted(closedId)
+
+        val file = export(source)
+        FullBackupImporter(BackupRepository(target), null)
+            .restore(FullBackupReader.decode(bytes(file), DB_SCHEMA_VERSION))
+
+        val restored = target.purchaseGoals().getAllGoals()
+        val active = restored.single { it.title == "Наушники" }
+        val closed = restored.single { it.title == "Чехол" }
+        assertTrue(restored.none { it.title == "Старая цель" })
+        assertTrue(active.id != activeId)
+        assertEquals(1_200_000L, active.targetKopecks)
+        assertEquals(due.toEpochDay(), active.dueEpochDay)
+        assertNull(active.actualPriceKopecks)
+        assertEquals(45_000L, closed.actualPriceKopecks)
+        assertTrue(closed.hidden)
+        val amountsById = target.expenses().getAllWithCategory().associate { it.expense.id to it.expense.amountKopecks }
+        val amountsByGoal = target.purchaseGoals().getAllContributions().associate { it.goalId to amountsById[it.expenseId] }
+        assertEquals(mapOf(active.id to 100_000L, closed.id to 50_000L), amountsByGoal)
+        assertEquals(file, export(target))
     }
 
     @Test

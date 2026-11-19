@@ -22,13 +22,18 @@ import ru.my.traty.ui.designsystem.theme.holidayOn
 import ru.my.traty.ui.designsystem.theme.isDark
 import java.time.LocalDate
 
+const val ACTION_OPEN_PURCHASE_GOALS = "ru.my.traty.action.OPEN_PURCHASE_GOALS"
+
 class MainActivity : ComponentActivity() {
     private var receiptCameraRequested by mutableStateOf(false)
+    private var purchaseGoalsRequested by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         receiptCameraRequested = savedInstanceState?.getBoolean(RECEIPT_CAMERA_ACTION)
             ?: (intent.action == RECEIPT_CAMERA_ACTION)
+        purchaseGoalsRequested = savedInstanceState?.getBoolean(ACTION_OPEN_PURCHASE_GOALS)
+            ?: (intent.action == ACTION_OPEN_PURCHASE_GOALS)
         setContent {
             val vm: MainViewModel = viewModel()
             val settings by vm.settings.collectAsStateWithLifecycle()
@@ -57,7 +62,11 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = settings.dynamicColor,
                 holiday = todayHoliday.takeIf { settings.holidayDecor },
             ) {
-                TratyRoot(vm)
+                TratyRoot(
+                    vm = vm,
+                    revealPurchaseGoals = purchaseGoalsRequested,
+                    onPurchaseGoalsRevealed = { purchaseGoalsRequested = false },
+                )
                 ReceiptCameraEntry(
                     requested = receiptCameraRequested,
                     onHandled = { receiptCameraRequested = false },
@@ -69,11 +78,15 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.action == RECEIPT_CAMERA_ACTION) receiptCameraRequested = true
+        when (intent.action) {
+            RECEIPT_CAMERA_ACTION -> receiptCameraRequested = true
+            ACTION_OPEN_PURCHASE_GOALS -> purchaseGoalsRequested = true
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean(RECEIPT_CAMERA_ACTION, receiptCameraRequested)
+        outState.putBoolean(ACTION_OPEN_PURCHASE_GOALS, purchaseGoalsRequested)
         super.onSaveInstanceState(outState)
     }
 }

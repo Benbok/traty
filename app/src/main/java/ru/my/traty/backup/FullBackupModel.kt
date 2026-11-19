@@ -43,6 +43,8 @@ data class FullBackup(
     @SerialName("pending_phrases") val pendingPhrases: List<BackupPendingPhrase> = emptyList(),
     val housing: ru.my.traty.data.apartments.ApartmentSnapshot = ru.my.traty.data.apartments.ApartmentSnapshot(),
     val settings: PortableSettings = PortableSettings(),
+    @SerialName("purchase_goals") val purchaseGoals: List<BackupPurchaseGoal> = emptyList(),
+    @SerialName("purchase_contributions") val purchaseContributions: List<BackupPurchaseContribution> = emptyList(),
 )
 
 @Serializable
@@ -193,6 +195,20 @@ data class BackupDebt(
 @Serializable
 data class BackupDebtPayment(val debt: Long, val expense: Long, val part: String)
 
+@Serializable
+data class BackupPurchaseGoal(
+    val key: Long,
+    val title: String,
+    val targetKopecks: Long,
+    val dueEpochDay: Long,
+    val actualPriceKopecks: Long? = null,
+    val hidden: Boolean = false,
+)
+
+/** [goal] и [expense] — ключи цели и взноса в этом файле. */
+@Serializable
+data class BackupPurchaseContribution(val goal: Long, val expense: Long)
+
 /**
  * Неразобранная фраза. Переносится только текст и время: черновик разбора ссылается на записи
  * старого телефона, поэтому на новом фраза разбирается заново.
@@ -217,13 +233,14 @@ fun FullBackup.summary(): List<Pair<String, Int>> = listOf(
     "Планы трат" to budgets.size + monthBudgets.size,
     "Задания на неделю" to weeklyTasks.size,
     "Покупки частями и кредиты" to debts.size,
+    "Накопления на покупки" to purchaseGoals.size,
     "Неразобранные фразы" to pendingPhrases.size,
 ).filter { it.second > 0 }
 
 /** Записей всего, без категорий: для сообщений «сохранено N записей». */
 val FullBackup.recordCount: Int
     get() = housing.apartments.size + housing.meters.size + housing.readings.size + expenses.size + incomes.size + reconciliations.size + rules.size + templates.size + recurring.size +
-        budgets.size + monthBudgets.size + weeklyTasks.size + debts.size + pendingPhrases.size
+        budgets.size + monthBudgets.size + weeklyTasks.size + debts.size + purchaseGoals.size + pendingPhrases.size
 
 /** Копию нельзя прочитать или восстановить. [message] — готовый текст для пользователя. */
 class FullBackupException(message: String) : Exception(message)

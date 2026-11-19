@@ -26,20 +26,29 @@ fun DatePickerModal(
     onDateSelected: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
     latestDate: LocalDate? = null,
+    earliestDate: LocalDate? = null,
 ) {
-    val initialMillis = remember(initialDate, latestDate) {
+    val initialMillis = remember(initialDate, latestDate, earliestDate) {
         val date = initialDate ?: LocalDate.now()
-        (latestDate?.let { minOf(date, it) } ?: date)
+        val tooEarlyClamped = earliestDate?.let { maxOf(date, it) } ?: date
+        (latestDate?.let { minOf(tooEarlyClamped, it) } ?: tooEarlyClamped)
             .atStartOfDay(ZoneOffset.UTC)
             .toInstant()
             .toEpochMilli()
     }
-    val selectableDates = remember(latestDate) {
-        if (latestDate == null) DatePickerDefaults.AllDates else object : SelectableDates {
-            override fun isSelectableDate(utcTimeMillis: Long): Boolean =
-                utcTimeMillis <= latestDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+    val selectableDates = remember(latestDate, earliestDate) {
+        if (latestDate == null && earliestDate == null) {
+            DatePickerDefaults.AllDates
+        } else object : SelectableDates {
+            private val first = earliestDate?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli()
+            private val last = latestDate?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli()
 
-            override fun isSelectableYear(year: Int): Boolean = year <= latestDate.year
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                (first == null || utcTimeMillis >= first) && (last == null || utcTimeMillis <= last)
+
+            override fun isSelectableYear(year: Int): Boolean =
+                (earliestDate == null || year >= earliestDate.year) &&
+                    (latestDate == null || year <= latestDate.year)
         }
     }
     val datePickerState = rememberDatePickerState(

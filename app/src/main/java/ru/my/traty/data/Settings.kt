@@ -13,11 +13,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import ru.my.traty.data.digest.DEFAULT_DIGEST_TIME
+import ru.my.traty.data.digest.DigestSettings
 import ru.my.traty.data.period.MAX_PERIOD_START_DAY
 import ru.my.traty.data.period.MIN_PERIOD_START_DAY
 import ru.my.traty.data.secure.AesGcmSecretCipher
 import ru.my.traty.data.secure.KeystoreKeys
 import ru.my.traty.data.secure.SecretCodec
+import java.time.LocalTime
 
 enum class ThemeMode(val title: String) {
     SYSTEM("Системная"),
@@ -58,8 +61,9 @@ data class AppSettings(
     val voiceEngine: VoiceEngine = VoiceEngine.GIGAAM,
     /** Показывать метки 🔺 🔁 🆕 ⚡ 📅 на тратах. */
     val labelsEnabled: Boolean = true,
-    /** Вечернее уведомление «Итог дня» (около 20:00). */
+    /** Вечернее уведомление «Итог дня». */
     val dailyDigestEnabled: Boolean = true,
+    val dailyDigestTime: LocalTime = DEFAULT_DIGEST_TIME,
     /** Ключи скрытых карточек наблюдений на Главной. */
     val dismissedObservations: Set<String> = emptySet(),
     /** Карточка «План трат» на Тратах: показаны ли категории. По умолчанию свёрнуто — только общий итог. */
@@ -96,6 +100,11 @@ internal fun decodeLines(raw: String?): List<String> =
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
 private const val MAX_DISMISSED = 60
+private const val MINUTES_PER_DAY = 24 * 60
+
+private fun digestTime(minutes: Int?): LocalTime =
+    minutes?.takeIf { it in 0 until MINUTES_PER_DAY }
+        ?.let { LocalTime.of(it / 60, it % 60) } ?: DEFAULT_DIGEST_TIME
 
 /**
  * API-ключи ИИ хранятся зашифрованными ключом Android Keystore ([SecretCodec]);
@@ -121,6 +130,7 @@ class SettingsRepository(
         val voiceEngine = stringPreferencesKey("voice_engine")
         val labelsEnabled = booleanPreferencesKey("labels_enabled")
         val dailyDigest = booleanPreferencesKey("daily_digest")
+        val dailyDigestMinutes = intPreferencesKey("daily_digest_minutes")
         val dismissedObservations = stringSetPreferencesKey("dismissed_observations")
         val homePlanExpanded = booleanPreferencesKey("home_plan_expanded")
         val budgetAlerts = booleanPreferencesKey("budget_alerts")
@@ -153,6 +163,7 @@ class SettingsRepository(
             voiceEngine = p[K.voiceEngine]?.let { runCatching { VoiceEngine.valueOf(it) }.getOrNull() } ?: d.voiceEngine,
             labelsEnabled = p[K.labelsEnabled] ?: d.labelsEnabled,
             dailyDigestEnabled = p[K.dailyDigest] ?: d.dailyDigestEnabled,
+            dailyDigestTime = digestTime(p[K.dailyDigestMinutes]),
             dismissedObservations = p[K.dismissedObservations] ?: d.dismissedObservations,
             homePlanExpanded = p[K.homePlanExpanded] ?: d.homePlanExpanded,
             budgetAlertsEnabled = p[K.budgetAlerts] ?: d.budgetAlertsEnabled,
@@ -199,6 +210,7 @@ class SettingsRepository(
             enumOrNull<VoiceEngine>(s.voiceEngine)?.let { p[K.voiceEngine] = it.name }
             s.labelsEnabled?.let { p[K.labelsEnabled] = it }
             s.dailyDigestEnabled?.let { p[K.dailyDigest] = it }
+            s.dailyDigestMinutes?.takeIf { it in 0 until MINUTES_PER_DAY }?.let { p[K.dailyDigestMinutes] = it }
             s.homePlanExpanded?.let { p[K.homePlanExpanded] = it }
             s.budgetAlertsEnabled?.let { p[K.budgetAlerts] = it }
             s.weeklyTasksNotify?.let { p[K.weeklyTasksNotify] = it }
@@ -242,8 +254,16 @@ class SettingsRepository(
         }
     }
 
+    internal val digestSettings: Flow<DigestSettings> = context.dataStore.data.map { p ->
+        DigestSettings(p[K.dailyDigest] ?: true, digestTime(p[K.dailyDigestMinutes]))
+    }
+
     suspend fun setDailyDigestEnabled(enabled: Boolean) {
         context.dataStore.edit { p -> p[K.dailyDigest] = enabled }
+    }
+
+    suspend fun setDailyDigestTime(time: LocalTime) {
+        context.dataStore.edit { p -> p[K.dailyDigestMinutes] = time.toSecondOfDay() / 60 }
     }
 
     /** Знакомство с приложением уже показано или пропущено. Отдельно от [flow]: не трогает Keystore. */

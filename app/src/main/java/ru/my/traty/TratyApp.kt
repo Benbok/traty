@@ -6,6 +6,7 @@ import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -71,7 +72,11 @@ open class TratyApp : Application() {
         if (parsePendingOnStart) {
             runCatching { RecurringReminderWork.schedule(this) }
             runCatching { DebtReminderWork.schedule(this) }
-            runCatching { DailyDigestWork.schedule(this) }
+            appScope.launch {
+                container.settings.digestSettings.distinctUntilChanged().collect { settings ->
+                    runCatching { DailyDigestWork.schedule(this@TratyApp, settings) }
+                }
+            }
             container.budgetAlerts.start(appScope)
             runCatching { WeeklyTaskWork.schedule(this) }
             // Есть фразы без разбора (в т. ч. оставшиеся с прошлого запуска) — поставить фоновый разбор
@@ -110,6 +115,8 @@ class AppContainer(
     val settings = SettingsRepository(context)
     val apartments = ru.my.traty.data.apartments.ApartmentRepository(db)
     val categories = CategoryRepository(db)
+    val purchaseGoals = ru.my.traty.data.purchases.PurchaseGoalRepository(db, categories)
+    val financialReports = ru.my.traty.data.reporting.FinancialReportRepository(db)
     val reconciliations = ReconciliationRepository(db, categories)
     val onboarding = OnboardingRepository(db, settings)
     val incomes = IncomeRepository(db)

@@ -14,6 +14,8 @@ import ru.my.traty.data.budget.MonthBudget
 import ru.my.traty.data.debt.Debt
 import ru.my.traty.data.debt.DebtPayment
 import ru.my.traty.data.items.ExpenseItem
+import ru.my.traty.data.purchases.PurchaseContribution
+import ru.my.traty.data.purchases.PurchaseGoal
 import ru.my.traty.data.weekly.WeeklyTask
 
 /**
@@ -37,4 +39,6 @@ data class DbSnapshot(
     val debts: List<Debt> = emptyList(),
     val debtPayments: List<DebtPayment> = emptyList(),
     val pendingPhrases: List<PendingPhrase> = emptyList(),
+    val purchaseGoals: List<PurchaseGoal> = emptyList(),
+    val purchaseContributions: List<PurchaseContribution> = emptyList(),
 )

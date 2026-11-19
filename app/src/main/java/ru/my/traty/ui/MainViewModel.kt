@@ -145,37 +145,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.db.incomes().observeRange(p.startMillis(zone), p.endMillisExclusive(zone))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val totals: StateFlow<List<CategoryTotal>> = _period.flatMapLatest { p ->
-        c.db.expenses().observeTotals(p.startMillis(zone), p.endMillisExclusive(zone))
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    val prevTotals: StateFlow<List<CategoryTotal>> = _period.flatMapLatest { p ->
-        val prev = p.previous(startDay)
-        c.db.expenses().observeTotals(prev.startMillis(zone), prev.endMillisExclusive(zone))
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    /** Траты прошлого расчётного периода — для линии накопленных трат «сейчас против прошлого». */
-    val prevExpenses: StateFlow<List<ExpenseWithCategory>> = _period.flatMapLatest { p ->
-        val prev = p.previous(startDay)
-        c.db.expenses().observeRange(prev.startMillis(zone), prev.endMillisExclusive(zone))
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    /**
-     * Дни прошлого периода, с которыми честно сравнивать категории: пока период идёт — столько же первых дней,
-     * сколько прошло в текущем (см. [ru.my.traty.data.PeriodComparison.comparableWindow]).
-     */
-    val comparableWindow: StateFlow<Pair<LocalDate, LocalDate>> = _period.map { p ->
-        ru.my.traty.data.PeriodComparison.comparableWindow(p, p.previous(startDay), LocalDate.now())
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, LocalDate.now() to LocalDate.now())
-
-    /** Траты по категориям за [comparableWindow] — для роста и падения по категориям и «Что изменилось». */
-    val comparableTotals: StateFlow<List<CategoryTotal>> = comparableWindow.flatMapLatest { (from, to) ->
-        c.db.expenses().observeTotals(
-            from.atStartOfDay(zone).toInstant().toEpochMilli(),
-            to.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),
-        )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
     /** Планы показанного расчётного периода с прогрессом — для Статистики и Трат. */
     val plans: StateFlow<List<ru.my.traty.ui.budget.PlanItem>> = planItemsFlow(c, _period, expenses, categories, zone)
         .flowOn(Dispatchers.Default)
@@ -429,10 +398,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteModel() = c.models.delete()
 
-    fun setDailyDigestEnabled(enabled: Boolean) = viewModelScope.launch {
-        c.settings.setDailyDigestEnabled(enabled)
-    }
-
     /** Флажок «импульсивная» у категории из экрана траты: меняет метку ⚡ у всех трат категории. */
     fun setCategoryImpulsive(categoryId: Long, impulsive: Boolean) = viewModelScope.launch {
         val cat = c.db.categories().getAllWithSubs().firstOrNull { it.category.id == categoryId }?.category ?: return@launch
@@ -479,11 +444,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** ИИ получает только агрегированные суммы по категориям, без мест и заметок. */
-    fun requestInsight() {
+    fun requestInsight(cur: List<CategoryTotal>, previous: List<CategoryTotal>) {
         val client = c.llm(settings.value) ?: run { message = "Для комментария нужен ИИ (Настройки)"; return }
-        val cur = totals.value
         if (cur.isEmpty()) { message = "За этот период трат нет"; return }
-        val prev = prevTotals.value.associate { it.categoryId to it.total }
+        val prev = previous.associate { it.categoryId to it.total }
         val summary = buildString {
             appendLine("Период: ${formatPeriod(_period.value, startDay)}. Траты по категориям (₽), в скобках — прошлый период:")
             cur.forEach { t -> appendLine("- ${t.name}: ${t.total / 100} (${(prev[t.categoryId] ?: 0) / 100})") }

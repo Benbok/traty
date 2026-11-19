@@ -98,6 +98,15 @@
             android:name=".data.debt.DebtActionReceiver"
             android:exported="false" />
 
+        <receiver
+            android:name=".data.digest.DailyDigestClockReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
         <service
             android:name=".tile.VoiceTileService"
             android:exported="true"

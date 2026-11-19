@@ -5,10 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -23,7 +19,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.time.Duration.Companion.seconds
@@ -44,7 +39,7 @@ import ru.my.traty.ui.feedback.FeedbackScreen
 import ru.my.traty.ui.home.EditExpenseOverlay
 import ru.my.traty.ui.home.ExpenseItemsViewModel
 import ru.my.traty.ui.home.HomeScreen
-import ru.my.traty.ui.navigation.TratyNavLabel
+import ru.my.traty.ui.purchases.PurchaseGoalScreen
 import ru.my.traty.ui.navigation.TratyNavTab
 import ru.my.traty.ui.help.HelpScreen
 import ru.my.traty.ui.whatsnew.WhatsNewSheet
@@ -67,7 +62,11 @@ import ru.my.traty.ui.receipt.ReceiptOverlay
  * Корневой контейнер приложения Traty с нижней навигацией: Траты, Графики, Статистика, ИИ, Настройки.
  */
 @Composable
-fun TratyRoot(vm: MainViewModel = viewModel()) {
+fun TratyRoot(
+    vm: MainViewModel = viewModel(),
+    revealPurchaseGoals: Boolean = false,
+    onPurchaseGoalsRevealed: () -> Unit = {},
+) {
     var tab by rememberSaveable { mutableStateOf(TratyNavTab.HOME) }
     var showCategories by rememberSaveable { mutableStateOf(false) }
     var showApartments by rememberSaveable { mutableStateOf(false) }
@@ -82,6 +81,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     var selectedDebtId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showBudget by rememberSaveable { mutableStateOf(false) }
     var showWeekly by rememberSaveable { mutableStateOf(false) }
+    var showPurchaseGoals by rememberSaveable { mutableStateOf(false) }
     var showAiSettings by rememberSaveable { mutableStateOf(false) }
     var showFeedback by rememberSaveable { mutableStateOf(false) }
     // null - экран сверки закрыт
@@ -95,6 +95,13 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
     var startRecording by remember { mutableStateOf(false) }
     val categories by vm.categories.collectAsStateWithLifecycle()
     val labels by vm.labels.collectAsStateWithLifecycle()
+
+    LaunchedEffect(revealPurchaseGoals) {
+        if (revealPurchaseGoals) {
+            tab = TratyNavTab.HOME
+            showPurchaseGoals = false
+        }
+    }
 
     BackHandler(enabled = tab != TratyNavTab.HOME) {
         tab = TratyNavTab.HOME
@@ -143,34 +150,7 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
             },
             containerColor = TratyTheme.colors.background,
             bottomBar = {
-                if (!showApartments) NavigationBar(
-                    containerColor = TratyTheme.colors.surface,
-                    tonalElevation = 2.dp,
-                ) {
-                    val navTitles = remember { TratyNavTab.entries.map { it.title } }
-                    TratyNavTab.entries.forEach { t ->
-                        NavigationBarItem(
-                            selected = tab == t,
-                            onClick = { tab = t },
-                            icon = { Icon(t.icon, contentDescription = null) },
-                            label = {
-                                TratyNavLabel(
-                                    text = t.title,
-                                    allTitles = navTitles,
-                                    style = TratyTheme.typography.labelMedium,
-                                )
-                            },
-                            alwaysShowLabel = true,
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = TratyTheme.colors.primary,
-                                selectedTextColor = TratyTheme.colors.primary,
-                                indicatorColor = TratyTheme.colors.primaryContainer,
-                                unselectedIconColor = TratyTheme.colors.onSurfaceVariant,
-                                unselectedTextColor = TratyTheme.colors.onSurfaceVariant,
-                            ),
-                        )
-                    }
-                }
+                if (!showApartments) TratyBottomBar(tab, onSelect = { tab = it })
             },
         ) { pad ->
             Box(
@@ -187,6 +167,9 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
                         startRecording = startRecording,
                         onStartRecordingHandled = { startRecording = false },
                         onOpenWeekly = { showWeekly = true },
+                        onOpenPurchases = { showPurchaseGoals = true },
+                        revealPurchaseGoals = revealPurchaseGoals,
+                        onPurchaseGoalsRevealed = onPurchaseGoalsRevealed,
                     )
                     TratyNavTab.CHARTS -> ChartsScreen()
                     TratyNavTab.STATS -> StatsScreen(
@@ -241,6 +224,12 @@ fun TratyRoot(vm: MainViewModel = viewModel()) {
         if (showBudget) {
             Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
                 BudgetScreen(onBack = { showBudget = false }, onOpenWeekly = { showWeekly = true })
+            }
+        }
+
+        if (showPurchaseGoals) {
+            Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
+                PurchaseGoalScreen(onBack = { showPurchaseGoals = false })
             }
         }
 

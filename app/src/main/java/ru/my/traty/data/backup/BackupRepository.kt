@@ -16,6 +16,7 @@ class BackupRepository(private val db: AppDatabase) {
         val pending = db.pendingPhrases().getByStatus(PendingStatus.WAITING) +
             db.pendingPhrases().getByStatus(PendingStatus.PARSED)
         val h = db.apartments()
+        val purchases = db.purchaseGoals()
         DbSnapshot(
             housing = ru.my.traty.data.apartments.ApartmentSnapshot(h.apartments(), h.meters(), h.registers(), h.readings(), h.submissions(), h.submissionReadings()),
             categories = cats.map { it.category },
@@ -33,6 +34,8 @@ class BackupRepository(private val db: AppDatabase) {
             debts = db.debts().getAll(),
             debtPayments = db.debts().getAllPayments(),
             pendingPhrases = pending.sortedBy { it.createdAt },
+            purchaseGoals = purchases.getAllGoals(),
+            purchaseContributions = purchases.getAllContributions(),
         )
     }
 
@@ -44,6 +47,8 @@ class BackupRepository(private val db: AppDatabase) {
     suspend fun replaceAll(s: DbSnapshot, beforeCommit: suspend () -> Unit = {}) = db.withTransaction {
         val w = db.openHelper.writableDatabase
         // Сначала зависимые таблицы, потом те, на которые они ссылаются: внешние ключи проверяются сразу
+        val purchases = db.purchaseGoals()
+        purchases.clearGoals()
         CLEAR_ORDER.forEach { w.execSQL("DELETE FROM `$it`") }
 
         val h = db.apartments()
@@ -57,6 +62,8 @@ class BackupRepository(private val db: AppDatabase) {
         s.subcategories.forEach { db.categories().insertSub(it) }
         if (s.expenses.isNotEmpty()) db.expenses().insertAll(s.expenses)
         if (s.expenseItems.isNotEmpty()) db.expenseItems().insertAll(s.expenseItems)
+        if (s.purchaseGoals.isNotEmpty()) purchases.insertGoals(s.purchaseGoals)
+        if (s.purchaseContributions.isNotEmpty()) purchases.insertContributions(s.purchaseContributions)
         if (s.incomes.isNotEmpty()) db.incomes().insertAll(s.incomes)
         s.reconciliations.forEach { db.reconciliations().insert(it) }
         s.templates.forEach { db.templates().insert(it) }

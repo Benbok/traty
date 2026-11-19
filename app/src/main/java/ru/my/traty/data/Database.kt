@@ -69,10 +69,6 @@ data class Subcategory(
     val sortOrder: Int = 0,
 )
 
-/** Записи расхождения правятся и удаляются только через «Переделать». */
-val Expense.isUserEditable: Boolean get() = source != ExpenseSource.RECONCILE
-val Income.isUserEditable: Boolean get() = origin != IncomeOrigin.RECONCILE
-
 /** «Неучтённые» не выбираются ни пользователем, ни ИИ для обычных трат. */
 fun List<CategoryWithSubs>.selectable(): List<CategoryWithSubs> =
     filterNot { sameName(it.category.name, DefaultCategories.UNACCOUNTED) }
