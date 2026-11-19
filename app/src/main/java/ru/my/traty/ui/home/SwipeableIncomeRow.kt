@@ -15,6 +15,7 @@ fun SwipeableIncomeRow(
     onClick: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    internalTransfer: Boolean = false,
 ) {
     SwipeToDeleteRow(
         key = income.id,
@@ -22,6 +23,6 @@ fun SwipeableIncomeRow(
         onDelete = onDelete,
         modifier = modifier,
     ) {
-        IncomeRow(income = income, onClick = onClick)
+        IncomeRow(income = income, onClick = onClick, internalTransfer = internalTransfer)
     }
 }

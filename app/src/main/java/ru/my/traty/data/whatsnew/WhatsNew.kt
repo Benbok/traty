@@ -13,6 +13,15 @@ data class WhatsNewEntry(val version: String, val items: List<WhatsNewItem>)
 object WhatsNew {
     val entries: List<WhatsNewEntry> = listOf(
         WhatsNewEntry(
+            version = "0.3.7",
+            items = listOf(
+                WhatsNewItem("В «Тратах» можно запланировать покупку. Укажите стоимость и дату, чтобы узнать, сколько откладывать каждый день."),
+                WhatsNewItem("«Итог дня» напоминает о взносе на покупку. Время уведомления можно изменить в «Настройках»."),
+                WhatsNewItem("При отмене цели деньги возвращаются в доступный остаток. Взносы и возврат видны в истории, а итоги трат и доходов их пропускают.", "stats"),
+                WhatsNewItem("В карточке счётчика уточнили, какие показания можно отметить как переданные, и обновили сведения о приборе.", "apartments"),
+            ),
+        ),
+        WhatsNewEntry(
             version = "0.3.6",
             items = listOf(
                 WhatsNewItem("У стандартных категорий расходов появились новые значки. Они также видны на диаграмме в «Статистике».", "stats"),

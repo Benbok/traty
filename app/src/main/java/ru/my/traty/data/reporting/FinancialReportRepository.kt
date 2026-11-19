@@ -14,11 +14,11 @@ import ru.my.traty.data.purchases.PurchaseGoalStatus
 
 class FinancialReportRepository(private val db: AppDatabase) {
     private val resolvedGoals = db.purchaseGoals().observeResolved()
-    private val cancelledExpenses = resolvedGoals.map { goals ->
-        goals.filter { it.goal.actualPriceKopecks == null }
-            .flatMap { it.contributions }
-            .mapTo(mutableSetOf()) { it.id }
-    }.distinctUntilChanged()
+    private val cancelledExpenses = resolvedGoals.map(::cancelledExpenseIds).distinctUntilChanged()
+
+    internal fun cancelledTransfers() = combine(db.incomes().observeAll(), resolvedGoals) { incomes, goals ->
+        CancelledPurchaseTransfers(cancelledExpenseIds(goals), cancelledRefundIds(incomes, goals))
+    }.distinctUntilChanged().flowOn(Dispatchers.Default)
 
     fun expenses(from: Long, to: Long) = combine(
         db.expenses().observeRange(from, to),
@@ -31,6 +31,28 @@ class FinancialReportRepository(private val db: AppDatabase) {
         val excluded = cancelledRefundIds(rows, goals)
         rows.asReversed().filter { it.timestamp >= from && it.timestamp < to && it.id !in excluded }
     }.flowOn(Dispatchers.Default)
+}
+
+internal data class CancelledPurchaseTransfers(
+    private val expenseIds: Set<Long> = emptySet(),
+    private val incomeIds: Set<Long> = emptySet(),
+) {
+    fun expenseTotal(rows: List<ExpenseWithCategory>): Long =
+        rows.sumOf { if (it.expense.id in expenseIds) 0L else it.expense.amountKopecks }
+
+    fun incomeTotal(rows: List<Income>): Long =
+        rows.sumOf { if (isRefund(it)) 0L else it.amountKopecks }
+
+    fun isRefund(income: Income): Boolean =
+        income.origin == IncomeOrigin.PURCHASE_CANCELLATION_REFUND || income.id in incomeIds
+}
+
+private fun cancelledExpenseIds(goals: List<PurchaseGoalStatus>): Set<Long> = buildSet {
+    for (status in goals) {
+        if (status.goal.hidden && status.goal.actualPriceKopecks == null) {
+            status.contributions.forEach { add(it.id) }
+        }
+    }
 }
 
 internal fun reportTotals(rows: List<ExpenseWithCategory>): List<CategoryTotal> =

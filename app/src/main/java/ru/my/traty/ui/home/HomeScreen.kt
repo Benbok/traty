@@ -144,8 +144,9 @@ fun HomeScreen(
     // Заголовки дней нужны в общей ленте; внутри одного выбранного дня они только повторяли бы дату
     val dayHeaders = remember(feed, selectedDate) { if (selectedDate == null) feed.dayHeaders(zone) else emptyMap() }
     val today by purchaseGoalToday()
-    val totalExpense = remember(displayedExpenses) { displayedExpenses.sumOf { it.expense.amountKopecks } }
-    val totalIncome = remember(displayedIncomes) { displayedIncomes.sumOf { it.amountKopecks } }
+    val transfers by purchasesVm.cancelledTransfers.collectAsStateWithLifecycle()
+    val totalExpense = remember(displayedExpenses, transfers) { transfers.expenseTotal(displayedExpenses) }
+    val totalIncome = remember(displayedIncomes, transfers) { transfers.incomeTotal(displayedIncomes) }
 
     val mic = rememberHomeMic(vm)
     // Голосовой ввод запроса в поиск (без ИИ): текст попадает в строку поиска
@@ -350,6 +351,7 @@ fun HomeScreen(
                     is FeedItem.IncomeItem -> {
                         SwipeableIncomeRow(
                             income = item.data,
+                            internalTransfer = transfers.isRefund(item.data),
                             onClick = { incomeOpened = item.data },
                             onDelete = { incomeToDelete = item.data },
                             modifier = Modifier.animateItem(),

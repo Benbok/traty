@@ -12,12 +12,17 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ru.my.traty.TratyApp
 import ru.my.traty.data.purchases.PurchaseGoalStatus
+import ru.my.traty.data.reporting.CancelledPurchaseTransfers
 import java.time.LocalDate
 
 class PurchaseGoalViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository = (application as TratyApp).container.purchaseGoals
+    private val container = (application as TratyApp).container
+    private val repository = container.purchaseGoals
     val goals: StateFlow<List<PurchaseGoalStatus>?> = repository.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    internal val cancelledTransfers = container.financialReports.cancelledTransfers()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CancelledPurchaseTransfers())
 
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()

@@ -142,4 +142,22 @@ class PurchaseGoalRepositoryTest {
         assertTrue(reports.incomes(clock.millis(), clock.millis() + 1).first().isEmpty())
         assertEquals(75_000L, db.incomes().getAll().single().amountKopecks)
     }
+
+    @Test
+    fun sameDayFeedTotalsExcludeCancelledTransfersAndKeepOtherMovements() = runTest {
+        val goal = repository.create("Наушники", 120_000, due)
+        repository.contribute(goal, 75_000)
+        repository.cancel(goal)
+        val category = CategoryRepository(db).resolveForSave("Кафе", null, null)
+        db.expenses().insert(ru.my.traty.data.Expense(amountKopecks = 20_000, categoryId = category.categoryId, timestamp = clock.millis()))
+        db.incomes().insert(ru.my.traty.data.Income(amountKopecks = 50_000, source = "Зарплата", timestamp = clock.millis()))
+
+        val feedExpenses = db.expenses().getAllWithCategory()
+        val feedIncomes = db.incomes().getAll()
+        val transfers = FinancialReportRepository(db).cancelledTransfers().first()
+        assertEquals(20_000L, transfers.expenseTotal(feedExpenses))
+        assertEquals(50_000L, transfers.incomeTotal(feedIncomes))
+        assertEquals(2, feedExpenses.size)
+        assertEquals(2, feedIncomes.size)
+    }
 }

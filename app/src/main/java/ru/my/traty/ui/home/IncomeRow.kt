@@ -29,7 +29,9 @@ fun IncomeRow(
     income: Income,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    internalTransfer: Boolean = false,
 ) {
+    val amountColor = if (internalTransfer) TratyTheme.colors.onSurfaceVariant else TratyTheme.colors.income
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -38,7 +40,7 @@ fun IncomeRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TratyCategoryBadge(
-            emoji = "💰",
+            emoji = if (internalTransfer) "↩️" else "💰",
             categoryName = income.source,
             size = 42.dp,
         )
@@ -47,7 +49,7 @@ fun IncomeRow(
             Text(
                 text = income.source,
                 style = TratyTheme.typography.titleSmall,
-                color = TratyTheme.colors.income,
+                color = amountColor,
             )
             val sub = remember(income) { listOfNotNull(formatTime(income.timestamp), income.note).joinToString(" · ") }
             Text(
@@ -57,10 +59,10 @@ fun IncomeRow(
             )
         }
         Text(
-            text = "+${formatRub(income.amountKopecks)}",
+            text = if (internalTransfer) formatRub(income.amountKopecks) else "+${formatRub(income.amountKopecks)}",
             style = TratyTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
-            color = TratyTheme.colors.income,
+            color = amountColor,
         )
     }
 }
