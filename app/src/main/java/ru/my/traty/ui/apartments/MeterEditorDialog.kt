@@ -59,12 +59,7 @@ internal fun MeterEditorScreen(value: Meter, existingCodes: List<String>, vm: Ap
         },
     ) {
         HousingEditorPreview(
-            emoji = when (resource) {
-                ResourceType.COLD_WATER -> "💧"
-                ResourceType.HOT_WATER -> "♨️"
-                ResourceType.ELECTRICITY -> "⚡"
-                ResourceType.GAS -> "🔥"
-            },
+            illustration = resource.illustration,
             title = name.ifBlank { "Новый счётчик" },
             subtitle = resource.title + if (resource == ResourceType.ELECTRICITY) " · Тарифов: $count" else "",
         )

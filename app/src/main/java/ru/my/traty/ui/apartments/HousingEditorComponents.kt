@@ -1,6 +1,7 @@
 package ru.my.traty.ui.apartments
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -68,14 +69,14 @@ internal fun HousingEditorPage(
 }
 
 @Composable
-internal fun HousingEditorPreview(emoji: String, title: String, subtitle: String) {
+internal fun HousingEditorPreview(@DrawableRes illustration: Int, title: String, subtitle: String) {
     TratyCard(Modifier.fillMaxWidth()) {
         Column(
             Modifier.fillMaxWidth().padding(TratyTheme.spacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
         ) {
-            TratyCategoryBadge(emoji = emoji, categoryName = title, size = 56.dp)
+            TratyIllustrationBadge(illustration, size = 56.dp)
             Text(
                 title,
                 style = TratyTheme.typography.headlineMedium,
