@@ -7,31 +7,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ru.my.traty.R
 import ru.my.traty.data.apartments.*
 import ru.my.traty.ui.designsystem.components.*
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import java.util.Locale
 
-internal val ResourceType.symbol: ImageVector get() = when (this) {
-    ResourceType.COLD_WATER -> Icons.Filled.WaterDrop
-    ResourceType.HOT_WATER -> Icons.Filled.HotTub
-    ResourceType.ELECTRICITY -> Icons.Filled.Bolt
-    ResourceType.GAS -> Icons.Filled.LocalFireDepartment
-}
-
 internal fun registerTitle(code: String) = if (code == "TOTAL") "Общее показание" else "Тариф $code"
-
-@Composable
-internal fun HousingBadge(icon: ImageVector) {
-    Surface(shape = TratyTheme.shapes.medium, color = TratyTheme.colors.primaryContainer) {
-        Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = TratyTheme.colors.primary, modifier = Modifier.size(24.dp))
-        }
-    }
-}
 
 @Composable
 internal fun HousingMenu(
@@ -89,7 +73,7 @@ internal fun ApartmentSummaryCard(
     TratyCard(Modifier.fillMaxWidth(), onClick = onOpen) {
         Column(Modifier.padding(TratyTheme.spacing.md), verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                HousingBadge(Icons.Filled.Apartment)
+                TratyIllustrationBadge(R.drawable.ic_category_home, size = 44.dp)
                 Spacer(Modifier.width(TratyTheme.spacing.sm))
                 Column(Modifier.weight(1f)) {
                     Text(value.name, style = TratyTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -105,7 +89,9 @@ internal fun ApartmentSummaryCard(
                     style = TratyTheme.typography.labelLarge,
                     color = TratyTheme.colors.onSurfaceVariant,
                 )
-                resources.forEach { Icon(it.symbol, it.title, tint = TratyTheme.colors.primary, modifier = Modifier.size(18.dp)) }
+                resources.forEach {
+                    TratyIllustrationBadge(it.illustration, size = 18.dp, contentDescription = it.title)
+                }
                 Icon(Icons.Filled.ChevronRight, null, tint = TratyTheme.colors.onSurfaceVariant)
             }
         }
@@ -119,7 +105,7 @@ internal fun MeterSummaryCard(value: Meter, snapshot: ApartmentSnapshot, onOpen:
     TratyCard(Modifier.fillMaxWidth(), onClick = onOpen) {
         Column(Modifier.padding(TratyTheme.spacing.md), verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                HousingBadge(resource.symbol)
+                TratyIllustrationBadge(resource.illustration, size = 44.dp)
                 Spacer(Modifier.width(TratyTheme.spacing.sm))
                 Column(Modifier.weight(1f)) {
                     Text(value.name, style = TratyTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -157,7 +143,7 @@ internal fun ResourceSummaryCard(resource: ResourceType, meters: List<Meter>, sn
     TratyTonalCard(Modifier.fillMaxWidth(), onClick = onOpen) {
         Column(Modifier.padding(TratyTheme.spacing.md), verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(resource.symbol, null, tint = TratyTheme.colors.primary)
+                TratyIllustrationBadge(resource.illustration, size = 24.dp)
                 Spacer(Modifier.width(TratyTheme.spacing.sm))
                 Text(resource.title, modifier = Modifier.weight(1f), style = TratyTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Icon(Icons.Filled.ChevronRight, null, tint = TratyTheme.colors.onSurfaceVariant)

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import ru.my.traty.R
 import ru.my.traty.data.apartments.Apartment
 import ru.my.traty.ui.designsystem.components.*
 
@@ -30,7 +31,7 @@ internal fun ApartmentEditorScreen(value: Apartment, vm: ApartmentsViewModel, on
         },
     ) {
         HousingEditorPreview(
-            emoji = "🏠",
+            illustration = R.drawable.ic_category_home,
             title = name.ifBlank { "Новая квартира" },
             subtitle = address.ifBlank { "Счётчики и показания в одном месте" },
         )
