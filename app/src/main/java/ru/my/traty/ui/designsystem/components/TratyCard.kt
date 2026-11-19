@@ -1,7 +1,6 @@
 package ru.my.traty.ui.designsystem.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.padding
@@ -32,7 +31,7 @@ fun TratyCard(
     Surface(
         modifier = modifier.then(
             if (onClick != null) {
-                Modifier.clip(shape).clickable(onClick = onClick)
+                Modifier.clip(shape).tratyClickable(onClick = onClick)
             } else {
                 Modifier
             }

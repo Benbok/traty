@@ -1,7 +1,6 @@
 package ru.my.traty.ui.capture
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,12 +12,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +37,7 @@ import ru.my.traty.data.sameName
 import ru.my.traty.ui.designsystem.components.TratyAmountTextField
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
+import ru.my.traty.ui.designsystem.components.TratyDropdownPicker
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.home.CategoryPicker
@@ -204,21 +202,17 @@ private fun isNewSubcategory(row: EntryRow, categories: List<CategoryWithSubs>):
 private fun IncomeSourcePicker(selected: String, onPick: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val emoji = IncomeSources.ALL.firstOrNull { it.first == selected }?.second.orEmpty()
-    Box {
-        OutlinedButton(
-            onClick = { open = true },
-            modifier = Modifier.fillMaxWidth(),
-            shape = TratyTheme.shapes.small,
-        ) {
-            Text("$emoji $selected".trim())
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            IncomeSources.ALL.forEach { (name, e) ->
-                DropdownMenuItem(
-                    text = { Text("$e $name") },
-                    onClick = { onPick(name); open = false },
-                )
-            }
+    TratyDropdownPicker(
+        expanded = open,
+        onExpand = { open = true },
+        onDismiss = { open = false },
+        label = { Text("$emoji $selected".trim()) },
+    ) {
+        IncomeSources.ALL.forEach { (name, e) ->
+            DropdownMenuItem(
+                text = { Text("$e $name") },
+                onClick = { onPick(name); open = false },
+            )
         }
     }
 }

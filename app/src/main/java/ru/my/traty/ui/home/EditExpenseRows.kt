@@ -1,7 +1,6 @@
 package ru.my.traty.ui.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import ru.my.traty.data.labels.ExpenseLabelHit
 import ru.my.traty.ui.designsystem.components.AmountVisualTransformation
 import ru.my.traty.ui.designsystem.components.rememberAmountFieldValue
+import ru.my.traty.ui.designsystem.components.tratyClickable
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 // Строки и поля экрана «Редактировать трату»
@@ -104,7 +104,7 @@ internal fun PickRow(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clickable(enabled = enabled, onClick = onClick)
+            .tratyClickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = TratyTheme.spacing.lg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -179,7 +179,7 @@ internal fun OptionSheet(
                     Modifier
                         .fillMaxWidth()
                         .heightIn(min = 52.dp)
-                        .clickable { onPick(value) }
+                        .tratyClickable { onPick(value) }
                         .padding(horizontal = TratyTheme.spacing.lg),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

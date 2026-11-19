@@ -1,6 +1,5 @@
 package ru.my.traty.ui.home
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
@@ -15,6 +14,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import ru.my.traty.ui.designsystem.components.tratyClickable
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatDateNumeric
 import java.time.LocalDate
@@ -52,7 +53,8 @@ fun DateField(
             Box(
                 Modifier
                     .matchParentSize()
-                    .clickable { showPicker = true },
+                    .clip(TratyTheme.shapes.small)
+                    .tratyClickable { showPicker = true },
             )
         }
     }
