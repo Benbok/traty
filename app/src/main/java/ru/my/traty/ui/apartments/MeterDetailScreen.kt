@@ -43,6 +43,7 @@ fun MeterDetailScreen(meterId: Long, onBack: () -> Unit, vm: MeterDetailViewMode
     val passedByReading = remember(submissions, s.submissionReadings) {
         submissionsByReading(submissions, s.submissionReadings)
     }
+    val pendingReadings = remember(readings, passedByReading) { unsubmittedReadings(readings, passedByReading.keys) }
     val visibleReadings = remember(readings, selectedMonth) { readingsForMonth(readings, selectedMonth) }
     if (editMeter && meter != null) {
         MeterEditorScreen(
@@ -91,7 +92,7 @@ fun MeterDetailScreen(meterId: Long, onBack: () -> Unit, vm: MeterDetailViewMode
                 TratyOutlinedButton(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { submitting = true },
-                    enabled = readings.isNotEmpty(),
+                    enabled = pendingReadings.isNotEmpty(),
                 ) { Text("Отметить передачу") }
             }
         }
@@ -195,19 +196,8 @@ fun MeterDetailScreen(meterId: Long, onBack: () -> Unit, vm: MeterDetailViewMode
                     }
                 }
             }
-            2 -> {
-                item { HousingSectionTitle("Реквизиты счётчика") }
-                item {
-                    HousingCard("О приборе") {
-                        MeterInfoRow("Ресурс", resource?.title)
-                        MeterInfoRow("Номер прибора", meter?.serialNumber)
-                        MeterInfoRow("Поставщик", meter?.provider)
-                        MeterInfoRow("Лицевой счёт", meter?.account)
-                        MeterInfoRow("Начало учёта", meter?.accountingFrom?.let(HousingDates::format))
-                        MeterInfoRow("Окончание учёта", meter?.accountingTo?.let(HousingDates::format))
-                        MeterInfoRow("Статус", if (meter?.archived == true) "В архиве" else "Действующий")
-                    }
-                }
+            2 -> if (meter != null && resource != null) {
+                item { MeterAboutSection(meter, resource) }
             }
         }
     }
@@ -216,8 +206,7 @@ fun MeterDetailScreen(meterId: Long, onBack: () -> Unit, vm: MeterDetailViewMode
     }) { adding = false }
     editing?.let { r -> ReadingEditorDialog(registers.filter { it.id == r.registerId }, r, vm) { editing = null } }
     if (submitting) {
-        val pending = remember(readings, passedByReading) { unsubmittedReadings(readings, passedByReading.keys) }
-        SubmissionDialog(meterId, pending, registers, vm) { submitting = false }
+        SubmissionDialog(meterId, pendingReadings, registers, vm) { submitting = false }
     }
     if (choosingMeasuredMonth) {
         SubmissionMonthPicker(
@@ -240,13 +229,5 @@ fun MeterDetailScreen(meterId: Long, onBack: () -> Unit, vm: MeterDetailViewMode
             },
             dismissButton = { TratyTextButton(onClick = { deleting = null }) { Text("Отмена") } },
         )
-    }
-}
-
-@Composable
-private fun MeterInfoRow(label: String, value: String?) {
-    Column(verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {
-        Text(label, style = TratyTheme.typography.labelMedium, color = TratyTheme.colors.onSurfaceVariant)
-        Text(value?.takeIf { it.isNotBlank() } ?: "Не указано", style = TratyTheme.typography.bodyMedium)
     }
 }
