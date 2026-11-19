@@ -121,16 +121,23 @@ object AssistantEngine {
         AssistantItemSuggestions.find(q, filter, spending, from..to, ctx)?.let { return it }
         filter.unresolvedAnswer(spending, ctx)?.let { return it }
 
-        fun rowsIn(a: LocalDate, b: LocalDate) = spending.filter { r ->
+        fun rowsIn(a: LocalDate, b: LocalDate, selection: Filter = filter) = spending.filter { r ->
             val d = day(r.expense.timestamp, ctx.zone)
-            !d.isBefore(a) && !d.isAfter(b) && filter.matches(r, ctx.expenseItems[r.expense.id].orEmpty())
+            !d.isBefore(a) && !d.isAfter(b) && selection.matches(r, ctx.expenseItems[r.expense.id].orEmpty())
         }
 
         val rows = rowsIn(from, to)
         val span = span(from, to)
         val subject = filter.describe()
         val base = header(ctx) + (if (filter.unknownNames.isNotEmpty()) "Не найдены в записях: ${filter.unknownNames.joinToString(", ")}.\n" else "")
-        if (q.intent == Intents.PRODUCT_RANK) return ProductRanking.answer(q, rows, ctx.expenseItems, span)
+        if (q.intent == Intents.PRODUCT_RANK) {
+            val mixed = if (q.categories.singleOrNull()?.let(::fold) == "продукты") {
+                val storeOnly = Filter(emptySet(), emptyList(), filter.place)
+                val included = rows.map { it.expense.id }.toHashSet()
+                rowsIn(from, to, storeOnly).filterNot { it.expense.id in included }
+            } else emptyList()
+            return ProductRanking.answer(q, rows, ctx.expenseItems, span, mixed)
+        }
         val picked = Picked(rows, filter, ctx)
 
         return when (q.intent) {

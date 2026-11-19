@@ -35,11 +35,11 @@ object ItemTotals {
      * Товары за период по убыванию суммы. [place] — только позиции из этого магазина (в любом написании),
      * null — из всех. Позиции без названия пропускаются.
      */
-    fun byProduct(sales: List<ItemSale>, place: String? = null): List<ProductTotal> {
+    fun byProduct(sales: List<ItemSale>, place: String? = null, keyOf: (String) -> String = ItemNames::key): List<ProductTotal> {
         val placeKey = place?.let(Places::key)
         return sales
             .filter { placeKey == null || Places.key(it.place) == placeKey }
-            .mapNotNull { s -> ItemNames.key(s.name).takeIf { it.isNotEmpty() }?.let { it to s } }
+            .mapNotNull { s -> keyOf(s.name).takeIf { it.isNotEmpty() }?.let { it to s } }
             .groupBy({ it.first }, { it.second })
             .map { (key, rows) -> total(key, rows) }
             .sortedWith(compareByDescending<ProductTotal> { it.totalKopecks }.thenByDescending { it.purchases }.thenBy { it.name })
