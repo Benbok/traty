@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import ru.my.traty.ui.designsystem.components.*
+import ru.my.traty.ui.designsystem.components.TratyFloatingActionButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 @Composable
@@ -43,7 +44,7 @@ internal fun HousingPage(
             )
         },
         floatingActionButton = {
-            if (onAdd != null) FloatingActionButton(
+            if (onAdd != null) TratyFloatingActionButton(
                 onClick = onAdd,
                 containerColor = TratyTheme.colors.primary,
                 contentColor = TratyTheme.colors.onPrimary,

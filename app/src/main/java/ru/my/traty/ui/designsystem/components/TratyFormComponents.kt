@@ -1,5 +1,6 @@
 package ru.my.traty.ui.designsystem.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -109,7 +110,7 @@ fun TratyPickRow(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .tratyClickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = TratyTheme.spacing.lg),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +34,7 @@ import ru.my.traty.ui.AmountInput
 import ru.my.traty.ui.designsystem.components.TratyAmountTextField
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
+import ru.my.traty.ui.designsystem.components.TratyFilterChip
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatMonth
@@ -129,7 +129,7 @@ fun TotalLimitDialog(
                     color = TratyTheme.colors.onSurfaceVariant,
                 )
                 TratyAmountTextField(value = amount, onValueChange = { amount = it }, label = "Сумма на месяц", modifier = Modifier.fillMaxWidth())
-                FilterChip(selected = repeats, onClick = { repeats = !repeats }, label = { Text("Повторять каждый месяц") })
+                TratyFilterChip(selected = repeats, onClick = { repeats = !repeats }, label = { Text("Повторять каждый месяц") })
                 if (current != null) {
                     TratyTextButton(onClick = onRemove) { Text("Убрать лимит с этого месяца", color = TratyTheme.colors.expense) }
                 }

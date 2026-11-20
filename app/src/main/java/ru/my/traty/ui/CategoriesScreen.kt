@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -62,6 +61,7 @@ import ru.my.traty.data.DefaultCategories
 import ru.my.traty.data.Subcategory
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCategoryBadge
+import ru.my.traty.ui.designsystem.components.TratyFloatingActionButton
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyOutlinedButton
@@ -118,7 +118,7 @@ fun CategoriesScreen(onBack: () -> Unit, vm: CategoriesViewModel = viewModel()) 
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
+            TratyFloatingActionButton(
                 onClick = { adding = true },
                 containerColor = TratyTheme.colors.primary,
                 contentColor = TratyTheme.colors.onPrimary,

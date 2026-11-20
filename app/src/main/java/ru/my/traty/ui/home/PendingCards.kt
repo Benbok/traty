@@ -1,6 +1,5 @@
 package ru.my.traty.ui.home
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,8 +26,8 @@ fun PendingCard(title: String, subtitle: String?, modifier: Modifier = Modifier,
     TratyCard(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+            .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
+        onClick = onClick,
         backgroundColor = TratyTheme.colors.primaryContainer,
     ) {
         Column(Modifier.padding(TratyTheme.spacing.md)) {

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +26,7 @@ import ru.my.traty.data.debt.DebtTree
 import ru.my.traty.data.debt.DebtTreeNode
 import ru.my.traty.data.debt.DebtTreeSummary
 import ru.my.traty.data.debt.TreePaymentState
+import ru.my.traty.ui.designsystem.components.TratyFilterChip
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.designsystem.tokens.TratyPalette
 
@@ -157,7 +157,7 @@ private fun TreeChip(
     onSelect: (TreeFilter) -> Unit,
     overdue: Boolean = false,
 ) {
-    FilterChip(
+    TratyFilterChip(
         selected = selected == value,
         onClick = { onSelect(value) },
         label = { Text(label) },

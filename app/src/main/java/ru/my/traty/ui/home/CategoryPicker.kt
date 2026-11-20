@@ -1,6 +1,5 @@
 package ru.my.traty.ui.home
 
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -10,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import ru.my.traty.capture.NewCategory
 import ru.my.traty.data.CategoryWithSubs
+import ru.my.traty.ui.designsystem.components.TratyDropdownMenuItem
 import ru.my.traty.ui.designsystem.components.TratyDropdownPicker
 
 @Composable
@@ -32,14 +32,14 @@ fun CategoryPicker(
         label = { Text("$emoji $selected" + if (isNew) " (новая)" else "") },
     ) {
         newOne?.let { s ->
-            DropdownMenuItem(
+            TratyDropdownMenuItem(
                 text = { Text("${s.emoji} ${s.name} (новая)") },
                 onClick = { onPick(s.name); open = false },
             )
             HorizontalDivider()
         }
         categories.forEach { c ->
-            DropdownMenuItem(
+            TratyDropdownMenuItem(
                 text = { Text("${c.emoji} ${c.name}") },
                 onClick = { onPick(c.name); open = false },
             )

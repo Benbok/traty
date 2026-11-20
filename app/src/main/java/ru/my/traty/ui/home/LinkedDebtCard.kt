@@ -2,7 +2,6 @@ package ru.my.traty.ui.home
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,9 +31,8 @@ import ru.my.traty.ui.designsystem.theme.TratyTheme
 internal fun LinkedDebtCard(linkedDebt: Debt, onOpenDebt: (Long) -> Unit) {
     val d = linkedDebt
     TratyCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onOpenDebt(d.id) },
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { onOpenDebt(d.id) },
         backgroundColor = TratyTheme.colors.surface,
         border = BorderStroke(1.dp, TratyTheme.colors.primary.copy(alpha = 0.5f)),
     ) {

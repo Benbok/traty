@@ -2,7 +2,6 @@ package ru.my.traty.ui.settings
 
 import android.os.Build
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -100,7 +99,8 @@ private fun ThemeModeOption(
         ThemeMode.SYSTEM -> Icons.Filled.BrightnessAuto
     }
     TratyCard(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier,
+        onClick = onClick,
         backgroundColor = if (selected) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
         border = if (selected) BorderStroke(1.5.dp, TratyTheme.colors.primary) else null,
         shape = TratyTheme.shapes.medium,

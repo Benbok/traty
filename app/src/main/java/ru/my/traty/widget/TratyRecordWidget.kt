@@ -48,7 +48,7 @@ private fun RecordWidgetContent(openCapture: Intent) {
     Box(
         modifier = GlanceModifier
             .fillMaxSize()
-            .clickable(actionStartActivity(openCapture)),
+            .clickable(actionStartActivity(openCapture), rippleOverride = R.drawable.traty_widget_press_record),
         contentAlignment = Alignment.Center,
     ) {
         Box(

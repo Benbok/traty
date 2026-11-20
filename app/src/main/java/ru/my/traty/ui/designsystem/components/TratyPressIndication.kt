@@ -3,7 +3,7 @@ package ru.my.traty.ui.designsystem.components
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.IndicationNodeFactory
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.FocusInteraction
 import androidx.compose.foundation.interaction.HoverInteraction
 import androidx.compose.foundation.interaction.InteractionSource
@@ -15,6 +15,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DrawModifierNode
@@ -23,24 +25,26 @@ import kotlinx.coroutines.launch
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 @Composable
-internal fun Modifier.tratyClickable(
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-): Modifier = clickable(
-    interactionSource = null,
-    indication = TratyPressIndication(TratyTheme.colors.onSurface),
-    enabled = enabled,
-    onClick = onClick,
+internal fun Modifier.tratyPressFeedback(
+    interactionSource: InteractionSource,
+    shape: Shape? = null,
+): Modifier = indication(
+    interactionSource,
+    TratyPressIndication(TratyTheme.colors.onSurface, shape, drawFocusAndHover = false),
 )
 
-private data class TratyPressIndication(val color: Color) : IndicationNodeFactory {
+internal data class TratyPressIndication(
+    val color: Color,
+    val shape: Shape? = null,
+    val drawFocusAndHover: Boolean = true,
+) : IndicationNodeFactory {
     override fun create(interactionSource: InteractionSource): DelegatableNode =
-        TratyPressNode(interactionSource, color)
+        TratyPressNode(interactionSource, this)
 }
 
 private class TratyPressNode(
     private val interactionSource: InteractionSource,
-    private val color: Color,
+    private val indication: TratyPressIndication,
 ) : Modifier.Node(), DrawModifierNode {
     // Ровная подсветка не меняет форму, когда карточка раскрывается.
     private var pressAlpha by mutableFloatStateOf(0f)
@@ -79,7 +83,18 @@ private class TratyPressNode(
 
     override fun ContentDrawScope.draw() {
         drawContent()
-        val alpha = maxOf(pressAlpha, if (focused) 0.10f else 0f, if (hovered) 0.04f else 0f)
-        if (alpha > 0f) drawRect(color.copy(alpha = alpha))
+        val alpha = if (indication.drawFocusAndHover) {
+            maxOf(pressAlpha, if (focused) 0.10f else 0f, if (hovered) 0.04f else 0f)
+        } else {
+            pressAlpha
+        }
+        if (alpha <= 0f) return
+        val color = indication.color.copy(alpha = alpha)
+        val shape = indication.shape
+        if (shape == null) {
+            drawRect(color)
+        } else {
+            drawOutline(shape.createOutline(size, layoutDirection, this), color)
+        }
     }
 }

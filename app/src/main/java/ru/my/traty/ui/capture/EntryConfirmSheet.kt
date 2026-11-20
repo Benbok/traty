@@ -12,10 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,7 +34,10 @@ import ru.my.traty.data.sameName
 import ru.my.traty.ui.designsystem.components.TratyAmountTextField
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
+import ru.my.traty.ui.designsystem.components.TratyDropdownMenuItem
 import ru.my.traty.ui.designsystem.components.TratyDropdownPicker
+import ru.my.traty.ui.designsystem.components.TratyFilterChip
+import ru.my.traty.ui.designsystem.components.TratyMaterialIconButton
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.home.CategoryPicker
@@ -97,20 +97,20 @@ fun EntryConfirmSheet(
                             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                FilterChip(
+                                TratyFilterChip(
                                     selected = !isIncome,
                                     onClick = { update(i) { it.copy(type = EntryType.EXPENSE) } },
                                     label = { Text("Трата") },
                                 )
                                 Spacer(Modifier.padding(horizontal = TratyTheme.spacing.xxs))
-                                FilterChip(
+                                TratyFilterChip(
                                     selected = isIncome,
                                     onClick = { update(i) { it.copy(type = EntryType.INCOME) } },
                                     label = { Text("Пополнение") },
                                 )
                                 Spacer(Modifier.weight(1f))
                                 if (rows.size > 1) {
-                                    IconButton(onClick = { rows = rows.filterIndexed { j, _ -> j != i } }) {
+                                    TratyMaterialIconButton(onClick = { rows = rows.filterIndexed { j, _ -> j != i } }) {
                                         Icon(Icons.Filled.Close, "Убрать", tint = TratyTheme.colors.onSurfaceVariant)
                                     }
                                 }
@@ -209,7 +209,7 @@ private fun IncomeSourcePicker(selected: String, onPick: (String) -> Unit) {
         label = { Text("$emoji $selected".trim()) },
     ) {
         IncomeSources.ALL.forEach { (name, e) ->
-            DropdownMenuItem(
+            TratyDropdownMenuItem(
                 text = { Text("$e $name") },
                 onClick = { onPick(name); open = false },
             )

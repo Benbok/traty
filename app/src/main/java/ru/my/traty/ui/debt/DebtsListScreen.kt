@@ -2,7 +2,6 @@ package ru.my.traty.ui.debt
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,7 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -45,6 +43,7 @@ import ru.my.traty.ui.designsystem.components.TratyAmountText
 import ru.my.traty.ui.designsystem.components.TratyCard
 import ru.my.traty.ui.designsystem.components.TratyCategoryBadge
 import ru.my.traty.ui.designsystem.components.TratyEmptyState
+import ru.my.traty.ui.designsystem.components.TratyFilterChip
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyProgressBar
 import ru.my.traty.ui.designsystem.theme.TratyTheme
@@ -93,7 +92,7 @@ fun DebtsListScreen(
                     .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.xs),
                 horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
             ) {
-                FilterChip(
+                TratyFilterChip(
                     selected = !showClosed,
                     onClick = { showClosed = false },
                     label = { Text("Активные (${activeItems.size})") },
@@ -102,7 +101,7 @@ fun DebtsListScreen(
                         selectedLabelColor = TratyTheme.colors.primary,
                     ),
                 )
-                FilterChip(
+                TratyFilterChip(
                     selected = showClosed,
                     onClick = { showClosed = true },
                     label = { Text("Завершённые (${closedItems.size})") },
@@ -164,8 +163,8 @@ private fun DebtListRow(
     TratyCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = TratyTheme.spacing.lg)
-            .clickable(onClick = onClick),
+            .padding(horizontal = TratyTheme.spacing.lg),
+        onClick = onClick,
         backgroundColor = TratyTheme.colors.surface,
         border = BorderStroke(
             width = 1.dp,

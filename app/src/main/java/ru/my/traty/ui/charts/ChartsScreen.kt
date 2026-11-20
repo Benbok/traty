@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -92,7 +93,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                         shape = TratyTheme.shapes.small,
                         color = if (isSelected) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
                         border = if (isSelected) BorderStroke(1.dp, TratyTheme.colors.primary) else null,
-                        modifier = Modifier.clickable { vm.setPeriod(p) },
+                        modifier = Modifier.clip(TratyTheme.shapes.small).clickable { vm.setPeriod(p) },
                     ) {
                         Text(
                             text = p.title,

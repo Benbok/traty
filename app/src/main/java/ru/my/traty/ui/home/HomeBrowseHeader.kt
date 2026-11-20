@@ -1,5 +1,6 @@
 package ru.my.traty.ui.home
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -16,12 +17,14 @@ import androidx.compose.material3.InputChip
 import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.components.TratyMonthPicker
+import ru.my.traty.ui.designsystem.components.tratyPressFeedback
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatDate
@@ -85,7 +88,10 @@ private fun SelectedDayFilter(selectedDate: LocalDate, onPickDate: () -> Unit, o
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val interactionSource = remember { MutableInteractionSource() }
         InputChip(
+            modifier = Modifier.tratyPressFeedback(interactionSource, TratyTheme.shapes.small),
+            interactionSource = interactionSource,
             selected = true,
             onClick = onPickDate,
             label = { Text("Дата: ${formatDate(selectedDate)}") },

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +23,7 @@ import ru.my.traty.data.recurring.PeriodUnit
 import ru.my.traty.ui.AmountInput
 import ru.my.traty.ui.designsystem.components.TratyAmountTextField
 import ru.my.traty.ui.designsystem.components.TratyButton
+import ru.my.traty.ui.designsystem.components.TratyFilterChip
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.home.CategoryPicker
@@ -76,7 +76,7 @@ internal fun RecurringEditDialog(
                     horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
                 ) {
                     UNIT_CHIPS.forEach { (u, label) ->
-                        FilterChip(selected = unit == u, onClick = { unit = u }, label = { Text(label) })
+                        TratyFilterChip(selected = unit == u, onClick = { unit = u }, label = { Text(label) })
                     }
                 }
                 OutlinedTextField(
@@ -88,7 +88,7 @@ internal fun RecurringEditDialog(
                     modifier = Modifier.fillMaxWidth(),
                     shape = TratyTheme.shapes.small,
                 )
-                FilterChip(
+                TratyFilterChip(
                     selected = varies,
                     onClick = { varies = !varies },
                     label = { Text("Сумма меняется (коммуналка)") },
@@ -100,7 +100,7 @@ internal fun RecurringEditDialog(
                     horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
                 ) {
                     REMIND_CHIPS.forEach { (days, label) ->
-                        FilterChip(selected = remind == days, onClick = { remind = days }, label = { Text(label) })
+                        TratyFilterChip(selected = remind == days, onClick = { remind = days }, label = { Text(label) })
                     }
                 }
             }

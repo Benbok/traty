@@ -3,7 +3,6 @@ package ru.my.traty.ui.apartments
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -11,6 +10,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import ru.my.traty.data.apartments.*
 import ru.my.traty.ui.designsystem.components.*
+import ru.my.traty.ui.designsystem.components.TratyFilterChip
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.home.DatePickerModal
 import java.time.LocalDate
@@ -79,7 +79,7 @@ internal fun MeterEditorScreen(value: Meter, existingCodes: List<String>, vm: Ap
             TratyCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().padding(TratyTheme.spacing.md)) {
                     ResourceType.entries.forEach { r ->
-                        FilterChip(
+                        TratyFilterChip(
                             selected = resource == r,
                             onClick = { resourceName = r.name },
                             enabled = !vm.busy,
@@ -97,7 +97,7 @@ internal fun MeterEditorScreen(value: Meter, existingCodes: List<String>, vm: Ap
                 HousingSectionTitle("Количество тарифов")
                 Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm)) {
                     (1..3).forEach { n ->
-                        FilterChip(
+                        TratyFilterChip(
                             selected = count == n,
                             onClick = { count = n },
                             enabled = !vm.busy,

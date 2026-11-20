@@ -143,7 +143,7 @@ private fun HeaderRow(
         Column(
             modifier = GlanceModifier
                 .defaultWeight()
-                .clickable(actionStartActivity(openMain)),
+                .clickable(actionStartActivity(openMain), rippleOverride = R.drawable.traty_widget_press_row),
         ) {
             Text(
                 text = "СЕГОДНЯ",
@@ -178,7 +178,7 @@ private fun HeaderRow(
             modifier = GlanceModifier
                 .cornerRadius(16.dp)
                 .background(emeraldPrimary)
-                .clickable(actionStartActivity(openCapture))
+                .clickable(actionStartActivity(openCapture), rippleOverride = R.drawable.traty_widget_press_action)
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center,
         ) {
@@ -224,7 +224,7 @@ private fun ExpensesList(
         Row(
             modifier = GlanceModifier
                 .fillMaxWidth()
-                .clickable(actionStartActivity(openMain))
+                .clickable(actionStartActivity(openMain), rippleOverride = R.drawable.traty_widget_press_row)
                 .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -240,7 +240,7 @@ private fun ExpensesList(
         Column(
             modifier = GlanceModifier
                 .fillMaxWidth()
-                .clickable(actionStartActivity(openMain)),
+                .clickable(actionStartActivity(openMain), rippleOverride = R.drawable.traty_widget_press_row),
         ) {
             expenses.take(maxItems).forEachIndexed { index, item ->
                 if (index > 0) {
