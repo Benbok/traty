@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.ui.designsystem.components.TratyOutlinedButton
+import ru.my.traty.ui.designsystem.components.tratyPressFeedback
 import ru.my.traty.ui.designsystem.components.TratyTonalButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
@@ -150,10 +153,13 @@ private fun ReceiptSource(
     highlighted: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val shape = TratyTheme.shapes.medium
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = TratyTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth().tratyPressFeedback(interactionSource, shape),
+        shape = shape,
+        interactionSource = interactionSource,
         color = if (highlighted) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
         contentColor = if (highlighted) TratyTheme.colors.onPrimaryContainer else TratyTheme.colors.onSurface,
     ) {

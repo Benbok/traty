@@ -12,7 +12,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +24,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import ru.my.traty.ui.capture.RecordState
+import ru.my.traty.ui.designsystem.components.TratyMaterialIconButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 /**
@@ -61,7 +61,7 @@ fun FeedSearchField(
         trailingIcon = {
             Row {
                 if (mic != null) {
-                    IconButton(onClick = mic::onClick, enabled = micEnabled && micState !is RecordState.Recognizing) {
+                    TratyMaterialIconButton(onClick = mic::onClick, enabled = micEnabled && micState !is RecordState.Recognizing) {
                         when (micState) {
                             is RecordState.Recognizing -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                             is RecordState.Listening -> Icon(Icons.Filled.Stop, contentDescription = "Закончить запись", modifier = Modifier.size(20.dp))
@@ -70,7 +70,7 @@ fun FeedSearchField(
                     }
                 }
                 if (query.isNotEmpty()) {
-                    IconButton(onClick = { onQueryChange("") }) {
+                    TratyMaterialIconButton(onClick = { onQueryChange("") }) {
                         Icon(Icons.Filled.Close, contentDescription = "Очистить", modifier = Modifier.size(20.dp))
                     }
                 }

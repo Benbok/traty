@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.my.traty.data.VoiceEngine
 import ru.my.traty.speech.ModelState
+import ru.my.traty.ui.designsystem.components.TratyRadioButton
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
@@ -46,7 +46,7 @@ fun VoiceSettingsCard(vm: MainViewModel, modifier: Modifier = Modifier) {
                         .padding(vertical = TratyTheme.spacing.xs),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    RadioButton(selected = settings.voiceEngine == e, onClick = { vm.setVoiceEngine(e) })
+                    TratyRadioButton(selected = settings.voiceEngine == e, onClick = { vm.setVoiceEngine(e) })
                     Spacer(Modifier.width(TratyTheme.spacing.sm))
                     Text(e.title, style = TratyTheme.typography.bodyLarge)
                 }

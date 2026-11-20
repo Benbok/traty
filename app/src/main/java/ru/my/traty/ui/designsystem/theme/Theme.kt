@@ -1,9 +1,14 @@
 package ru.my.traty.ui.designsystem.theme
 
 import android.os.Build
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.ripple.RippleAlpha
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RippleConfiguration
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -12,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.platform.LocalContext
+import ru.my.traty.ui.designsystem.components.TratyPressIndication
 import ru.my.traty.ui.designsystem.tokens.DarkTratyColors
 import ru.my.traty.ui.designsystem.tokens.LightTratyColors
 import ru.my.traty.ui.designsystem.tokens.LocalTratyColors
@@ -51,12 +57,25 @@ object TratyTheme {
         get() = LocalTratyShapes.current
 }
 
+// Компоненты Material рисуют ripple отдельно от LocalIndication. Оставляем видимый
+// фокус и наведение, а подсветку касания рисуют компоненты дизайн-системы.
+@OptIn(ExperimentalMaterial3Api::class)
+private val tratyMaterialRipple = RippleConfiguration(
+    rippleAlpha = RippleAlpha(
+        draggedAlpha = 0.16f,
+        focusedAlpha = 0.10f,
+        hoveredAlpha = 0.08f,
+        pressedAlpha = 0f,
+    ),
+)
+
 /**
  * Тема приложения. [dynamicColor] включает цвета из обоев на Android 12+;
  * на более старых телефонах остаётся палитра Traty.
  * [holiday] — праздничный акцент и значок в шапке. При цветах из обоев акцент
  * не меняется (иначе он спорит с фоном из обоев), остаётся только значок.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TratyTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -90,10 +109,13 @@ fun TratyTheme(
         LocalTratyShapes provides tratyShapes,
         LocalTratyHoliday provides holiday,
     ) {
-        MaterialTheme(
-            colorScheme = m3ColorScheme,
-            content = content,
-        )
+        MaterialTheme(colorScheme = m3ColorScheme) {
+            CompositionLocalProvider(
+                LocalIndication provides TratyPressIndication(tratyColors.onSurface),
+                LocalRippleConfiguration provides tratyMaterialRipple,
+                content = content,
+            )
+        }
     }
 }
 

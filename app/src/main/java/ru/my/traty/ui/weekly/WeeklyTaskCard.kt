@@ -1,5 +1,6 @@
 package ru.my.traty.ui.weekly
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -18,6 +20,7 @@ import ru.my.traty.data.weekly.TaskState
 import ru.my.traty.data.weekly.WeeklyTask
 import ru.my.traty.data.weekly.WeeklyTaskType
 import ru.my.traty.ui.designsystem.components.TratyCard
+import ru.my.traty.ui.designsystem.components.tratyPressFeedback
 import ru.my.traty.ui.designsystem.components.TratyProgressBar
 import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
@@ -55,7 +58,13 @@ fun WeeklyTaskCard(
             Spacer(Modifier.height(TratyTheme.spacing.xs))
             if (manual) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = p.task.checked, onCheckedChange = { onCheck(p.task, it) })
+                    val interactionSource = remember { MutableInteractionSource() }
+                    Checkbox(
+                        checked = p.task.checked,
+                        onCheckedChange = { onCheck(p.task, it) },
+                        modifier = Modifier.tratyPressFeedback(interactionSource, TratyTheme.shapes.small),
+                        interactionSource = interactionSource,
+                    )
                     Text(p.text, style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)
                 }
             } else {

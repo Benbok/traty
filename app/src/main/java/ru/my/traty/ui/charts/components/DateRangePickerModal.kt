@@ -27,6 +27,7 @@ import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.my.traty.ui.designsystem.components.TratyCard
@@ -208,7 +209,7 @@ fun DateRangePickerModal(
                         shape = TratyTheme.shapes.small,
                         color = if (isCurrentPreset) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
                         border = if (isCurrentPreset) BorderStroke(1.dp, TratyTheme.colors.primary) else null,
-                        modifier = Modifier.clickable {
+                        modifier = Modifier.clip(TratyTheme.shapes.small).clickable {
                             val pStart = range.first.toPickerMillis()
                             val pEnd = range.second.toPickerMillis()
                             state.setSelection(pStart, pEnd)

@@ -17,11 +17,9 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarData
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -143,7 +141,7 @@ fun TratySnackbarContent(
 
             if (actionLabel != null && onAction != null) {
                 Spacer(Modifier.width(TratyTheme.spacing.sm))
-                TextButton(
+                TratyMaterialTextButton(
                     onClick = onAction,
                     shape = TratyTheme.shapes.small,
                     colors = ButtonDefaults.textButtonColors(
@@ -160,7 +158,7 @@ fun TratySnackbarContent(
                     )
                 }
             } else if (withDismissAction && onDismiss != null) {
-                IconButton(
+                TratyMaterialIconButton(
                     onClick = onDismiss,
                     modifier = Modifier.size(32.dp),
                 ) {

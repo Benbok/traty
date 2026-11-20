@@ -21,9 +21,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -43,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.LlmProvider
+import ru.my.traty.ui.designsystem.components.TratyMaterialIconButton
+import ru.my.traty.ui.designsystem.components.TratyRadioButton
 import ru.my.traty.ui.MainViewModel
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyCard
@@ -125,7 +125,7 @@ fun AiSettingsScreen(
                                 .padding(vertical = TratyTheme.spacing.xs),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            RadioButton(
+                            TratyRadioButton(
                                 selected = isSelected,
                                 onClick = { s = s.copy(provider = p) },
                             )
@@ -259,7 +259,7 @@ private fun AiSecretField(label: String, value: String, onChange: (String) -> Un
         trailingIcon = {
             val icon = if (visible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility
             val desc = if (visible) "Скрыть ключ" else "Показать ключ"
-            IconButton(onClick = { visible = !visible }) {
+            TratyMaterialIconButton(onClick = { visible = !visible }) {
                 Icon(imageVector = icon, contentDescription = desc, modifier = Modifier.size(20.dp))
             }
         },

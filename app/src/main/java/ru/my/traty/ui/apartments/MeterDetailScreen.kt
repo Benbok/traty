@@ -13,6 +13,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.data.apartments.*
 import ru.my.traty.ui.designsystem.components.*
+import ru.my.traty.ui.designsystem.components.TratyFilterChip
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import java.time.Instant
 import java.time.YearMonth
@@ -99,7 +100,7 @@ fun MeterDetailScreen(meterId: Long, onBack: () -> Unit, vm: MeterDetailViewMode
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {
                 listOf("История", "Расход", "О приборе").forEachIndexed { index, label ->
-                    FilterChip(
+                    TratyFilterChip(
                         selected = section == index, onClick = { section = index },
                         modifier = Modifier.weight(1f),
                         label = { Text(label, style = TratyTheme.typography.labelMedium) },

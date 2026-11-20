@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatDateNumeric
 import java.time.LocalDate
@@ -52,6 +53,7 @@ fun DateField(
             Box(
                 Modifier
                     .matchParentSize()
+                    .clip(TratyTheme.shapes.small)
                     .clickable { showPicker = true },
             )
         }

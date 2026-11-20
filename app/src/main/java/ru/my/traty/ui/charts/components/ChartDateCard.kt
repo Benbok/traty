@@ -107,7 +107,7 @@ fun ChartDateCard(
                     shape = TratyTheme.shapes.small,
                     color = if (isCustom) TratyTheme.colors.primaryContainer else TratyTheme.colors.surfaceContainer,
                     border = if (isCustom) BorderStroke(1.dp, TratyTheme.colors.primary) else null,
-                    modifier = Modifier.clickable(onClick = onOpenCalendar),
+                    modifier = Modifier.clip(TratyTheme.shapes.small).clickable(onClick = onOpenCalendar),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),

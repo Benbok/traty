@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import ru.my.traty.R
 import ru.my.traty.data.apartments.*
 import ru.my.traty.ui.designsystem.components.*
+import ru.my.traty.ui.designsystem.components.TratyDropdownMenuItem
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import java.util.Locale
 
@@ -27,12 +28,12 @@ internal fun HousingMenu(
     Box {
         TratyIconButton(Icons.Filled.MoreVert, description, { expanded = true })
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
+            TratyDropdownMenuItem(
                 text = { Text("Редактировать") },
                 leadingIcon = { Icon(Icons.Filled.Edit, null) },
                 onClick = { expanded = false; onEdit() },
             )
-            if (onDelete != null) DropdownMenuItem(
+            if (onDelete != null) TratyDropdownMenuItem(
                 text = { Text("Удалить", color = TratyTheme.colors.expense) },
                 leadingIcon = { Icon(Icons.Filled.DeleteOutline, null, tint = TratyTheme.colors.expense) },
                 onClick = { expanded = false; onDelete() },

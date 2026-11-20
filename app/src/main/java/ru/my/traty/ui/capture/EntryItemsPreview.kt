@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -17,6 +16,7 @@ import ru.my.traty.capture.DraftItem
 import ru.my.traty.data.items.ItemsBalance
 import ru.my.traty.data.items.ItemsBalanceState
 import ru.my.traty.data.items.ItemsCheck
+import ru.my.traty.ui.designsystem.components.TratyMaterialIconButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatRub
 
@@ -56,7 +56,7 @@ private fun ItemLine(item: DraftItem, onRemove: () -> Unit) {
             style = TratyTheme.typography.bodyMedium,
             color = if (item.priceKopecks() == null) TratyTheme.colors.onSurfaceVariant else TratyTheme.colors.onSurface,
         )
-        IconButton(onClick = onRemove) {
+        TratyMaterialIconButton(onClick = onRemove) {
             Icon(Icons.Filled.Close, "Убрать товар", tint = TratyTheme.colors.onSurfaceVariant)
         }
     }

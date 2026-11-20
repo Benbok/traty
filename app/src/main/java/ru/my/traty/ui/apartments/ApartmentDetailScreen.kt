@@ -14,6 +14,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.data.apartments.*
 import ru.my.traty.ui.designsystem.components.*
+import ru.my.traty.ui.designsystem.components.TratyFilterChip
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 @Composable
@@ -53,7 +54,7 @@ fun ApartmentDetailScreen(apartmentId: Long, onBack: () -> Unit, onOpenMeter: (L
     ) {
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm)) {
-                FilterChip(
+                TratyFilterChip(
                     selected = !consumption, onClick = { consumption = false },
                     label = { Text("Счётчики") }, modifier = Modifier.weight(1f),
                     colors = FilterChipDefaults.filterChipColors(
@@ -61,7 +62,7 @@ fun ApartmentDetailScreen(apartmentId: Long, onBack: () -> Unit, onOpenMeter: (L
                         selectedLabelColor = TratyTheme.colors.primary,
                     ),
                 )
-                FilterChip(
+                TratyFilterChip(
                     selected = consumption, onClick = { consumption = true },
                     label = { Text("Потребление") }, modifier = Modifier.weight(1f),
                     colors = FilterChipDefaults.filterChipColors(

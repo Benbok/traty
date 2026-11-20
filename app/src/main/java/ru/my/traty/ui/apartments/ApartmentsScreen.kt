@@ -3,13 +3,13 @@ package ru.my.traty.ui.apartments
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apartment
 import ru.my.traty.ui.designsystem.components.TratyEmptyState
+import ru.my.traty.ui.designsystem.components.TratyFilterChip
 import ru.my.traty.ui.designsystem.components.TratyIconButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import androidx.compose.runtime.*
@@ -67,7 +67,7 @@ fun ApartmentsScreen(onOpenApartment: (Long) -> Unit, onBack: () -> Unit, vm: Ap
     ) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {
-                FilterChip(
+                TratyFilterChip(
                     selected = !archived,
                     onClick = { archived = false },
                     label = { Text("Активные (${active.size})") },
@@ -76,7 +76,7 @@ fun ApartmentsScreen(onOpenApartment: (Long) -> Unit, onBack: () -> Unit, vm: Ap
                         selectedLabelColor = TratyTheme.colors.primary,
                     ),
                 )
-                FilterChip(
+                TratyFilterChip(
                     selected = archived,
                     onClick = { archived = true },
                     label = { Text("Архив (${archivedApartments.size})") },
