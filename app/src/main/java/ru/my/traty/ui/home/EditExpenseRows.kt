@@ -179,7 +179,7 @@ internal fun OptionSheet(
                     Modifier
                         .fillMaxWidth()
                         .heightIn(min = 52.dp)
-                        .tratyClickable { onPick(value) }
+                        .clickable { onPick(value) }
                         .padding(horizontal = TratyTheme.spacing.lg),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
