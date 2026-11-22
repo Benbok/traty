@@ -98,7 +98,7 @@ internal object ProductReportRequest {
         val incoming = ai?.productReport ?: ProductReportOptions()
         val parsed = local?.productReport ?: ProductReportOptions()
         val prior = follow?.productReport
-        val compare = parsed.compare ?: incoming.compare ?: prior?.compare
+        val compare = parsed.compare ?: incoming.compare ?: true.takeIf { comparison.containsMatchIn(text) } ?: prior?.compare
             ?: (ai?.compareFrom != null || ai?.compareTo != null)
         val clear = incoming.allProducts == true || allProducts.containsMatchIn(text)
         val shown = !clear && (incoming.shownOnly == true || selected.containsMatchIn(text) ||

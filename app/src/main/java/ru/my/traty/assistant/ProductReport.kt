@@ -32,7 +32,8 @@ internal object ProductReport {
         val options = q.productReport ?: ProductReportOptions(metric = q.productRankBy ?: "frequency")
         val metric = options.metric ?: "spending"
         val period = BillingPeriod.containing(ctx.today, ctx.startDay)
-        val (requested, to) = range(q.from, q.to, period.startDate, ctx.today)
+        val defaultFrom = if (metric == "frequency" && options.compare != true && q.to == null) QuestionDates.ALL_TIME else period.startDate
+        val (requested, to) = range(q.from, q.to, defaultFrom, ctx.today)
         val allTime = requested == QuestionDates.ALL_TIME
         val from = if (allTime) spending.minOfOrNull { day(it.expense.timestamp, ctx.zone) } ?: requested else requested
         val current = DateSpan(from, to)
