@@ -22,6 +22,7 @@ internal object ProductReportRequest {
     private val products = Regex("""(?<!\p{L})(?:товар|продукт)\p{L}*""")
     private val groceries = Regex("""(?<!\p{L})продукт\p{L}*""")
     private val list = Regex("""(?:какие|список|покажи|отчет).*(?:купил|покупа|товар|продукт)""")
+    private val categorySpending = Regex("""(?:трат|расход)\p{L}*\s+на\s+продукт|(?:потрат|ушло)\p{L}*\s+на\s+продукт""")
     private val comparison = Regex("""сравн|чем\s+(?:в|за)\s+прошл|вырос|снизил|стал[аи]?\s+(?:тратить|покупать)""")
     private val repeat = Regex("""повторно|больше одного раза|несколько раз""")
     private val selected = Regex("""из\s+(?:этих|них)""")
@@ -54,6 +55,7 @@ internal object ProductReportRequest {
     fun guess(text: String, categories: List<CategoryWithSubs>): AssistantQuery? {
         if (!products.containsMatchIn(text)) return null
         val previousRank = ProductRanking.guess(text)
+        if (previousRank == null && categorySpending.containsMatchIn(text) && !Regex("""по\s+товар|какие\s+продукт""").containsMatchIn(text)) return null
         val compare = comparison.containsMatchIn(text)
         val repeated = repeat.containsMatchIn(text)
         val limit = limit(text)
