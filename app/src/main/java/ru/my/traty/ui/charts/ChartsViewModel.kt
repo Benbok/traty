@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.my.traty.TratyApp
 import ru.my.traty.data.ExpenseWithCategory
@@ -19,12 +20,17 @@ import ru.my.traty.data.Income
 import ru.my.traty.data.Places
 import ru.my.traty.data.placeTotals
 import ru.my.traty.data.period.BillingPeriod
-import ru.my.traty.ui.charts.model.CashFlowPoint
+import ru.my.traty.ui.charts.model.CashFlowCategory
+import ru.my.traty.ui.charts.model.CashFlowCategoryKey
+import ru.my.traty.ui.charts.model.CashFlowKind
+import ru.my.traty.ui.charts.model.MAX_COMPARED_CATEGORIES
+import ru.my.traty.ui.charts.model.cashFlowGranularity
+import ru.my.traty.ui.charts.model.cashFlowIntervals
+import ru.my.traty.ui.charts.model.CashFlowGraph
+import ru.my.traty.ui.charts.model.buildCashFlowSelection
 import ru.my.traty.ui.charts.model.CategoryCreditShare
-import ru.my.traty.ui.charts.model.ChartExpenseCategory
 import ru.my.traty.ui.charts.model.ChartPeriod
 import ru.my.traty.ui.charts.model.ChartSummary
-import ru.my.traty.ui.charts.model.cumulativeCashFlowPoints
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -39,9 +45,10 @@ data class ChartsUiState(
     val rangeStart: LocalDate = LocalDate.now(),
     val rangeEnd: LocalDate = LocalDate.now(),
     val summary: ChartSummary = ChartSummary(0, 0, 0, null, 0, 0, 0),
-    val cashFlowPoints: List<CashFlowPoint> = emptyList(),
-    val expenseCategories: List<ChartExpenseCategory> = emptyList(),
-    val cashFlowCategoryId: Long? = null,
+    val cashFlowKind: CashFlowKind = CashFlowKind.EXPENSE,
+    val cashFlow: CashFlowGraph = CashFlowGraph(),
+    val cashFlowCategories: List<CashFlowCategory> = emptyList(),
+    val cashFlowCategoryKeys: Set<CashFlowCategoryKey> = emptySet(),
     val categoryShares: List<CategoryCreditShare> = emptyList(),
     val recentIncomes: List<Income> = emptyList(),
 )
@@ -59,7 +66,12 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
     private val startDay = MutableStateFlow(1)
     val billingPeriod = MutableStateFlow(BillingPeriod.containing(LocalDate.now(), 1))
 
-    private val cashFlowCategory = MutableStateFlow<Long?>(null)
+    private data class CashFlowFilter(
+        val kind: CashFlowKind = CashFlowKind.EXPENSE,
+        val selections: Map<CashFlowKind, List<CashFlowCategory>> = emptyMap(),
+    )
+
+    private val cashFlowFilter = MutableStateFlow(CashFlowFilter())
 
     init {
         viewModelScope.launch {
@@ -101,14 +113,33 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
         combine(
             c.financialReports.expenses(range.startMillis, range.endMillis),
             c.financialReports.incomes(range.startMillis, range.endMillis),
-            cashFlowCategory,
-        ) { expenses, incomes, categoryId ->
-            processUiState(selection.period, selection.billing, selection.startDay, range, expenses, incomes, categoryId)
+            cashFlowFilter,
+        ) { expenses, incomes, filter ->
+            processUiState(selection.period, selection.billing, selection.startDay, range, expenses, incomes, filter)
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, ChartsUiState())
 
-    fun setCashFlowCategory(categoryId: Long?) {
-        cashFlowCategory.value = categoryId
+    fun setCashFlowKind(kind: CashFlowKind) {
+        cashFlowFilter.update { it.copy(kind = kind) }
+    }
+
+    fun toggleCashFlowCategory(key: CashFlowCategoryKey) {
+        val state = uiState.value
+        val category = state.cashFlowCategories.firstOrNull { it.key == key } ?: return
+        cashFlowFilter.update { filter ->
+            if (filter.kind != state.cashFlowKind) return@update filter
+            val selected = filter.selections[filter.kind].orEmpty()
+            val next = when {
+                selected.any { it.key == key } -> selected.filterNot { it.key == key }
+                selected.size < MAX_COMPARED_CATEGORIES -> selected + category
+                else -> return@update filter
+            }
+            filter.copy(selections = filter.selections + (filter.kind to next))
+        }
+    }
+
+    fun clearCashFlowCategories() {
+        cashFlowFilter.update { it.copy(selections = it.selections - it.kind) }
     }
 
     fun setPeriod(newPeriod: ChartPeriod) {
@@ -136,7 +167,7 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
         range: ChartRange,
         expenses: List<ExpenseWithCategory>,
         incomes: List<Income>,
-        categoryId: Long?,
+        filter: CashFlowFilter,
     ): ChartsUiState {
         val totalDebit = incomes.sumOf { it.amountKopecks }
         val totalCredit = expenses.sumOf { it.expense.amountKopecks }
@@ -158,13 +189,20 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
             expenseCount = expenses.size,
         )
 
-        val expenseCategories = expenses.distinctBy { it.expense.categoryId }
-            .map { ChartExpenseCategory(it.expense.categoryId, it.categoryName) }
-            .sortedWith(compareBy<ChartExpenseCategory> { it.name.lowercase() }.thenBy { it.id })
-        val selectedCategoryId = categoryId?.takeIf { id -> expenseCategories.any { it.id == id } }
-        val chartExpenses = if (selectedCategoryId == null) expenses
-            else expenses.filter { it.expense.categoryId == selectedCategoryId }
-        val cashFlowPoints = calculateCashFlowPoints(p, startDay, range, chartExpenses, incomes)
+        val granularity = cashFlowGranularity(range.startDate, range.endDate)
+        val timestamps = when (filter.kind) {
+            CashFlowKind.EXPENSE -> expenses.asSequence().map { it.expense.timestamp }
+            CashFlowKind.INCOME -> incomes.asSequence().map { it.timestamp }
+        }
+        val graphStart = if (p == ChartPeriod.ALL) {
+            timestamps.minOrNull()?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() } ?: range.startDate
+        } else range.startDate
+        val lastRecordedDate = timestamps.maxOrNull()?.let { Instant.ofEpochMilli(it).atZone(zone).toLocalDate() }
+        val graphEnd = minOf(range.endDate, maxOf(LocalDate.now(zone), lastRecordedDate ?: graphStart))
+        val cashFlow = buildCashFlowSelection(
+            cashFlowIntervals(graphStart, graphEnd, startDay, granularity),
+            granularity, expenses, incomes, filter.kind, filter.selections[filter.kind].orEmpty(), zone,
+        )
         val categoryShares = calculateCategoryShares(expenses, totalCredit)
 
         return ChartsUiState(
@@ -174,36 +212,13 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
             rangeStart = range.startDate,
             rangeEnd = range.endDate,
             summary = summary,
-            cashFlowPoints = cashFlowPoints,
-            expenseCategories = expenseCategories,
-            cashFlowCategoryId = selectedCategoryId,
+            cashFlowKind = filter.kind,
+            cashFlow = cashFlow.graph,
+            cashFlowCategories = cashFlow.categories,
+            cashFlowCategoryKeys = cashFlow.selected,
             categoryShares = categoryShares,
             recentIncomes = incomes.take(15),
         )
-    }
-
-    private fun calculateCashFlowPoints(
-        period: ChartPeriod,
-        startDay: Int,
-        range: ChartRange,
-        expenses: List<ExpenseWithCategory>,
-        incomes: List<Income>,
-    ): List<CashFlowPoint> {
-        if (expenses.isEmpty() && incomes.isEmpty()) return emptyList()
-        val incomeByDate = incomes.groupBy {
-            Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate()
-        }.mapValues { (_, items) -> items.sumOf { it.amountKopecks } }
-        val expenseByDate = expenses.groupBy {
-            Instant.ofEpochMilli(it.expense.timestamp).atZone(zone).toLocalDate()
-        }.mapValues { (_, items) -> items.sumOf { it.expense.amountKopecks } }
-        val intervals = if (usesDailyPoints(period, range)) {
-            generateSequence(range.startDate) { it.plusDays(1) }
-                .takeWhile { !it.isAfter(range.endDate) }
-                .map { it..it }.toList()
-        } else {
-            billingBuckets(range.startDate, range.endDate, startDay).map { it.startDate..it.endDate }
-        }
-        return cumulativeCashFlowPoints(intervals, incomeByDate, expenseByDate)
     }
 
     private fun calculateCategoryShares(

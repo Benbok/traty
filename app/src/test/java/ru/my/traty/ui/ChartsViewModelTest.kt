@@ -14,7 +14,6 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,8 +21,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import ru.my.traty.TestTratyApp
 import ru.my.traty.TratyApp
+import ru.my.traty.data.Category
 import ru.my.traty.data.Expense
 import ru.my.traty.ui.charts.ChartsViewModel
+import ru.my.traty.ui.charts.model.CashFlowCategoryKey
+import ru.my.traty.ui.charts.model.CashFlowKind
 import ru.my.traty.ui.charts.model.ChartPeriod
 import java.time.LocalDate
 import java.time.ZoneId
@@ -70,7 +72,7 @@ class ChartsViewModelTest {
 
         // Insert category & expense
         val catId = app.container.db.categories().insert(
-            ru.my.traty.data.Category(name = "ТестКатегория", emoji = "🏷️", sortOrder = 0)
+            Category(name = "ТестКатегория", emoji = "🏷️", sortOrder = 0)
         )
         app.container.db.expenses().insertAll(
             listOf(
@@ -105,12 +107,10 @@ class ChartsViewModelTest {
         assertEquals(1, state.summary.incomeCount)
         assertEquals(1, state.summary.expenseCount)
 
-        assertTrue(state.cashFlowPoints.isNotEmpty())
-
-        val lastPoint = state.cashFlowPoints.last()
-        assertEquals(50_000_00L, lastPoint.incomeKopecks)
-        assertEquals(20_000_00L, lastPoint.expenseKopecks)
-        assertEquals(30_000_00L, lastPoint.netKopecks)
+        assertEquals(
+            20_000_00L,
+            state.cashFlow.series.single().amounts.last(),
+        )
     }
 
     @Test
@@ -132,14 +132,16 @@ class ChartsViewModelTest {
     }
 
     @Test
-    fun categoryFiltersOnlyCashFlowExpensesAndFollowsDateRange() = runTest(timeout = 20.seconds) {
+    fun cashFlowShowsDailyTotalsInSeparateIncomeAndExpenseModes() = runTest(timeout = 20.seconds) {
         val today = LocalDate.now()
         val yesterday = today.minusDays(1)
         val zone = ZoneId.systemDefault()
         val db = app.container.db
-        val groceries = db.categories().insert(ru.my.traty.data.Category(name = "Продукты для теста", emoji = "🛒", sortOrder = 0))
-        val transport = db.categories().insert(ru.my.traty.data.Category(name = "Транспорт для теста", emoji = "🚕", sortOrder = 1))
+        val groceries = db.categories().insert(Category(name = "Зарплата", emoji = "🛒", sortOrder = 0))
+        val transport = db.categories().insert(Category(name = "Транспорт для теста", emoji = "🚕", sortOrder = 1))
+        val games = db.categories().insert(Category(name = "Игры для теста", emoji = "🎮", sortOrder = 2))
         db.expenses().insertAll(listOf(
+            Expense(amountKopecks = 4_000L, categoryId = games, timestamp = today.atStartOfDay(zone).toInstant().toEpochMilli()),
             Expense(amountKopecks = 12_000L, categoryId = groceries, timestamp = yesterday.atStartOfDay(zone).toInstant().toEpochMilli()),
             Expense(amountKopecks = 8_000L, categoryId = transport, timestamp = today.atStartOfDay(zone).toInstant().toEpochMilli()),
         ))
@@ -148,26 +150,38 @@ class ChartsViewModelTest {
         ))
 
         vm.setCustomRange(yesterday, today)
-        val both = vm.uiState.first { it.rangeStart == yesterday && it.expenseCategories.size == 2 }
-        assertEquals(setOf(groceries, transport), both.expenseCategories.map { it.id }.toSet())
-        assertEquals(20_000L, both.cashFlowPoints.last().expenseKopecks)
+        val groceriesKey = CashFlowCategoryKey.Expense(groceries)
+        val transportKey = CashFlowCategoryKey.Expense(transport)
+        val salaryKey = CashFlowCategoryKey.Income("зарплата")
+        val allExpenses = vm.uiState.first { it.rangeStart == yesterday && it.cashFlowCategories.size == 3 }
+        assertEquals(setOf(groceriesKey, transportKey, CashFlowCategoryKey.Expense(games)), allExpenses.cashFlowCategories.map { it.key }.toSet())
+        assertEquals(listOf(yesterday, today), allExpenses.cashFlow.dates)
+        assertEquals(listOf(12_000L, 12_000L), allExpenses.cashFlow.series.single().amounts)
 
-        vm.setCashFlowCategory(groceries)
-        val filtered = vm.uiState.first { it.cashFlowCategoryId == groceries }
-        assertEquals(12_000L, filtered.cashFlowPoints.last().expenseKopecks)
-        assertEquals(50_000L, filtered.cashFlowPoints.last().incomeKopecks)
-        assertEquals(20_000L, filtered.summary.totalCreditKopecks)
+        vm.toggleCashFlowCategory(groceriesKey)
+        val one = vm.uiState.first { it.cashFlowCategoryKeys == setOf(groceriesKey) }
+        assertEquals(listOf(12_000L, 0L), one.cashFlow.series.single().amounts)
+
+        vm.toggleCashFlowCategory(transportKey)
+        val two = vm.uiState.first { it.cashFlowCategoryKeys == setOf(groceriesKey, transportKey) }
+        assertEquals(listOf(listOf(12_000L, 0L), listOf(0L, 8_000L)), two.cashFlow.series.map { it.amounts })
+        assertEquals(listOf(12_000L), two.cashFlow.operationsByDay.getValue(yesterday).map { it.amount })
+        assertEquals(24_000L, two.summary.totalCreditKopecks)
+
+        vm.toggleCashFlowCategory(CashFlowCategoryKey.Expense(games))
+
+        vm.setCashFlowKind(CashFlowKind.INCOME)
+        val income = vm.uiState.first { it.cashFlowKind == CashFlowKind.INCOME }
+        assertEquals(listOf(salaryKey), income.cashFlowCategories.map { it.key })
+        assertEquals(listOf(0L, 50_000L), income.cashFlow.series.single().amounts)
+
+        vm.setCashFlowKind(CashFlowKind.EXPENSE)
+        val restored = vm.uiState.first { it.cashFlowKind == CashFlowKind.EXPENSE }
+        assertEquals(setOf(groceriesKey, transportKey), restored.cashFlowCategoryKeys)
 
         vm.setCustomRange(today, today)
-        val todayOnly = vm.uiState.first { it.rangeStart == today && it.expenseCategories.size == 1 }
-        assertEquals(listOf(transport), todayOnly.expenseCategories.map { it.id })
-        assertEquals(null, todayOnly.cashFlowCategoryId)
-        assertEquals(8_000L, todayOnly.cashFlowPoints.last().expenseKopecks)
-
-        vm.setCashFlowCategory(transport)
-        vm.uiState.first { it.cashFlowCategoryId == transport }
-        vm.setCashFlowCategory(null)
-        val all = vm.uiState.first { it.cashFlowCategoryId == null }
-        assertEquals(8_000L, all.cashFlowPoints.last().expenseKopecks)
+        val shorter = vm.uiState.first { it.rangeStart == today }
+        assertEquals(restored.cashFlowCategoryKeys, shorter.cashFlowCategoryKeys)
+        assertEquals(listOf(listOf(0L), listOf(8_000L)), shorter.cashFlow.series.map { it.amounts })
     }
 }

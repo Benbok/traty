@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -129,13 +130,21 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
             ChartKpiCard(summary = state.summary)
         }
 
-        // Накопительные доходы и расходы на общей шкале.
+        // Динамика по выбранным категориям.
         item(key = "cash-flow-chart", contentType = "cash-flow-chart") {
             CashFlowChart(
-                points = state.cashFlowPoints,
-                filteredExpenses = state.cashFlowCategoryId != null,
+                graph = state.cashFlow,
+                kind = state.cashFlowKind,
+                allCategories = state.cashFlowCategoryKeys.isEmpty(),
+                onKindChange = vm::setCashFlowKind,
             ) {
-                CashFlowCategoryPicker(state.expenseCategories, state.cashFlowCategoryId, vm::setCashFlowCategory)
+                CashFlowCategoryPicker(
+                    kind = state.cashFlowKind,
+                    categories = state.cashFlowCategories,
+                    selected = state.cashFlowCategoryKeys,
+                    onToggle = vm::toggleCashFlowCategory,
+                    onClear = vm::clearCashFlowCategories,
+                )
             }
         }
 
@@ -163,6 +172,7 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                         }
                         Spacer(Modifier.height(TratyTheme.spacing.md))
 
+                        val expandIconSlot = TratyTheme.spacing.xxl
                         state.categoryShares.forEach { cat ->
                             val expandable = Places.hasNamed(cat.stores)
                             val isExpanded = expandable && cat.categoryId in expandedCats
@@ -202,13 +212,18 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                                         size = AmountSize.SMALL,
                                         fontWeight = FontWeight.SemiBold,
                                     )
-                                    if (expandable) {
-                                        Icon(
-                                            imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                                            contentDescription = if (isExpanded) "Скрыть магазины" else "Показать магазины",
-                                            tint = TratyTheme.colors.onSurfaceVariant,
-                                            modifier = Modifier.padding(start = 2.dp).size(18.dp),
-                                        )
+                                    Box(
+                                        modifier = Modifier.width(expandIconSlot),
+                                        contentAlignment = Alignment.CenterEnd,
+                                    ) {
+                                        if (expandable) {
+                                            Icon(
+                                                imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                                contentDescription = if (isExpanded) "Скрыть магазины" else "Показать магазины",
+                                                tint = TratyTheme.colors.onSurfaceVariant,
+                                                modifier = Modifier.size(TratyTheme.spacing.lg),
+                                            )
+                                        }
                                     }
                                 }
                                 TratyProgressBar(
@@ -220,7 +235,13 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
                                     cat.stores.forEach { st ->
                                         val frac = if (cat.totalKopecks > 0) st.totalKopecks.toFloat() / cat.totalKopecks else 0f
                                         Row(
-                                            modifier = Modifier.fillMaxWidth().padding(start = 38.dp, top = TratyTheme.spacing.xs),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(
+                                                    start = 38.dp,
+                                                    top = TratyTheme.spacing.xs,
+                                                    end = expandIconSlot,
+                                                ),
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             Text(

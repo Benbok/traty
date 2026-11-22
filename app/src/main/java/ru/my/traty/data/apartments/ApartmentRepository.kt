@@ -32,6 +32,16 @@ class ApartmentRepository(private val db: AppDatabase) {
         }
         ApartmentValidation.check(snapshot()); id
     }
+    suspend fun setApartmentArchived(id: Long, archived: Boolean) = db.withTransaction {
+        val apartment = requireNotNull(dao.apartments().firstOrNull { it.id == id }) { "Квартира не найдена" }
+        if (apartment.archived != archived) dao.updateApartment(apartment.copy(archived = archived))
+    }
+
+    suspend fun setMeterArchived(id: Long, archived: Boolean) = db.withTransaction {
+        val meter = requireNotNull(dao.meters().firstOrNull { it.id == id }) { "Счётчик не найден" }
+        if (meter.archived != archived) dao.updateMeter(meter.copy(archived = archived))
+    }
+
     suspend fun saveReadings(values: List<MeterReading>) = db.withTransaction {
         require(values.isNotEmpty()) { "Введите хотя бы одно показание" }
         values.forEach { r ->

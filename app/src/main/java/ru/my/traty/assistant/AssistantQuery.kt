@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import kotlinx.serialization.json.Json
 import ru.my.traty.data.CategoryWithSubs
+import ru.my.traty.data.labels.ExpenseLabel
 
 /** Что спросил пользователь — в виде запроса к данным. ИИ переводит в него вопрос, считает приложение. */
 @Serializable
@@ -44,6 +45,8 @@ data class AssistantQuery(
     val productRankBy: String? = null,
     val productReport: ProductReportOptions? = null,
     @Transient val shownProductKeys: List<String> = emptyList(),
+    val labels: List<ExpenseLabel> = emptyList(),
+    @Transient val labelExpenseIds: Set<Long> = emptySet(),
 )
 
 object Intents {

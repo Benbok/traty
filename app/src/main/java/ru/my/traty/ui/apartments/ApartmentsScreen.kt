@@ -105,8 +105,7 @@ fun ApartmentsScreen(onOpenApartment: (Long) -> Unit, onBack: () -> Unit, vm: Ap
                 meterCount = meters.size,
                 resources = ResourceType.entries.filter { r -> meters.any { it.resource == r.name } },
                 onOpen = { onOpenApartment(a.id) },
-                onEdit = { editing = a },
-            )
+            ) { ApartmentActions(a, vm) { editing = a } }
         }
     }
 }

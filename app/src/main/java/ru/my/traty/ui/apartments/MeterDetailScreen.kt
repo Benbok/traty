@@ -61,7 +61,7 @@ fun MeterDetailScreen(meterId: Long, onBack: () -> Unit, vm: MeterDetailViewMode
             "Архив".takeIf { meter?.archived == true },
         ).joinToString(" · "),
         actions = {
-            if (meter != null) HousingMenu("Действия со счётчиком", { editMeter = true })
+            if (meter != null) MeterActions(meter, vm) { editMeter = true }
         },
     ) {
         item {

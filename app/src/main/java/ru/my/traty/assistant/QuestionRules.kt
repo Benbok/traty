@@ -37,6 +37,11 @@ object QuestionRules {
     /** Запрос по ключевым словам; null — в вопросе нет ничего про деньги. */
     fun guess(question: String, categories: List<CategoryWithSubs>): AssistantQuery? {
         val text = fold(question)
+        return AssistantLabelQuestions.guess(text, categories) { guessUnlabelled(it, categories) }
+            ?: guessUnlabelled(text, categories)
+    }
+
+    private fun guessUnlabelled(text: String, categories: List<CategoryWithSubs>): AssistantQuery? {
         ProductReportRequest.guess(text, categories)?.let { return it }
         ProductRanking.guess(text)?.let { return it }
         ItemFlavor.allTimeSubject(text)?.let { return AssistantQuery(intent = Intents.TOTAL, categories = listOf(it)) }
@@ -98,6 +103,7 @@ object QuestionRules {
         previous: AssistantQuery? = null,
         categories: List<CategoryWithSubs> = emptyList(),
     ): AssistantQuery {
+        AssistantLabelQuestions.resolve(question, guessed, fromAi, previous, categories, today, startDay)?.let { return it }
         ProductReportRequest.resolve(question, fromAi, guessed, previous, today, startDay)?.let { return it }
         if (fromAi?.intent !in IntentRegistry.COMMANDS &&
             (guessed?.intent == Intents.PRODUCT_RANK || fromAi?.intent == Intents.PRODUCT_RANK)

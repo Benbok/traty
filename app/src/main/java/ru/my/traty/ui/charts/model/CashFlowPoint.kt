@@ -17,11 +17,20 @@ fun cumulativeCashFlowPoints(
     incomeByDate: Map<LocalDate, Long>,
     expenseByDate: Map<LocalDate, Long>,
 ): List<CashFlowPoint> {
-    var income = 0L
-    var expense = 0L
+    val income = cumulativeCashFlowAmounts(intervals, incomeByDate)
+    val expense = cumulativeCashFlowAmounts(intervals, expenseByDate)
+    return intervals.mapIndexed { index, interval ->
+        CashFlowPoint(interval.endInclusive, income[index], expense[index])
+    }
+}
+
+internal fun cumulativeCashFlowAmounts(
+    intervals: List<ClosedRange<LocalDate>>,
+    amounts: Map<LocalDate, Long>,
+): List<Long> {
+    var total = 0L
     return intervals.map { interval ->
-        income += incomeByDate.filterKeys { it in interval }.values.sum()
-        expense += expenseByDate.filterKeys { it in interval }.values.sum()
-        CashFlowPoint(interval.endInclusive, income, expense)
+        total += amounts.filterKeys { it in interval }.values.sum()
+        total
     }
 }

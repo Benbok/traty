@@ -17,7 +17,11 @@ import java.time.ZoneId
  * Метки на тратах (🔺 🔁 🆕 ⚡ 📅) по всей истории, не только по показанному периоду.
  * ⚡ учитывает и план трат: трата сверх плана в импульсивной категории тоже импульсивная.
  */
-fun expenseLabelsFlow(c: AppContainer, zone: ZoneId): Flow<Map<Long, List<ExpenseLabelHit>>> {
+fun expenseLabelsFlow(
+    c: AppContainer,
+    zone: ZoneId,
+    includeHidden: Boolean = false,
+): Flow<Map<Long, List<ExpenseLabelHit>>> {
     val plans = combine(
         c.budgets.observeAll(),
         c.budgets.observeTotals(),
@@ -31,7 +35,7 @@ fun expenseLabelsFlow(c: AppContainer, zone: ZoneId): Flow<Map<Long, List<Expens
         expenses,
         c.db.recurring().observeAll(),
         c.categories.observeAllWithSubs(),
-        c.settings.flow.map { it.labelsEnabled }.distinctUntilChanged(),
+        c.settings.flow.map { includeHidden || it.labelsEnabled }.distinctUntilChanged(),
         plans,
     ) { (expenses, debtExpenseIds), recurring, cats, enabled, (rows, totals, startDay) ->
         if (!enabled) return@combine emptyMap()

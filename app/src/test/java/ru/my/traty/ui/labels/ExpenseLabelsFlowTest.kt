@@ -39,6 +39,8 @@ class ExpenseLabelsFlowTest {
             assertTrue(labels[expense].orEmpty().any { it.label == ExpenseLabel.IMPULSIVE })
             c.settings.setLabelsEnabled(false)
             assertTrue(withTimeout(5000) { expenseLabelsFlow(c, zone).first() }.isEmpty())
+            val forAssistant = withTimeout(5000) { expenseLabelsFlow(c, zone, includeHidden = true).first() }
+            assertTrue(forAssistant[expense].orEmpty().any { it.label == ExpenseLabel.IMPULSIVE })
         } finally {
             c.db.close()
         }

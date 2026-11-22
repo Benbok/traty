@@ -1,6 +1,7 @@
 package ru.my.traty.assistant
 
 import ru.my.traty.data.CategoryWithSubs
+import ru.my.traty.data.labels.ExpenseLabel
 import ru.my.traty.data.period.BillingPeriod
 import java.time.LocalDate
 import java.time.YearMonth
@@ -34,13 +35,14 @@ object AssistantPrompts {
 Сегодня $today, $weekday. Текущий расчётный период: ${period.startDate} — ${period.endDate}. Прошлый: ${previous.startDate} — ${previous.endDate}.
 
 Верни только JSON-объект без пояснений:
-{"intent": "...", "categories": [], "place": null, "from": null, "to": null, "compareFrom": null, "compareTo": null, "amount": null, "limit": null, "relative": false, "groupBy": null, "all": false, "target": null, "percent": false, "productReport": null}
+{"intent": "...", "categories": [], "labels": [], "place": null, "from": null, "to": null, "compareFrom": null, "compareTo": null, "amount": null, "limit": null, "relative": false, "groupBy": null, "all": false, "target": null, "percent": false, "productReport": null}
 
 intent — одно из:
 ${IntentRegistry.promptLines()}
 
 Правила:
 - categories — только названия из списка ниже (категория или подкатегория), как они написаны. «Такси» — это подкатегория, бери её.
+- labels — системные метки трат. Код и название: ${ExpenseLabel.entries.joinToString(", ") { "${it.name} — ${it.title}" }}. «Импульсивные покупки» — labels: ["IMPULSIVE"]. Если названа и категория, заполняй оба поля. «Похожая на подписку» — метка, а вопрос про список настоящих подписок — subscriptions.
 - Широкая тема расходов — родительская категория целиком со всеми подкатегориями. Не сужай «сколько потратил на кошку/питомца» до «Груминг»: если есть «Питомцы», выбери её, включая ветеринара, корм, зоомагазины и груминг. Только явно названная услуга («на груминг кошки», «на ветеринара») ограничивает подкатегорию. Не добавляй place, если пользователь не назвал конкретный магазин.
 - Не теряй явно названный товар или имя животного: «корм для кошки» — это корм, «на кошку Чуню» — поиск по словам «Чуня», а не все питомцы.
 - Сохраняй вкус, сорт, марку и фасовку, если они явно названы в вопросе о товаре. «Шоколадный молочный коктейль» передай как одну фразу в categories.
@@ -61,6 +63,8 @@ $cats
 «на какие товары я потратил больше в этом месяце, чем в прошлом» → {"intent":"product_report","productReport":{"metric":"spending","compare":true,"orderByChange":true,"direction":"increase"}}
 «а какие из них я стал чаще покупать?» → {"intent":"product_report","productReport":{"followUp":true,"shownOnly":true,"metric":"frequency","direction":"increase"}}
 «сколько я потратил на кафе в этом месяце» → {"intent":"total","categories":["Кафе и рестораны"]}
+«посчитай все импульсивные покупки» → {"intent":"total","labels":["IMPULSIVE"]}
+«покажи необычно крупные траты на продукты» → {"intent":"list","categories":["Продукты"],"labels":["LARGE"]}
 «сколько я потратил на такси в октябре» → {"intent":"total","categories":["Такси"],"from":"${october.atDay(1)}","to":"${october.atEndOfMonth()}"}
 «сколько я потратил на шоколадки» → {"intent":"total","categories":["шоколадки"]}
 «сколько литров молока я купил в этом месяце» → {"intent":"total","categories":["молоко"]}
@@ -101,6 +105,7 @@ $cats
     const val ANSWER_SYSTEM = "Ты дружелюбный личный финансовый помощник в приложении учёта трат. " +
         "Тебе дают вопрос пользователя и данные, которые уже посчитало приложение. Ответь на русском, 2–4 коротких предложения. " +
         "Используй только цифры из данных, ничего не досчитывай и не придумывай. Если данных не хватает — честно скажи, чего не хватает. " +
+        "Если спрашивают, сколько покупок, используй число покупок из данных. " +
         "Если спрашивают, сколько товара куплено (штук, литров, килограммов), отвечай по строке «Количество» из данных, а сумму назови вторым числом. " +
         "Если просят совет — дай один-два конкретных и выполнимых. Тон спокойный и поддерживающий, без упрёков. " +
         "Если в данных есть предложение плана трат, кратко объясни, из чего оно получилось, и скажи, что строки можно отметить и добавить в план кнопкой под ответом; сам план ты не меняешь. " +

@@ -1,10 +1,19 @@
 package ru.my.traty.ui.charts.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -24,28 +33,34 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import ru.my.traty.ui.charts.model.ChartExpenseCategory
+import ru.my.traty.ui.charts.model.CashFlowCategory
+import ru.my.traty.ui.charts.model.CashFlowCategoryKey
+import ru.my.traty.ui.charts.model.CashFlowKind
+import ru.my.traty.ui.charts.model.MAX_COMPARED_CATEGORIES
+import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.components.TratyDropdownPicker
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 @Composable
 internal fun CashFlowCategoryPicker(
-    categories: List<ChartExpenseCategory>,
-    selectedId: Long?,
-    onSelect: (Long?) -> Unit,
+    kind: CashFlowKind,
+    categories: List<CashFlowCategory>,
+    selected: Set<CashFlowCategoryKey>,
+    onToggle: (CashFlowCategoryKey) -> Unit,
+    onClear: () -> Unit,
 ) {
     if (categories.isEmpty()) return
 
-    var expanded by remember(categories) { mutableStateOf(false) }
-    val allLabel = "Все категории"
-    val selectedName = categories.firstOrNull { it.id == selectedId }?.name ?: allLabel
-    val selectCategory: (Long?) -> Unit = {
-        expanded = false
-        onSelect(it)
+    val allLabel = if (kind == CashFlowKind.EXPENSE) "Все категории" else "Все источники"
+    var expanded by remember(kind) { mutableStateOf(false) }
+    val selectedName = when (selected.size) {
+        0 -> allLabel
+        1 -> categories.first { it.key in selected }.name
+        else -> categories.filter { it.key in selected }.joinToString(", ") { it.name }
     }
 
     Text(
-        "Категория расходов",
+        if (kind == CashFlowKind.EXPENSE) "Категории расходов" else "Источники доходов",
         style = TratyTheme.typography.labelMedium,
         color = TratyTheme.colors.onSurfaceVariant,
     )
@@ -54,6 +69,7 @@ internal fun CashFlowCategoryPicker(
         expanded = expanded,
         onExpand = { expanded = true },
         onDismiss = { expanded = false },
+        matchAnchorWidth = true,
         label = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -75,19 +91,94 @@ internal fun CashFlowCategoryPicker(
             }
         },
     ) {
-        CategoryOption(allLabel, selectedId == null) { selectCategory(null) }
-        categories.forEach { category ->
-            CategoryOption(category.name, category.id == selectedId) { selectCategory(category.id) }
-        }
+        CashFlowCategoryOptions(
+            allLabel = allLabel,
+            categories = categories,
+            selected = selected,
+            onToggle = onToggle,
+            onClear = onClear,
+            onDone = { expanded = false },
+        )
     }
     Spacer(Modifier.height(TratyTheme.spacing.md))
 }
 
 @Composable
-private fun CategoryOption(name: String, isSelected: Boolean, onClick: () -> Unit) {
+private fun CashFlowCategoryOptions(
+    allLabel: String,
+    categories: List<CashFlowCategory>,
+    selected: Set<CashFlowCategoryKey>,
+    onToggle: (CashFlowCategoryKey) -> Unit,
+    onClear: () -> Unit,
+    onDone: () -> Unit,
+) {
+    var query by remember { mutableStateOf("") }
+    val search = query.trim()
+    val matches = remember(categories, search) {
+        categories.filter { it.name.contains(search, ignoreCase = true) }
+    }
+    val scroll = rememberScrollState()
+    LaunchedEffect(search) { scroll.scrollTo(0) }
+
+    OutlinedTextField(
+        value = query,
+        onValueChange = { query = it },
+        label = { Text("Поиск по названию") },
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        singleLine = true,
+        shape = TratyTheme.shapes.small,
+        textStyle = TratyTheme.typography.bodyMedium,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = TratyTheme.spacing.md),
+    )
+    Spacer(Modifier.height(TratyTheme.spacing.xs))
+    Column(
+        Modifier.fillMaxWidth()
+            .heightIn(max = TratyTheme.spacing.huge * 4)
+            .verticalScroll(scroll),
+    ) {
+        if (search.isEmpty()) CategoryOption(allLabel, selected.isEmpty(), onClear)
+        matches.forEach { category ->
+            val isSelected = category.key in selected
+            CategoryOption(
+                category.name, isSelected,
+                onClick = { onToggle(category.key) },
+                enabled = isSelected || selected.size < MAX_COMPARED_CATEGORIES,
+            )
+        }
+        if (matches.isEmpty()) {
+            Text(
+                "Ничего не найдено",
+                style = TratyTheme.typography.bodyMedium,
+                color = TratyTheme.colors.onSurfaceVariant,
+                modifier = Modifier.padding(TratyTheme.spacing.lg),
+            )
+        }
+    }
+    if (selected.size == MAX_COMPARED_CATEGORIES) {
+        Text(
+            "Снимите отметку, чтобы выбрать другой пункт",
+            style = TratyTheme.typography.bodySmall,
+            color = TratyTheme.colors.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = TratyTheme.spacing.md, vertical = TratyTheme.spacing.xs),
+        )
+    }
+    HorizontalDivider(color = TratyTheme.colors.borderSubtle)
+    TratyTextButton(onClick = onDone, modifier = Modifier.padding(horizontal = TratyTheme.spacing.sm)) {
+        Text("Готово")
+    }
+}
+
+@Composable
+private fun CategoryOption(
+    name: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
     DropdownMenuItem(
         text = { Text(name) },
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier.semantics { selected = isSelected },
         trailingIcon = {
             if (isSelected) {

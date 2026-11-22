@@ -2,8 +2,10 @@ package ru.my.traty.ui.charts.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -96,12 +98,14 @@ fun ChartKpiCard(
 
         // Две карточки рядом: доходы и траты
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
             horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
         ) {
             // Дебет
             TratyCard(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 backgroundColor = TratyTheme.colors.surface,
                 shape = TratyTheme.shapes.medium,
             ) {
@@ -137,7 +141,7 @@ fun ChartKpiCard(
 
             // Кредит
             TratyCard(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 backgroundColor = TratyTheme.colors.surface,
                 shape = TratyTheme.shapes.medium,
             ) {

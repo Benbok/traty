@@ -47,6 +47,7 @@ internal object ExpenseCommands {
             out = out.copy(
                 categories = previous.categories.filterNot { fold(it) == fold(out.target.orEmpty()) },
                 place = previous.place,
+                labels = out.labels.ifEmpty { previous.labels },
                 from = previous.from,
                 to = previous.to,
                 limit = out.limit ?: previous.limit.takeIf { previous.intent == Intents.TOP },

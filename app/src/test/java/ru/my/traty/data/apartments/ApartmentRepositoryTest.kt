@@ -41,6 +41,37 @@ class ApartmentRepositoryTest {
         } finally { db.close() }
     }
 
+    @Test fun archivingAndRestoringPreserveMetersAndReadingHistory() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        try {
+            val repo = ApartmentRepository(db)
+            val apartmentId = repo.saveApartment(Apartment(name = "Дом"))
+            val meterId = repo.saveMeter(
+                Meter(apartmentId = apartmentId, name = "Кухня", resource = "COLD_WATER", accountingTo = date("2026-02-01")),
+                listOf("TOTAL"),
+            )
+            val registerId = repo.snapshot().registers.single().id
+            repo.saveReadings(listOf(MeterReading(registerId = registerId, measuredAt = date("2026-01-01"), valueMilli = 1000)))
+            val readingId = repo.snapshot().readings.single().id
+            repo.markSubmitted(meterId, listOf(readingId), date("2026-01-02"), 202601)
+            val original = repo.snapshot()
+
+            repo.setApartmentArchived(apartmentId, true)
+            val withArchivedApartment = original.copy(apartments = original.apartments.map { it.copy(archived = true) })
+            assertEquals(withArchivedApartment, repo.snapshot())
+
+            repo.setMeterArchived(meterId, true)
+            val withArchivedBoth = withArchivedApartment.copy(meters = original.meters.map { it.copy(archived = true) })
+            assertEquals(withArchivedBoth, repo.snapshot())
+
+            repo.setApartmentArchived(apartmentId, false)
+            assertTrue(repo.snapshot().meters.single().archived)
+            repo.setMeterArchived(meterId, false)
+            assertEquals(original, repo.snapshot())
+        } finally { db.close() }
+    }
+
     @Test fun migrationAddsTablesAndPreservesExistingCategories() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val name = "apartments-migration-test.db"

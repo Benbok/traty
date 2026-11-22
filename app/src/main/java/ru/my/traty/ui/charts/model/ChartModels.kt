@@ -46,6 +46,3 @@ data class CategoryCreditShare(
     /** Разбивка категории по магазинам (по убыванию суммы, «Без магазина» последним). */
     val stores: List<StoreTotal> = emptyList(),
 )
-
-/** Категория, по которой в диапазоне графика были расходы. */
-data class ChartExpenseCategory(val id: Long, val name: String)

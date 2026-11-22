@@ -49,7 +49,7 @@ fun ApartmentDetailScreen(apartmentId: Long, onBack: () -> Unit, onOpenMeter: (L
                 tint = TratyTheme.colors.primary,
                 containerColor = TratyTheme.colors.primaryContainer,
             )
-            if (apartment != null) HousingMenu("Действия с квартирой", { editApartment = true })
+            if (apartment != null) ApartmentActions(apartment, vm) { editApartment = true }
         },
     ) {
         item {
@@ -90,7 +90,7 @@ fun ApartmentDetailScreen(apartmentId: Long, onBack: () -> Unit, onOpenMeter: (L
                 if (group.isNotEmpty()) {
                     item { HousingSectionTitle(resource.title) }
                     items(group, key = { it.id }) { meter ->
-                        MeterSummaryCard(meter, s, onOpen = { onOpenMeter(meter.id) }, onEdit = { editing = meter })
+                        MeterSummaryCard(meter, s, onOpen = { onOpenMeter(meter.id) }) { MeterActions(meter, vm) { editing = meter } }
                     }
                 }
             }
@@ -98,7 +98,7 @@ fun ApartmentDetailScreen(apartmentId: Long, onBack: () -> Unit, onOpenMeter: (L
             if (archived.isNotEmpty()) {
                 item { HousingSectionTitle("Архивные приборы") }
                 items(archived, key = { it.id }) { meter ->
-                    MeterSummaryCard(meter, s, onOpen = { onOpenMeter(meter.id) }, onEdit = { editing = meter })
+                    MeterSummaryCard(meter, s, onOpen = { onOpenMeter(meter.id) }) { MeterActions(meter, vm) { editing = meter } }
                 }
             }
         }

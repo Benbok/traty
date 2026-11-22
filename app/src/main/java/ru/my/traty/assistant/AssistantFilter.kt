@@ -5,6 +5,7 @@ package ru.my.traty.assistant
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.ExpenseWithCategory
 import ru.my.traty.data.items.ExpenseItem
+import ru.my.traty.data.labels.ExpenseLabel
 import ru.my.traty.data.search.SearchText
 import java.util.Locale
 
@@ -54,8 +55,10 @@ internal class Filter(
     val itemTerms: List<String> = emptyList(),
     val qualifiedItem: ItemFlavor? = null,
     private val useSearchWords: Boolean = false,
+    private val labels: List<ExpenseLabel> = emptyList(),
+    private val labelExpenseIds: Set<Long> = emptySet(),
 ) {
-    val isEmpty get() = names.isEmpty() && terms.isEmpty() && place == null && itemTerms.isEmpty()
+    val isEmpty get() = names.isEmpty() && terms.isEmpty() && place == null && itemTerms.isEmpty() && labels.isEmpty()
 
     /** Трата прошла по категории, подкатегории или слову из места и заметки: засчитывается вся сумма. */
     private fun wholeMatch(r: ExpenseWithCategory): Boolean {
@@ -76,6 +79,7 @@ internal class Filter(
 
     /** Трата попадает в ответ: по категории, по слову в месте или заметке или по товару внутри покупки. */
     fun matches(r: ExpenseWithCategory, items: List<ExpenseItem> = emptyList()): Boolean {
+        if (labels.isNotEmpty() && r.expense.id !in labelExpenseIds) return false
         if (names.isNotEmpty() || terms.isNotEmpty() || itemTerms.isNotEmpty()) {
             if (!wholeMatch(r) && itemPart(r, items) == null) return false
         }
@@ -94,6 +98,7 @@ internal class Filter(
         names.takeIf { it.isNotEmpty() }?.joinToString(", ") { it.replaceFirstChar { c -> c.uppercase() } },
         (terms + itemTerms).takeIf { it.isNotEmpty() }?.joinToString(", ") { "«$it»" },
         place?.let { "«$it»" },
+        labels.takeIf { it.isNotEmpty() }?.joinToString(" или ") { "метка «${it.title}»" },
     ).joinToString(", ").ifEmpty { null }
 
     fun unresolvedAnswer(rows: List<ExpenseWithCategory>, ctx: AssistantContext): AssistantData? {
@@ -120,6 +125,7 @@ internal class Filter(
                 return Filter(
                     emptySet(), emptyList(), placeFromQuery, itemTerms = listOf(item),
                     qualifiedItem = ItemFlavor.parse(item), useSearchWords = true,
+                    labels = q.labels, labelExpenseIds = q.labelExpenseIds,
                 )
             }
             val known = HashSet<String>()
@@ -169,7 +175,10 @@ internal class Filter(
             }
             val distinctItems = itemTerms.distinct()
             val qualifiedItem = distinctItems.singleOrNull()?.takeIf { q.intent == Intents.TOTAL }?.let(ItemFlavor::parse)
-            return Filter(found, missing, place, terms, distinctItems, qualifiedItem)
+            return Filter(
+                found, missing, place, terms, distinctItems, qualifiedItem,
+                labels = q.labels, labelExpenseIds = q.labelExpenseIds,
+            )
         }
 
         private fun hasItem(expenseItems: Map<Long, List<ExpenseItem>>, phrase: String) =

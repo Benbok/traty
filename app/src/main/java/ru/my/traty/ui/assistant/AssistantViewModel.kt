@@ -11,6 +11,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -29,6 +30,7 @@ import ru.my.traty.assistant.ProductResolution
 import ru.my.traty.assistant.AssistantFallback
 import ru.my.traty.assistant.Balance
 import ru.my.traty.assistant.AssistantEngine
+import ru.my.traty.assistant.AssistantLabelQuestions
 import ru.my.traty.assistant.AssistantPrompts
 import ru.my.traty.assistant.AssistantQueries
 import ru.my.traty.assistant.AssistantQuery
@@ -46,6 +48,7 @@ import ru.my.traty.data.selectable
 import ru.my.traty.data.budget.BudgetRepository
 import ru.my.traty.data.budget.PlanKey
 import ru.my.traty.data.recurring.RecurringRepository
+import ru.my.traty.ui.labels.expenseLabelsFlow
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -188,7 +191,10 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                         debts = debts,
                         expenseItems = expenseItems,
                     )
-                    AssistantEngine.run(query, ctx)
+                    val scoped = if (query.labels.isEmpty()) query else {
+                        AssistantLabelQuestions.attachMatches(query, expenseLabelsFlow(c, zone, includeHidden = true).first())
+                    }
+                    AssistantEngine.run(scoped, ctx)
                 }
                 val matching = ProductResolution.prompt(question, calculated)
                 val sentMatching = matching?.takeIf { client != null && !offline }

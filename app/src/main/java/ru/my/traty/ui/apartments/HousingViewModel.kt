@@ -32,7 +32,21 @@ abstract class HousingViewModel(app: Application) : AndroidViewModel(app) {
             catch (e: Exception) { message = "Не удалось загрузить квартиры. Откройте раздел заново." }
         }
     }
-    protected fun change(onSaved: () -> Unit = {}, block: suspend () -> Unit) {
+    fun setApartmentArchived(id: Long, archived: Boolean, onSaved: () -> Unit) =
+        change(onSaved, archiveError(archived)) { repo.setApartmentArchived(id, archived) }
+
+    fun setMeterArchived(id: Long, archived: Boolean, onSaved: () -> Unit) =
+        change(onSaved, archiveError(archived)) { repo.setMeterArchived(id, archived) }
+
+    private fun archiveError(archived: Boolean): String =
+        if (archived) "Не удалось перенести в архив. Попробуйте ещё раз."
+        else "Не удалось вернуть из архива. Попробуйте ещё раз."
+
+    protected fun change(
+        onSaved: () -> Unit = {},
+        failureMessage: String = "Не удалось сохранить. Проверьте, нет ли показания за эту дату.",
+        block: suspend () -> Unit,
+    ) {
         if (busy) return
         busy = true; message = null
         viewModelScope.launch {
@@ -41,7 +55,7 @@ abstract class HousingViewModel(app: Application) : AndroidViewModel(app) {
                 onSaved()
             } catch (e: CancellationException) { throw e }
             catch (e: IllegalArgumentException) { message = e.message ?: "Проверьте введённые данные" }
-            catch (e: Exception) { message = "Не удалось сохранить. Проверьте, нет ли показания за эту дату." }
+            catch (e: Exception) { message = failureMessage }
             finally { busy = false }
         }
     }

@@ -23,6 +23,8 @@ internal fun HousingMenu(
     description: String,
     onEdit: () -> Unit,
     onDelete: (() -> Unit)? = null,
+    archived: Boolean = false,
+    onArchive: (() -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -32,6 +34,11 @@ internal fun HousingMenu(
                 text = { Text("Редактировать") },
                 leadingIcon = { Icon(Icons.Filled.Edit, null) },
                 onClick = { expanded = false; onEdit() },
+            )
+            if (onArchive != null) TratyDropdownMenuItem(
+                text = { Text(if (archived) "Вернуть из архива" else "В архив") },
+                leadingIcon = { Icon(if (archived) Icons.Filled.Unarchive else Icons.Filled.Archive, null) },
+                onClick = { expanded = false; onArchive() },
             )
             if (onDelete != null) TratyDropdownMenuItem(
                 text = { Text("Удалить", color = TratyTheme.colors.expense) },
@@ -69,7 +76,7 @@ internal fun ApartmentSummaryCard(
     meterCount: Int,
     resources: List<ResourceType>,
     onOpen: () -> Unit,
-    onEdit: () -> Unit,
+    actions: @Composable () -> Unit,
 ) {
     TratyCard(Modifier.fillMaxWidth(), onClick = onOpen) {
         Column(Modifier.padding(TratyTheme.spacing.md), verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md)) {
@@ -80,7 +87,7 @@ internal fun ApartmentSummaryCard(
                     Text(value.name, style = TratyTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     value.address?.takeIf { it.isNotBlank() }?.let { HousingHint(it) }
                 }
-                HousingMenu("Действия с квартирой ${value.name}", onEdit)
+                actions()
             }
             HorizontalDivider(color = TratyTheme.colors.borderSubtle)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm)) {
@@ -100,7 +107,12 @@ internal fun ApartmentSummaryCard(
 }
 
 @Composable
-internal fun MeterSummaryCard(value: Meter, snapshot: ApartmentSnapshot, onOpen: () -> Unit, onEdit: (() -> Unit)? = null) {
+internal fun MeterSummaryCard(
+    value: Meter,
+    snapshot: ApartmentSnapshot,
+    onOpen: () -> Unit,
+    actions: @Composable () -> Unit,
+) {
     val resource = ResourceType.valueOf(value.resource)
     val series = snapshot.series(setOf(value.id))
     TratyCard(Modifier.fillMaxWidth(), onClick = onOpen) {
@@ -116,8 +128,7 @@ internal fun MeterSummaryCard(value: Meter, snapshot: ApartmentSnapshot, onOpen:
                         color = TratyTheme.colors.onSurfaceVariant,
                     )
                 }
-                if (onEdit != null) HousingMenu("Действия со счётчиком ${value.name}", onEdit)
-                else Icon(Icons.Filled.ChevronRight, null, tint = TratyTheme.colors.onSurfaceVariant)
+                actions()
             }
             val latest = series.mapNotNull { reg -> reg.points.maxByOrNull { it.measuredAt }?.let { reg to it } }
             if (latest.isEmpty()) HousingHint("Нет показаний · откройте счётчик для ввода")
