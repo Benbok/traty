@@ -24,7 +24,8 @@ class QuestionRulesTest {
     fun everyKindOfQuestionHasAWay() {
         assertEquals(Intents.TOTAL, intent("Сколько я потратил на такси в октябре?"))
         assertEquals(Intents.PLACES, intent("где больше всего тратил на кофе"))
-        assertEquals(Intents.COMPARE, intent("сравни продукты лето и осень"))
+        assertEquals(Intents.PRODUCT_REPORT, intent("сравни продукты лето и осень"))
+        assertEquals(Intents.COMPARE, intent("сравни расходы на продукты летом и осенью"))
         assertEquals(Intents.BREAKDOWN, intent("на что ушли деньги"))
         assertEquals(Intents.TOP, intent("топ 3 покупки за неделю"))
         assertEquals(Intents.TOP, intent("самая дорогая покупка"))
