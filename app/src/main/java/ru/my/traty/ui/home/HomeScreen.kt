@@ -365,6 +365,7 @@ fun HomeScreen(
             }
             searchElsewhere(
                 groups = elsewhere,
+                labels = labels,
                 startDay = settings.periodStartDay,
                 currentEmpty = feed.isEmpty(),
                 onExpenseClick = openExpense,

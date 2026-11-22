@@ -46,6 +46,7 @@ internal fun DayExpensesSheet(
     day: LocalDate,
     expenses: List<ExpenseWithCategory>,
     categoryColors: Map<Long, Color>,
+    labels: Map<Long, List<ru.my.traty.data.labels.ExpenseLabelHit>> = emptyMap(),
     onOpenDay: () -> Unit,
     onOpenExpense: (ExpenseWithCategory) -> Unit,
     onDismiss: () -> Unit,
@@ -109,7 +110,7 @@ internal fun DayExpensesSheet(
                 .heightIn(max = 420.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            expenses.forEach { e -> ExpenseRow(row = e, onClick = { onOpenExpense(e) }) }
+            expenses.forEach { e -> ExpenseRow(row = e, onClick = { onOpenExpense(e) }, labels = labels[e.expense.id].orEmpty()) }
         }
         TratyButton(
             onClick = onOpenDay,

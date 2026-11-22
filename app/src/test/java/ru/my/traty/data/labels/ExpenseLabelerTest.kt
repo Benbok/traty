@@ -106,7 +106,7 @@ class ExpenseLabelerTest {
     }
 
     @Test
-    fun lateEveningInTypicalImpulseCategoryIsImpulsive() {
+    fun everyPurchaseInImpulsiveCategoryGetsLabelAtAnyHour() {
         val night = exp(3, hour = 23, cat = 2, sub = null, catName = "Кафе и рестораны", subName = null)
         val earlyMorning = exp(4, hour = 2, cat = 2, sub = null, catName = "Кафе и рестораны", subName = null)
         val noon = exp(5, hour = 12, cat = 2, sub = null, catName = "Кафе и рестораны", subName = null)
@@ -114,7 +114,7 @@ class ExpenseLabelerTest {
         val result = label(listOf(night, earlyMorning, noon, groceriesAtNight))
         assertEquals(listOf(ExpenseLabel.IMPULSIVE), labelsOf(result, night))
         assertEquals(listOf(ExpenseLabel.IMPULSIVE), labelsOf(result, earlyMorning))
-        assertTrue(labelsOf(result, noon).isEmpty())
+        assertEquals(listOf(ExpenseLabel.IMPULSIVE), labelsOf(result, noon))
         assertTrue(labelsOf(result, groceriesAtNight).isEmpty())
         assertTrue("23:00" in result.getValue(night.expense.id).single().reason)
     }
@@ -138,7 +138,7 @@ class ExpenseLabelerTest {
         val overPlan = mapOf(cafe.expense.id to "Трата сверх плана.", pharmacy.expense.id to "Трата сверх плана.")
         val result = ExpenseLabeler.label(listOf(cafe, pharmacy), emptySet(), zone, overPlan = overPlan)
         assertEquals(listOf(ExpenseLabel.IMPULSIVE), labelsOf(result, cafe))
-        assertEquals("Трата сверх плана.", result.getValue(cafe.expense.id).single().reason)
+        assertTrue("Трата сверх плана." in result.getValue(cafe.expense.id).single().reason)
         // «Здоровье» не импульсивная категория — перерасход не делает трату импульсивной
         assertTrue(labelsOf(result, pharmacy).isEmpty())
     }
@@ -159,7 +159,7 @@ class ExpenseLabelerTest {
         val two = listOf(cafe(2, 9), cafe(2, 12))
         val result = label(three + two)
         assertTrue(three.all { labelsOf(result, it) == listOf(ExpenseLabel.IMPULSIVE) })
-        assertTrue(two.all { labelsOf(result, it).isEmpty() })
+        assertTrue(two.all { labelsOf(result, it) == listOf(ExpenseLabel.IMPULSIVE) })
         assertTrue("3 мелкие траты" in result.getValue(three[0].expense.id).single().reason)
         // та же картина в «Продуктах» — не импульс
         val groceries = (0..2).map { exp(7, 9 + it, kopecks = 20_000, cat = 3, sub = null, catName = "Продукты", subName = null) }

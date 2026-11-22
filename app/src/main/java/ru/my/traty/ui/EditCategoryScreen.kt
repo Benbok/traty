@@ -194,7 +194,7 @@ fun EditCategoryScreen(
                     TratyRowDivider()
                     TratySwitchRow(
                         title = "Импульсивные траты ⚡",
-                        subtitle = "Ночные покупки и серии мелких покупок за день получат метку ⚡",
+                        subtitle = "Все покупки в этой категории получат метку ⚡",
                         checked = impulsive,
                         onCheckedChange = { impulsive = it },
                     )

@@ -30,7 +30,7 @@ fun expenseLabelsFlow(c: AppContainer, zone: ZoneId): Flow<Map<Long, List<Expens
     return combine(
         expenses,
         c.db.recurring().observeAll(),
-        c.db.categories().observeActiveWithSubs(),
+        c.categories.observeAllWithSubs(),
         c.settings.flow.map { it.labelsEnabled }.distinctUntilChanged(),
         plans,
     ) { (expenses, debtExpenseIds), recurring, cats, enabled, (rows, totals, startDay) ->

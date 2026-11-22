@@ -301,7 +301,7 @@ fun EditExpenseScreen(
                                         style = TratyTheme.typography.bodyMedium,
                                     )
                                     Text(
-                                        "Для всех трат в этой категории: ночные покупки и серии мелких получат ⚡",
+                                        "Все покупки в этой категории получают метку ⚡",
                                         style = TratyTheme.typography.bodySmall,
                                         color = TratyTheme.colors.onSurfaceVariant,
                                     )

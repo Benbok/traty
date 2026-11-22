@@ -79,10 +79,12 @@ fun ExpenseRow(
                         )
                     }
                 }
-                if (labels.isNotEmpty()) {
-                    Spacer(Modifier.width(TratyTheme.spacing.xs))
-                    ExpenseLabelBadges(labels)
-                }
+            }
+            if (labels.isNotEmpty()) {
+                ExpenseLabelBadges(
+                    labels,
+                    Modifier.padding(top = TratyTheme.spacing.xxs, bottom = TratyTheme.spacing.xxs),
+                )
             }
             val accent = TratyTheme.colors.primary
             val sub = remember(row, itemCount, accent) { expenseSubtitleText(formatTime(e.timestamp), e.note, itemCount, accent) }

@@ -1,7 +1,6 @@
 package ru.my.traty.ui.home
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -66,19 +65,7 @@ internal fun AmountField(value: String, onValueChange: (String) -> Unit, enabled
 
 @Composable
 internal fun LabelChip(hit: ExpenseLabelHit) {
-    Box(
-        Modifier
-            .heightIn(min = 28.dp)
-            .background(TratyTheme.colors.surfaceContainer, TratyTheme.shapes.pill)
-            .padding(horizontal = TratyTheme.spacing.md, vertical = TratyTheme.spacing.xs),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            "${hit.label.emoji} ${hit.label.title}",
-            style = TratyTheme.typography.labelMedium,
-            color = TratyTheme.colors.onSurface,
-        )
-    }
+    ExpenseLabelChip(hit.label, fullTitle = true)
 }
 
 @Composable

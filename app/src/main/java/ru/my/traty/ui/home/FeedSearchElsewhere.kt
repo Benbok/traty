@@ -34,6 +34,7 @@ fun LazyListScope.searchElsewhere(
     itemsByExpense: Map<Long, List<ExpenseItem>> = emptyMap(),
     query: String = "",
     itemCounts: Map<Long, Int> = emptyMap(),
+    labels: Map<Long, List<ru.my.traty.data.labels.ExpenseLabelHit>> = emptyMap(),
 ) {
     if (groups.isEmpty()) return
     item(key = "elsewhere-banner", contentType = "elsewhere-banner") {
@@ -50,6 +51,7 @@ fun LazyListScope.searchElsewhere(
                     onClick = { onExpenseClick(item.data) },
                     matched = FeedSearch.matchedItems(itemsByExpense[item.data.expense.id].orEmpty(), query),
                     itemCount = itemCounts[item.data.expense.id] ?: 0,
+                    labels = labels[item.data.expense.id].orEmpty(),
                 )
                 is FeedItem.IncomeItem -> IncomeRow(income = item.data, onClick = { onIncomeClick(item.data) })
             }
