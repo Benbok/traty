@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.data.Places
+import ru.my.traty.ui.charts.components.CashFlowCategoryPicker
 import ru.my.traty.ui.charts.components.CashFlowChart
 import ru.my.traty.ui.charts.components.ChartDateCard
 import ru.my.traty.ui.charts.components.ChartKpiCard
@@ -130,7 +131,12 @@ fun ChartsScreen(vm: ChartsViewModel = viewModel()) {
 
         // Накопительные доходы и расходы на общей шкале.
         item(key = "cash-flow-chart", contentType = "cash-flow-chart") {
-            CashFlowChart(points = state.cashFlowPoints)
+            CashFlowChart(
+                points = state.cashFlowPoints,
+                filteredExpenses = state.cashFlowCategoryId != null,
+            ) {
+                CashFlowCategoryPicker(state.expenseCategories, state.cashFlowCategoryId, vm::setCashFlowCategory)
+            }
         }
 
         // Структура трат (Кредит по категориям)

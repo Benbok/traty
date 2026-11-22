@@ -47,3 +47,5 @@ data class CategoryCreditShare(
     val stores: List<StoreTotal> = emptyList(),
 )
 
+/** Категория, по которой в диапазоне графика были расходы. */
+data class ChartExpenseCategory(val id: Long, val name: String)

@@ -42,7 +42,12 @@ import ru.my.traty.ui.formatRubSigned
 import kotlin.math.roundToInt
 
 @Composable
-fun CashFlowChart(points: List<CashFlowPoint>, modifier: Modifier = Modifier) {
+fun CashFlowChart(
+    points: List<CashFlowPoint>,
+    modifier: Modifier = Modifier,
+    filteredExpenses: Boolean = false,
+    categoryPicker: @Composable () -> Unit = {},
+) {
     var selectedIndex by remember(points) { mutableStateOf<Int?>(null) }
     val active = points.getOrNull(selectedIndex ?: points.lastIndex)
     TratyCard(
@@ -58,6 +63,7 @@ fun CashFlowChart(points: List<CashFlowPoint>, modifier: Modifier = Modifier) {
                 color = TratyTheme.colors.onSurfaceVariant,
             )
             Spacer(Modifier.height(TratyTheme.spacing.md))
+            categoryPicker()
             if (active == null) {
                 Box(Modifier.fillMaxWidth().height(192.dp), contentAlignment = Alignment.Center) {
                     Text("Нет операций за этот период", style = TratyTheme.typography.bodyMedium)
@@ -65,11 +71,12 @@ fun CashFlowChart(points: List<CashFlowPoint>, modifier: Modifier = Modifier) {
             } else {
                 CashFlowPlot(points, selectedIndex) { selectedIndex = it }
                 Spacer(Modifier.height(TratyTheme.spacing.md))
-                CashFlowDetails(active)
+                CashFlowDetails(active, filteredExpenses)
             }
             Spacer(Modifier.height(TratyTheme.spacing.sm))
             Text(
-                "Разница доходов и расходов за период, не остаток на счетах",
+                if (filteredExpenses) "Разница между всеми доходами и расходами выбранной категории"
+                else "Разница доходов и расходов за период, не остаток на счетах",
                 style = TratyTheme.typography.bodySmall,
                 color = TratyTheme.colors.onSurfaceVariant,
             )
@@ -78,11 +85,15 @@ fun CashFlowChart(points: List<CashFlowPoint>, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun CashFlowDetails(point: CashFlowPoint) {
+private fun CashFlowDetails(point: CashFlowPoint, filteredExpenses: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {
         Text("На ${formatDate(point.date)}", style = TratyTheme.typography.labelMedium)
         CashFlowAmount("━ Доходы", formatRub(point.incomeKopecks), TratyTheme.colors.income)
-        CashFlowAmount("┄ Расходы", formatRub(point.expenseKopecks), TratyTheme.colors.expense)
+        CashFlowAmount(
+            if (filteredExpenses) "┄ Расходы категории" else "┄ Расходы",
+            formatRub(point.expenseKopecks),
+            TratyTheme.colors.expense,
+        )
         CashFlowAmount(
             "Разница", formatRubSigned(point.netKopecks),
             if (point.netKopecks >= 0) TratyTheme.colors.income else TratyTheme.colors.expense,
