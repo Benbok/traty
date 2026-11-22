@@ -1,5 +1,7 @@
 package ru.my.traty.ui.designsystem.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.IndicationNodeFactory
@@ -61,15 +63,28 @@ private class TratyPressNode(
                 when (interaction) {
                     is PressInteraction.Press -> {
                         pressAnimation?.cancel()
-                        pressAlpha = 0.06f
-                    }
-                    is PressInteraction.Release, is PressInteraction.Cancel -> {
-                        pressAnimation?.cancel()
                         pressAnimation = launch {
-                            animate(pressAlpha, 0f, animationSpec = tween(durationMillis = 120)) { value, _ ->
-                                pressAlpha = value
+                            animate(
+                                pressAlpha, 0.06f,
+                                animationSpec = tween(durationMillis = 90, easing = FastOutSlowInEasing),
+                            ) { value, _ -> pressAlpha = value }
+                        }
+                    }
+                    is PressInteraction.Release -> {
+                        val entering = pressAnimation
+                        pressAnimation = launch {
+                            // Короткое касание успевает показать подсветку перед затуханием.
+                            try {
+                                entering?.join()
+                                fadeOut()
+                            } finally {
+                                entering?.cancel()
                             }
                         }
+                    }
+                    is PressInteraction.Cancel -> {
+                        pressAnimation?.cancel()
+                        pressAnimation = launch { fadeOut() }
                     }
                     is FocusInteraction.Focus -> focused = true
                     is FocusInteraction.Unfocus -> focused = false
@@ -79,6 +94,13 @@ private class TratyPressNode(
                 }
             }
         }
+    }
+
+    private suspend fun fadeOut() {
+        animate(
+            pressAlpha, 0f,
+            animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing),
+        ) { value, _ -> pressAlpha = value }
     }
 
     override fun ContentDrawScope.draw() {

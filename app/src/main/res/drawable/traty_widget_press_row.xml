@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <selector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:exitFadeDuration="120">
+    android:enterFadeDuration="90"
+    android:exitFadeDuration="220">
     <item android:state_pressed="true">
         <shape android:shape="rectangle">
             <solid android:color="@color/traty_widget_press" />
