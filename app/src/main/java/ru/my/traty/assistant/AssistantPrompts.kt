@@ -11,7 +11,7 @@ import java.util.Locale
  * Один прошлый обмен репликами — чтобы понимать «а в сентябре?».
  * [expenseIds] — траты, которые показал ответ: «удали их» относится ровно к ним. В ИИ они не уходят.
  */
-data class AssistantTurn(val question: String, val queryJson: String, val expenseIds: List<Long> = emptyList())
+data class AssistantTurn(val question: String, val queryJson: String, val expenseIds: List<Long> = emptyList(), val shownProductKeys: List<String> = emptyList())
 
 /** Тексты запросов к ИИ: шаг 1 — вопрос в JSON, шаг 2 — посчитанные цифры в человеческий ответ. */
 object AssistantPrompts {
