@@ -1,12 +1,5 @@
 package ru.my.traty.assistant
 
-import ru.my.traty.data.ExpenseWithCategory
-import ru.my.traty.data.items.ExpenseItem
-import ru.my.traty.data.items.ItemNames
-import ru.my.traty.data.items.ItemSale
-import ru.my.traty.data.items.ItemTotals
-import ru.my.traty.data.items.ProductTotal
-import ru.my.traty.ui.formatRub
 import java.time.LocalDate
 
 internal object ProductRanking {
@@ -64,89 +57,13 @@ internal object ProductRanking {
             from = when {
                 hasHistory -> previous?.from
                 dateReference -> null
-                model?.from != null || model?.to != null -> model?.from
                 (local?.productRankBy ?: rank?.productRankBy ?: FREQUENCY) == FREQUENCY -> QuestionDates.ALL_TIME.toString()
+                model?.from != null || model?.to != null -> model?.from
                 else -> null
             },
-            to = if (hasHistory) previous?.to else model?.to.takeUnless { dateReference },
+            to = if (hasHistory) previous?.to else model?.to.takeUnless {
+                dateReference || (local?.productRankBy ?: rank?.productRankBy ?: FREQUENCY) == FREQUENCY
+            },
         ), today, startDay)
-    }
-
-    fun answer(query: AssistantQuery, rows: List<ExpenseWithCategory>, expenseItems: Map<Long, List<ExpenseItem>>,
-        span: String, mixed: List<ExpenseWithCategory> = emptyList()): AssistantData {
-        val groceryOnly = query.categories.any { fold(it) == "продукты" }
-        val knownGroceries = if (mixed.isEmpty()) emptySet() else rows.flatMap { row ->
-            expenseItems[row.expense.id].orEmpty().map { ItemNames.familyKey(it.name) }
-        }.toSet()
-        val additional = mixed.associate { row ->
-            row.expense.id to expenseItems[row.expense.id].orEmpty().filter { ItemNames.familyKey(it.name) in knownGroceries }
-        }
-        val receipts = rows + mixed.filter { !additional[it.expense.id].isNullOrEmpty() }
-        val sales = receipts.flatMap { row ->
-            val expense = row.expense
-            (additional[expense.id] ?: expenseItems[expense.id]).orEmpty().filterNot { groceryOnly && petFood.containsMatchIn(fold(it.name)) }.map { item ->
-                ItemSale(item.name, item.priceKopecks, item.quantityMilli, item.unit, expense.id,
-                    expense.timestamp, expense.place, expense.categoryId, item.packMilli, item.packUnit)
-            }
-        }
-        val totals = ItemTotals.byProduct(sales, keyOf = ItemNames::familyKey)
-        val metric = when (query.productRankBy) {
-            PIECES -> "по количеству штук"
-            SPENDING -> "по сумме"
-            else -> "по числу покупок"
-        }
-        val comparator = when (query.productRankBy) {
-            PIECES -> compareByDescending<ProductTotal> { it.amounts.piecesMilli }
-            SPENDING -> compareByDescending<ProductTotal> { it.totalKopecks }
-            else -> compareByDescending<ProductTotal> { it.purchases }
-        }.thenByDescending { it.purchases }.thenBy { it.name }
-        val byFrequency = query.productRankBy != PIECES && query.productRankBy != SPENDING
-        val hasRepeatedPurchases = byFrequency && totals.any { it.purchases > 1 }
-        val ranked = totals.asSequence()
-            .filter { !hasRepeatedPurchases || it.purchases > 1 }
-            .filter { query.productRankBy != PIECES || it.amounts.piecesMilli > 0 }
-            .filter { query.productRankBy != SPENDING || it.totalKopecks != 0L || it.unpriced == 0 }
-            .sortedWith(comparator)
-            .toList()
-        val top = ranked.take((query.limit ?: AssistantEngine.DEFAULT_TOP).coerceIn(1, AssistantEngine.MAX_TOP))
-        val location = query.place?.let { " в магазине «$it»" }.orEmpty()
-        if (top.isEmpty()) {
-            val note = if (totals.isEmpty()) "В чеках нет записанных позиций." else "Для рейтинга $metric нет данных."
-            return AssistantData(facts = "", direct = "За $span$location. $note")
-        }
-
-        val withoutItems = rows.count { expenseItems[it.expense.id].isNullOrEmpty() }
-        val noRepeatedPurchases = byFrequency && !hasRepeatedPurchases
-        val keys = top.map { it.key }.toSet()
-        val receiptIds = sales.filter { ItemNames.familyKey(it.name) in keys }.map { it.expenseId }.distinct()
-        val report = buildString {
-            if (noRepeatedPurchases) {
-                appendLine("За $span$location каждый найденный товар встречается в одной покупке.")
-            } else {
-                appendLine("Товары $metric за $span$location")
-            }
-            top.forEach { entry ->
-                val purchases = "${entry.purchases} ${purchaseWord(entry.purchases)}"
-                val quantity = entry.amounts.text().takeIf { it.isNotBlank() }
-                val total = formatRub(entry.totalKopecks).takeIf { entry.totalKopecks != 0L || entry.unpriced == 0 }
-                val details = when (query.productRankBy) {
-                    PIECES -> listOfNotNull(quantity, purchases, total)
-                    SPENDING -> listOfNotNull(total, purchases, quantity)
-                    else -> listOfNotNull(purchases, quantity, total)
-                }
-                val pricing = if (entry.unpriced > 0) " · без цены: ${entry.unpriced} поз." else ""
-                appendLine("• ${ItemNames.familyName(entry.name)} — ${details.joinToString(" · ")}$pricing")
-            }
-            if (top.size < ranked.size) appendLine("Показано ${top.size} из ${ranked.size} товаров.")
-            if (withoutItems > 0) append("Состав чека известен для ${receipts.size - withoutItems} из ${receipts.size} покупок.")
-        }
-        return AssistantData(facts = "", direct = report.trimEnd(), expenseIds = receiptIds)
-    }
-
-    private fun purchaseWord(count: Int): String = when {
-        count % 100 in 11..14 -> "покупок"
-        count % 10 == 1 -> "покупка"
-        count % 10 in 2..4 -> "покупки"
-        else -> "покупок"
     }
 }

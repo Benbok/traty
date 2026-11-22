@@ -11,7 +11,7 @@ import java.util.Locale
  * Один прошлый обмен репликами — чтобы понимать «а в сентябре?».
  * [expenseIds] — траты, которые показал ответ: «удали их» относится ровно к ним. В ИИ они не уходят.
  */
-data class AssistantTurn(val question: String, val queryJson: String, val expenseIds: List<Long> = emptyList())
+data class AssistantTurn(val question: String, val queryJson: String, val expenseIds: List<Long> = emptyList(), val shownProductKeys: List<String> = emptyList())
 
 /** Тексты запросов к ИИ: шаг 1 — вопрос в JSON, шаг 2 — посчитанные цифры в человеческий ответ. */
 object AssistantPrompts {
@@ -34,7 +34,7 @@ object AssistantPrompts {
 Сегодня $today, $weekday. Текущий расчётный период: ${period.startDate} — ${period.endDate}. Прошлый: ${previous.startDate} — ${previous.endDate}.
 
 Верни только JSON-объект без пояснений:
-{"intent": "...", "categories": [], "place": null, "from": null, "to": null, "compareFrom": null, "compareTo": null, "amount": null, "limit": null, "relative": false, "groupBy": null, "all": false, "target": null, "percent": false}
+{"intent": "...", "categories": [], "place": null, "from": null, "to": null, "compareFrom": null, "compareTo": null, "amount": null, "limit": null, "relative": false, "groupBy": null, "all": false, "target": null, "percent": false, "productReport": null}
 
 intent — одно из:
 ${IntentRegistry.promptLines()}
@@ -45,6 +45,7 @@ ${IntentRegistry.promptLines()}
 - Не теряй явно названный товар или имя животного: «корм для кошки» — это корм, «на кошку Чуню» — поиск по словам «Чуня», а не все питомцы.
 - Сохраняй вкус, сорт, марку и фасовку, если они явно названы в вопросе о товаре. «Шоколадный молочный коктейль» передай как одну фразу в categories.
 - Товар или услуга, которых нет среди категорий («шаурма», «бензин», «шоколад», «молоко»), — тоже в categories, как сказал пользователь: приложение поищет их в заметках и в списках товаров внутри покупок. В этом случае сумма будет посчитана только по ценам совпавших позиций.
+- Для product_report названия отдельных товаров передавай только в productReport.items. В categories оставляй только явный фильтр по категории. При уточнении используй followUp и оставь неизменяемые поля пустыми.
 - Магазин, сервис или место, которого нет среди категорий («Пятёрочка», «Озон», «Яндекс»), пиши в place.
 - Даты — ГГГГ-ММ-ДД, включительно. Нет срока в вопросе — from и to null (значит текущий период).
 - «в этом месяце» — текущий период; «в прошлом месяце» — прошлый период целиком; «за неделю» — последние 7 дней включая сегодня; «вчера» — вчерашний день; названный месяц — весь этот месяц; «с ноября по декабрь» — с начала первого месяца до конца второго; «за последний год» — последние 12 месяцев; «за последний квартал» — последние 3 месяца; «в прошлом квартале» — прошлый календарный квартал.
@@ -57,6 +58,8 @@ ${IntentRegistry.promptLines()}
 $cats
 
 Примеры:
+«на какие товары я потратил больше в этом месяце, чем в прошлом» → {"intent":"product_report","productReport":{"metric":"spending","compare":true,"orderByChange":true,"direction":"increase"}}
+«а какие из них я стал чаще покупать?» → {"intent":"product_report","productReport":{"followUp":true,"shownOnly":true,"metric":"frequency","direction":"increase"}}
 «сколько я потратил на кафе в этом месяце» → {"intent":"total","categories":["Кафе и рестораны"]}
 «сколько я потратил на такси в октябре» → {"intent":"total","categories":["Такси"],"from":"${october.atDay(1)}","to":"${october.atEndOfMonth()}"}
 «сколько я потратил на шоколадки» → {"intent":"total","categories":["шоколадки"]}

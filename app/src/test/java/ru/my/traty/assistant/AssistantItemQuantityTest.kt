@@ -252,7 +252,7 @@ class AssistantItemQuantityTest {
 
         val repeated = report(receipts + exp(100, 11, null, milk))
         assertTrue(repeated, "• Молоко — 2 покупки" in repeated)
-        assertTrue(repeated, "Чипсы" !in repeated)
+        assertTrue(repeated, "Чипсы" in repeated)
     }
     @Test
     fun habitualRankingCombinesReceiptNamesAcrossMonthsBeforeTakingTop() {
@@ -267,9 +267,54 @@ class AssistantItemQuantityTest {
         val answer = ask("Какие продукты я покупаю чаще всего?", receipts)
         val reply = answer.direct.orEmpty()
         assertTrue(reply, "2 покупки · 7 шт" in reply && "379,93 ₽" in reply)
-        assertTrue(reply, "Чипсы" !in reply && "ваниль" !in reply)
-        assertEquals(setOf(older.expense.id, newer.expense.id), answer.expenseIds.toSet())
+        assertTrue(reply, "Чипсы" in reply && "ваниль" in reply.lowercase())
+        assertEquals(setOf(older.expense.id, newer.expense.id), answer.productReport!!.rows.first().currentExpenseIds.toSet())
         val november = ask("Какие продукты я покупаю чаще всего в ноябре?", receipts)
         assertTrue(november.direct.orEmpty(), "7 шт" !in november.direct.orEmpty())
+    }
+
+    @Test
+    fun fiveProductsIncludesSinglePurchasesAndKeepsReportScope() {
+        val milk = ExpenseItem(name = "Молоко", priceKopecks = 100)
+        val receipts = listOf(
+            exp(100, 4, null, milk), exp(100, 5, null, milk),
+            exp(100, 6, null, milk), exp(100, 7, null, milk),
+            exp(400, 8, null, *listOf("Масло", "Сыр", "Хлеб", "Яблоки")
+                .map { ExpenseItem(name = it, priceKopecks = 100) }.toTypedArray()),
+        )
+        val question = "Пять продуктов, которые я покупаю чаще всего"
+        val query = QuestionRules.resolve(question, null, QuestionRules.guess(question, categories), today, 1, categories = categories)
+        val ctx = AssistantContext(receipts, emptyList(), emptyList(), today, 1, ZoneOffset.UTC,
+            categories = categories, expenseItems = items)
+        val result = requireNotNull(AssistantEngine.run(query, ctx).productReport)
+        assertEquals(5, result.rows.size)
+        assertEquals("Молоко", result.rows.first().name)
+        assertEquals(4, result.rows.first().currentExpenseIds.size)
+
+        val next = "А за октябрь?"
+        val updated = QuestionRules.resolve(next, null, null, today, 1, query, categories)
+        assertEquals("2026-10-01", updated.from)
+        assertEquals(5, updated.limit)
+        assertEquals("frequency", updated.productReport?.metric)
+    }
+
+    @Test
+    fun comparisonIncludesItemsFromBothPeriodsAndTracesEachSide() {
+        val item = ExpenseItem(name = "Молоко", priceKopecks = 100)
+        val older = exp(2, 3, null, item, ExpenseItem(name = "Чай", priceKopecks = 100)).let {
+            it.copy(expense = it.expense.copy(timestamp = it.expense.timestamp - 31L * 86_400_000))
+        }
+        val newer = exp(4, 4, null, item.copy(priceKopecks = 300), ExpenseItem(name = "Мыло", priceKopecks = 100))
+        val receipts = listOf(older, newer)
+        val question = "Сравни товары в этом месяце и в прошлом месяце"
+        val query = QuestionRules.resolve(question, null, QuestionRules.guess(question, categories), today, 1, categories = categories)
+        assertEquals("2026-10-17", query.compareTo)
+        val ctx = AssistantContext(receipts, emptyList(), emptyList(), today, 1, ZoneOffset.UTC,
+            categories = categories, expenseItems = items)
+        val report = requireNotNull(AssistantEngine.run(query, ctx).productReport)
+        assertEquals(setOf("Молоко", "Чай", "Мыло"), report.rows.map { it.name }.toSet())
+        assertEquals(listOf(newer.expense.id), report.rows.first().currentExpenseIds)
+        assertEquals(listOf(older.expense.id), report.rows.first().previousExpenseIds)
+        assertTrue(report.rows.first().detail, "+2 ₽" in report.rows.first().detail)
     }
 }

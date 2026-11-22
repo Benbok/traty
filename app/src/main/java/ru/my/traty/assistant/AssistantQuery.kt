@@ -42,6 +42,8 @@ data class AssistantQuery(
     /** Название товара в явном вопросе о количестве купленного. Заполняется приложением. */
     val purchasedItem: String? = null,
     val productRankBy: String? = null,
+    val productReport: ProductReportOptions? = null,
+    @Transient val shownProductKeys: List<String> = emptyList(),
 )
 
 object Intents {
@@ -51,6 +53,7 @@ object Intents {
     const val RESOURCE_TREND = "resource_trend"
     const val TOTAL = "total"
     const val TOP = "top"
+    const val PRODUCT_REPORT = "product_report"
     const val PRODUCT_RANK = "product_rank"
     const val BREAKDOWN = "breakdown"
     const val PLACES = "places"

@@ -21,6 +21,7 @@ import ru.my.traty.data.placeTotals
 import ru.my.traty.data.period.BillingPeriod
 import ru.my.traty.ui.charts.model.CashFlowPoint
 import ru.my.traty.ui.charts.model.CategoryCreditShare
+import ru.my.traty.ui.charts.model.ChartExpenseCategory
 import ru.my.traty.ui.charts.model.ChartPeriod
 import ru.my.traty.ui.charts.model.ChartSummary
 import ru.my.traty.ui.charts.model.cumulativeCashFlowPoints
@@ -39,6 +40,8 @@ data class ChartsUiState(
     val rangeEnd: LocalDate = LocalDate.now(),
     val summary: ChartSummary = ChartSummary(0, 0, 0, null, 0, 0, 0),
     val cashFlowPoints: List<CashFlowPoint> = emptyList(),
+    val expenseCategories: List<ChartExpenseCategory> = emptyList(),
+    val cashFlowCategoryId: Long? = null,
     val categoryShares: List<CategoryCreditShare> = emptyList(),
     val recentIncomes: List<Income> = emptyList(),
 )
@@ -56,6 +59,8 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
     private val startDay = MutableStateFlow(1)
     val billingPeriod = MutableStateFlow(BillingPeriod.containing(LocalDate.now(), 1))
 
+    private val cashFlowCategory = MutableStateFlow<Long?>(null)
+
     init {
         viewModelScope.launch {
             c.settings.flow.map { it.periodStartDay }.distinctUntilChanged().collect { d ->
@@ -67,9 +72,13 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private data class ChartSelection(
+        val period: ChartPeriod, val billing: BillingPeriod, val startDay: Int, val range: ChartRange,
+    )
+
     private val rangeFlow = combine(period, billingPeriod, customRange, startDay) { p, bp, custom, d ->
         val now = LocalDate.now()
-        when (p) {
+        val range = when (p) {
             ChartPeriod.CUSTOM -> customChartRange(custom.first, custom.second, zone)
             ChartPeriod.MONTH -> {
                 ChartRange(bp.startMillis(zone), bp.endMillisExclusive(zone), bp.startDate, bp.endDate)
@@ -84,31 +93,23 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
                 ChartRange(0L, end.toStartMillis(), start, now)
             }
         }
+        ChartSelection(p, bp, d, range)
     }
 
-    private val expensesFlow = rangeFlow.flatMapLatest { r ->
-        c.financialReports.expenses(r.startMillis, r.endMillis)
+    val uiState: StateFlow<ChartsUiState> = rangeFlow.flatMapLatest { selection ->
+        val range = selection.range
+        combine(
+            c.financialReports.expenses(range.startMillis, range.endMillis),
+            c.financialReports.incomes(range.startMillis, range.endMillis),
+            cashFlowCategory,
+        ) { expenses, incomes, categoryId ->
+            processUiState(selection.period, selection.billing, selection.startDay, range, expenses, incomes, categoryId)
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, ChartsUiState())
+
+    fun setCashFlowCategory(categoryId: Long?) {
+        cashFlowCategory.value = categoryId
     }
-
-    private val incomesFlow = rangeFlow.flatMapLatest { r ->
-        c.financialReports.incomes(r.startMillis, r.endMillis)
-    }
-
-    private val selection = combine(billingPeriod, startDay) { bp, d -> bp to d }
-
-    val uiState: StateFlow<ChartsUiState> = combine(
-        period,
-        selection,
-        rangeFlow,
-        expensesFlow,
-        incomesFlow,
-    ) { p, sel, range, expenses, incomes ->
-        processUiState(p, sel.first, sel.second, range, expenses, incomes)
-    }.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        ChartsUiState(),
-    )
 
     fun setPeriod(newPeriod: ChartPeriod) {
         period.value = newPeriod
@@ -135,6 +136,7 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
         range: ChartRange,
         expenses: List<ExpenseWithCategory>,
         incomes: List<Income>,
+        categoryId: Long?,
     ): ChartsUiState {
         val totalDebit = incomes.sumOf { it.amountKopecks }
         val totalCredit = expenses.sumOf { it.expense.amountKopecks }
@@ -156,7 +158,13 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
             expenseCount = expenses.size,
         )
 
-        val cashFlowPoints = calculateCashFlowPoints(p, startDay, range, expenses, incomes)
+        val expenseCategories = expenses.distinctBy { it.expense.categoryId }
+            .map { ChartExpenseCategory(it.expense.categoryId, it.categoryName) }
+            .sortedWith(compareBy<ChartExpenseCategory> { it.name.lowercase() }.thenBy { it.id })
+        val selectedCategoryId = categoryId?.takeIf { id -> expenseCategories.any { it.id == id } }
+        val chartExpenses = if (selectedCategoryId == null) expenses
+            else expenses.filter { it.expense.categoryId == selectedCategoryId }
+        val cashFlowPoints = calculateCashFlowPoints(p, startDay, range, chartExpenses, incomes)
         val categoryShares = calculateCategoryShares(expenses, totalCredit)
 
         return ChartsUiState(
@@ -167,6 +175,8 @@ class ChartsViewModel(app: Application) : AndroidViewModel(app) {
             rangeEnd = range.endDate,
             summary = summary,
             cashFlowPoints = cashFlowPoints,
+            expenseCategories = expenseCategories,
+            cashFlowCategoryId = selectedCategoryId,
             categoryShares = categoryShares,
             recentIncomes = incomes.take(15),
         )

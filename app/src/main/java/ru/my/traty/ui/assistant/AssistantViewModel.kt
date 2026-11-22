@@ -80,6 +80,7 @@ data class ChatMessage(
     val expenseChanges: List<ExpenseChange> = emptyList(),
     val expensesApplied: Int? = null,
     val expensesUndone: Boolean = false,
+    val productReport: ru.my.traty.assistant.ProductReportResult? = null,
 )
 
 /**
@@ -123,8 +124,14 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 val categories = c.db.categories().getActiveWithSubs().selectable()
                 // Шаг 1: вопрос → запрос. Если ИИ не ответил, пробуем понять вопрос правилами
                 var aiDown: Exception? = null
+                val guessed = QuestionRules.guess(question, categories)
+                val previous = history.lastOrNull()?.let { turn ->
+                    AssistantQueries.decode(turn.queryJson)?.copy(ids = turn.expenseIds, shownProductKeys = turn.shownProductKeys)
+                }
+                val knownReport = ru.my.traty.assistant.ProductReportRequest.supports(guessed?.intent) ||
+                    ru.my.traty.assistant.ProductReportRequest.isContinuation(question, previous, today, s.periodStartDay)
                 val housing = withContext(Dispatchers.IO) { c.apartments.snapshot() }
-                val housingCatalog = ru.my.traty.assistant.apartments.ApartmentPrompts.catalog(housing)
+                val housingCatalog = ru.my.traty.assistant.apartments.ApartmentPrompts.catalog(housing).takeUnless { knownReport }.orEmpty()
                 val stepOneUser = AssistantPrompts.queryUser(question, history)
                 val fromAi = if (client == null) null else try {
                     AssistantQueries.decode(
@@ -143,16 +150,15 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 val housingReply = housingConversation.reply(question, fromAi, housing, today, client,
                     AssistantAnswers.sent(stepOneUser, categories.map { it.category.name }, null) + "\n" + housingCatalog)
                 if (housingReply != null) {
+                    history.clear()
                     messages += ChatMessage(nextId++, false, housingReply.text, sentFacts = housingReply.sentFacts)
                     return@launch
                 }
-                val guessed = QuestionRules.guess(question, categories)
-                if (aiDown != null && guessed == null) throw aiDown
                 val offline = aiDown != null
                 val offlineReason = aiDown?.message
                 // Траты прошлого ответа приложение помнит само: «удали их» относится ровно к ним
-                val previous = history.lastOrNull()?.let { t -> AssistantQueries.decode(t.queryJson)?.copy(ids = t.expenseIds) }
                 val query = QuestionRules.resolve(question, fromAi, guessed, today, s.periodStartDay, previous, categories)
+                if (aiDown != null && query.intent == Intents.UNKNOWN) throw aiDown
                 if (client == null && query.intent == Intents.UNKNOWN) {
                     messages += ChatMessage(nextId++, false, AssistantFallback.NO_AI_HINT)
                     return@launch
@@ -168,8 +174,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 val debts = c.debts.activeWithPayments(zone).map { (d, paid) -> DebtWithPaid(d, paid) }
                 val calculated = withContext(Dispatchers.Default) {
                     val expenses = c.db.expenses().getAllWithCategory()
-                    val expenseItems = c.db.expenseItems().getForAll(expenses.map { it.expense.id })
-                        .groupBy { it.expenseId }
+                    val expenseItems = c.expenseItems.getForAll(expenses.map { it.expense.id })
                     val ctx = AssistantContext(
                         expenses = expenses,
                         incomes = c.db.incomes().getAll(),
@@ -196,7 +201,9 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                 } else null
                 val data = withContext(Dispatchers.Default) { ProductResolution.answer(calculated, decision) }
                 val remembered = data.expenseIds.ifEmpty { data.expenseChanges.map { it.id } }
-                history.lastIndex.takeIf { it >= 0 }?.let { history[it] = history[it].copy(expenseIds = remembered) }
+                history.lastIndex.takeIf { it >= 0 }?.let { history[it] = history[it].copy(
+                    expenseIds = remembered, shownProductKeys = data.productReport?.shownKeys.orEmpty(),
+                ) }
                 val template = AssistantAnswers.template(query.intent, data)
                 val asked = client != null && !offline && data.direct == null && template == null
                 val text = data.direct ?: template ?: when {
@@ -217,6 +224,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
                     subscriptionChanges = data.subscriptionChanges,
                     debtChanges = data.debtChanges,
                     expenseChanges = data.expenseChanges,
+                    productReport = data.productReport,
                 )
             } catch (e: CancellationException) {
                 throw e

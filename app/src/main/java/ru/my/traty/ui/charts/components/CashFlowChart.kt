@@ -42,7 +42,12 @@ import ru.my.traty.ui.formatRubSigned
 import kotlin.math.roundToInt
 
 @Composable
-fun CashFlowChart(points: List<CashFlowPoint>, modifier: Modifier = Modifier) {
+fun CashFlowChart(
+    points: List<CashFlowPoint>,
+    modifier: Modifier = Modifier,
+    filteredExpenses: Boolean = false,
+    categoryPicker: @Composable () -> Unit = {},
+) {
     var selectedIndex by remember(points) { mutableStateOf<Int?>(null) }
     val active = points.getOrNull(selectedIndex ?: points.lastIndex)
     TratyCard(
@@ -58,18 +63,20 @@ fun CashFlowChart(points: List<CashFlowPoint>, modifier: Modifier = Modifier) {
                 color = TratyTheme.colors.onSurfaceVariant,
             )
             Spacer(Modifier.height(TratyTheme.spacing.md))
+            categoryPicker()
             if (active == null) {
                 Box(Modifier.fillMaxWidth().height(192.dp), contentAlignment = Alignment.Center) {
                     Text("Нет операций за этот период", style = TratyTheme.typography.bodyMedium)
                 }
             } else {
-                CashFlowPlot(points, selectedIndex) { selectedIndex = it }
+                CashFlowPlot(points, selectedIndex, filteredExpenses) { selectedIndex = it }
                 Spacer(Modifier.height(TratyTheme.spacing.md))
-                CashFlowDetails(active)
+                CashFlowDetails(active, filteredExpenses)
             }
             Spacer(Modifier.height(TratyTheme.spacing.sm))
             Text(
-                "Разница доходов и расходов за период, не остаток на счетах",
+                if (filteredExpenses) "Разница между всеми доходами и расходами выбранной категории"
+                else "Разница доходов и расходов за период, не остаток на счетах",
                 style = TratyTheme.typography.bodySmall,
                 color = TratyTheme.colors.onSurfaceVariant,
             )
@@ -78,11 +85,19 @@ fun CashFlowChart(points: List<CashFlowPoint>, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun CashFlowDetails(point: CashFlowPoint) {
+private fun CashFlowDetails(point: CashFlowPoint, filteredExpenses: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs)) {
         Text("На ${formatDate(point.date)}", style = TratyTheme.typography.labelMedium)
-        CashFlowAmount("━ Доходы", formatRub(point.incomeKopecks), TratyTheme.colors.income)
-        CashFlowAmount("┄ Расходы", formatRub(point.expenseKopecks), TratyTheme.colors.expense)
+        CashFlowAmount(
+            if (filteredExpenses) "━ Все доходы" else "━ Доходы",
+            formatRub(point.incomeKopecks),
+            TratyTheme.colors.income,
+        )
+        CashFlowAmount(
+            if (filteredExpenses) "┄ Расходы категории" else "┄ Расходы",
+            formatRub(point.expenseKopecks),
+            TratyTheme.colors.expense,
+        )
         CashFlowAmount(
             "Разница", formatRubSigned(point.netKopecks),
             if (point.netKopecks >= 0) TratyTheme.colors.income else TratyTheme.colors.expense,
@@ -99,7 +114,12 @@ private fun CashFlowAmount(label: String, value: String, color: Color) {
 }
 
 @Composable
-private fun CashFlowPlot(points: List<CashFlowPoint>, selected: Int?, onSelect: (Int) -> Unit) {
+private fun CashFlowPlot(
+    points: List<CashFlowPoint>,
+    selected: Int?,
+    filteredExpenses: Boolean,
+    onSelect: (Int) -> Unit,
+) {
     val incomeColor = TratyTheme.colors.income
     val expenseColor = TratyTheme.colors.expense
     val gridColor = TratyTheme.colors.borderSubtle
@@ -113,8 +133,10 @@ private fun CashFlowPlot(points: List<CashFlowPoint>, selected: Int?, onSelect: 
     Canvas(
         Modifier.fillMaxWidth().height(192.dp)
             .semantics {
-                contentDescription = "На ${formatDate(active.date)}: доходы ${formatRub(active.incomeKopecks)}, " +
-                    "расходы ${formatRub(active.expenseKopecks)}, разница ${formatRubSigned(active.netKopecks)}"
+                val incomeLabel = if (filteredExpenses) "все доходы" else "доходы"
+                val expenseLabel = if (filteredExpenses) "расходы категории" else "расходы"
+                contentDescription = "На ${formatDate(active.date)}: $incomeLabel ${formatRub(active.incomeKopecks)}, " +
+                    "$expenseLabel ${formatRub(active.expenseKopecks)}, разница ${formatRubSigned(active.netKopecks)}"
                 customActions = listOf(
                     CustomAccessibilityAction("Предыдущая дата") {
                         onSelect(((selected ?: points.lastIndex) - 1).coerceAtLeast(0)); true

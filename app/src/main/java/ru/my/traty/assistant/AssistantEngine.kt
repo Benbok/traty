@@ -109,6 +109,7 @@ object AssistantEngine {
         if (q.intent == Intents.DEBTS) return AssistantDebts.answer(q, ctx)
         AssistantDebtChanges.action(q.intent)?.let { return AssistantDebtChanges.propose(q, ctx, it) }
         AssistantExpenseChanges.action(q.intent)?.let { return AssistantExpenseChanges.propose(q, ctx, it) }
+        if (ProductReportRequest.supports(q.intent)) return ProductReport.run(q, ctx, spending)
         val period = BillingPeriod.containing(ctx.today, ctx.startDay)
         val (asked, to) = range(q.from, q.to, AssistantTrends.defaultFrom(q, ctx.today) ?: period.startDate, ctx.today)
         // «за всё время» — с первой записи, а не с условной даты
@@ -130,14 +131,6 @@ object AssistantEngine {
         val span = span(from, to)
         val subject = filter.describe()
         val base = header(ctx) + (if (filter.unknownNames.isNotEmpty()) "Не найдены в записях: ${filter.unknownNames.joinToString(", ")}.\n" else "")
-        if (q.intent == Intents.PRODUCT_RANK) {
-            val mixed = if (q.categories.singleOrNull()?.let(::fold) == "продукты") {
-                val storeOnly = Filter(emptySet(), emptyList(), filter.place)
-                val included = rows.map { it.expense.id }.toHashSet()
-                rowsIn(from, to, storeOnly).filterNot { it.expense.id in included }
-            } else emptyList()
-            return ProductRanking.answer(q, rows, ctx.expenseItems, span, mixed)
-        }
         val picked = Picked(rows, filter, ctx)
 
         return when (q.intent) {

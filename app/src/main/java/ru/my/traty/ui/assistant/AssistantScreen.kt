@@ -155,6 +155,7 @@ fun AssistantScreen(
                 if (m.fromUser) UserBubble(m.text) else AssistantBubble(
                     m,
                     onShowExpenses = { vm.showExpenses(m.expenseIds) },
+                    onShowProductExpenses = vm::showExpenses,
                     onApplyPlan = { vm.applyPlan(m.id, it) },
                     onApplySubscriptions = { vm.applySubscriptions(m.id, it) },
                     onApplyDebts = { vm.applyDebts(m.id, it) },
@@ -241,6 +242,7 @@ private fun UserBubble(text: String) {
 private fun AssistantBubble(
     m: ChatMessage,
     onShowExpenses: () -> Unit,
+    onShowProductExpenses: (List<Long>) -> Unit,
     onApplyPlan: (List<PlanProposal>) -> Unit,
     onApplySubscriptions: (List<SubscriptionChange>) -> Unit,
     onApplyDebts: (List<DebtChange>) -> Unit,
@@ -264,10 +266,11 @@ private fun AssistantBubble(
                 Spacer(Modifier.height(TratyTheme.spacing.sm))
             }
             Text(
-                m.text,
+                m.productReport?.title ?: m.text,
                 style = TratyTheme.typography.bodyMedium,
                 color = if (m.error) TratyTheme.colors.expense else TratyTheme.colors.onSurface,
             )
+            m.productReport?.let { ProductReportRows(it, onShowProductExpenses) }
             if (m.planProposals.isNotEmpty()) {
                 Spacer(Modifier.height(TratyTheme.spacing.sm))
                 PlanProposals(m, onApply = onApplyPlan, onOpenBudget = onOpenBudget)
