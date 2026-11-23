@@ -2,49 +2,28 @@ package ru.my.traty.ai.receipt
 
 import ru.my.traty.ai.LlmHttpException
 import java.io.IOException
+import java.io.InterruptedIOException
 
-/** Понятный текст ошибки для экрана чека. Ключ и тело ответа в текст не попадают. */
+/** Сообщения для экрана чека. В них попадают только локальные подсказки и статус HTTP. */
 object ReceiptErrors {
-    /** [step] — на каком шаге ошибка: чтение фото (Яндекс) или разбор текста (DeepSeek). */
-    fun text(e: Throwable, step: ReceiptService = ReceiptService.OCR): String = when {
-        e is ReceiptServiceFailure -> text(e.cause ?: e, e.service)
-        e is LlmHttpException && (e.code == 401 || e.code == 403) -> when (step) {
-            ReceiptService.OCR ->
-                "Яндекс не принял ключ. Проверьте API-ключ и ID каталога, а у сервисного аккаунта — роль ai.vision.user"
-            ReceiptService.PARSE, ReceiptService.VISION -> "DeepSeek не принял ключ. Проверьте его в настройках ИИ"
+    fun text(e: Throwable): String = when (e) {
+        is LlmHttpException -> when (e.code) {
+            400, 413 -> "DeepSeek не смог принять фото. Переснимите чек ближе или уберите лишние кадры"
+            401, 403 -> "DeepSeek не принял ключ. Проверьте его в настройках ИИ"
+            402 -> "На счёте DeepSeek закончились деньги"
+            429 -> "DeepSeek просит подождать. Попробуйте через минуту"
+            else -> "DeepSeek ответил ошибкой ${e.code}. Попробуйте ещё раз"
         }
-        e is LlmHttpException && e.code == 402 -> "На счёте DeepSeek закончились деньги"
-        e is LlmHttpException && e.code == 429 -> "${step.title} просит подождать: слишком много запросов. Попробуйте через минуту"
-        e is LlmHttpException && e.code == 400 && step == ReceiptService.OCR -> "Яндекс не смог прочитать фото. Переснимите чек ближе и ровнее"
-        e is LlmHttpException -> "${step.title} ответил ошибкой ${e.code}. Попробуйте ещё раз"
-        e is java.io.InterruptedIOException -> "${step.title} не успел ответить. Попробуйте ещё раз или снимите чек по частям"
-        e is IOException -> "Нет связи с сервисом ${step.title}. Проверьте интернет и попробуйте ещё раз"
-        e is ReceiptException || e is IllegalArgumentException -> e.message ?: "Не получилось разобрать чек"
+        is InterruptedIOException -> "DeepSeek не успел ответить. Попробуйте ещё раз или снимите чек по частям"
+        is IOException -> "Нет связи с DeepSeek. Проверьте интернет и попробуйте ещё раз"
+        is ReceiptException -> e.message ?: "Не получилось разобрать чек"
         else -> "Не получилось разобрать чек. Попробуйте ещё раз"
     }
 }
 
-/**
- * Поможет ли «Повторить» с тем же фото: да при обрыве связи, перегрузке и сбое сервиса;
- * нет, если не принят ключ, фото не читается или на нём нет чека — тут нужно чинить настройки или переснять.
- */
-fun ReceiptErrors.isRetryable(e: Throwable): Boolean {
-    val cause = if (e is ReceiptServiceFailure) e.cause ?: e else e
-    return when {
-        cause is LlmHttpException -> cause.code == 429 || cause.code == 408 || cause.code >= 500
-        cause is IOException -> true
-        // ИИ ответил не в формате: другой ответ на тот же текст обычно приходит нормальным
-        cause is ReceiptException -> cause.message == ReceiptParsing.BAD_ANSWER
-        else -> false
-    }
+fun ReceiptErrors.isRetryable(e: Throwable): Boolean = when (e) {
+    is LlmHttpException -> e.code == 408 || e.code == 429 || e.code >= 500
+    is IOException -> true
+    is ReceiptException -> e.message == BAD_RECEIPT_ANSWER
+    else -> false
 }
-
-/** Какой сервис работал, когда случилась ошибка. */
-enum class ReceiptService(val title: String) {
-    OCR("Яндекс"),
-    PARSE("DeepSeek"),
-    VISION("DeepSeek"),
-}
-
-/** Ошибка сервиса на шаге [service]: по ней экран говорит, кто не ответил — Яндекс или DeepSeek. */
-class ReceiptServiceFailure(val service: ReceiptService, cause: Throwable) : Exception(cause)

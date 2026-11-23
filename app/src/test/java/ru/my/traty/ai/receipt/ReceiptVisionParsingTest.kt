@@ -46,7 +46,7 @@ class ReceiptVisionParsingTest {
     @Test fun ambiguousSingleLineAtBoundaryRemainsForReview() {
         val first = decode("""{"items":[{"name":"Молоко","sum":80},{"name":"Хлеб","sum":40}]}""")
         val second = decode("""{"items":[{"name":"Хлеб","sum":40},{"name":"Сыр","sum":100}]}""")
-        val merged = ReceiptParts.merge(listOf(first, second), keepAmbiguousOverlap = true)
+        val merged = ReceiptParts.merge(listOf(first, second))
         assertEquals(listOf("Молоко", "Хлеб", "Хлеб", "Сыр"), merged.receipt.lines.map { it.name })
         assertEquals(1, merged.notices.size)
     }
@@ -54,7 +54,7 @@ class ReceiptVisionParsingTest {
     @Test fun multiLineOverlapIsRemovedWhileRepeatedPurchaseIsPreserved() {
         val first = decode("""{"items":[{"name":"Молоко","sum":80},{"name":"Хлеб","sum":40},{"name":"Сыр","sum":100}]}""")
         val second = decode("""{"items":[{"name":"Хлеб","sum":40},{"name":"Сыр","sum":100},{"name":"Хлеб","sum":40}]}""")
-        val merged = ReceiptParts.merge(listOf(first, second), keepAmbiguousOverlap = true)
+        val merged = ReceiptParts.merge(listOf(first, second))
         assertEquals(listOf("Молоко", "Хлеб", "Сыр", "Хлеб"), merged.receipt.lines.map { it.name })
     }
 
@@ -63,7 +63,7 @@ class ReceiptVisionParsingTest {
             {"name":"Хлеб","sum":40},{"name":"Сыр","sum":100}]}""")
         val second = decode("""{"items":[{"name":"Хлеб","sum":40},{"name":"Сыр","sum":100},
             {"name":"Хлеб","sum":40},{"name":"Сыр","sum":100},{"name":"Молоко","sum":80}]}""")
-        val merged = ReceiptParts.merge(listOf(first, second), keepAmbiguousOverlap = true)
+        val merged = ReceiptParts.merge(listOf(first, second))
         assertEquals(0, merged.removed)
         assertEquals(9, merged.receipt.lines.size)
     }

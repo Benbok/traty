@@ -30,10 +30,8 @@ import ru.my.traty.capture.EntryRow
 import ru.my.traty.capture.ReceiptImage
 import ru.my.traty.capture.ReceiptParts
 import ru.my.traty.capture.ReceiptReview
-import ru.my.traty.capture.ReceiptStep
 import ru.my.traty.capture.SaveResult
 import ru.my.traty.data.canScanReceipts
-import ru.my.traty.data.canUseLegacyReceiptOcr
 import ru.my.traty.data.items.ItemNames
 import java.io.File
 
@@ -42,7 +40,7 @@ class ReceiptPhoto(val id: Long, val jpeg: ByteArray, val thumbnail: Bitmap)
 sealed interface ReceiptUiState {
     data object Idle : ReceiptUiState
     data class Photos(val photos: List<ReceiptPhoto>) : ReceiptUiState
-    data class Working(val step: ReceiptStep, val canCancel: Boolean = true) : ReceiptUiState
+    data class Working(val title: String, val canCancel: Boolean = true) : ReceiptUiState
     data class Review(
         val review: ReceiptReview,
         val saving: Boolean = false,
@@ -56,8 +54,6 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
 
     val canScan: StateFlow<Boolean> = c.settings.flow.map { it.canScanReceipts }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
-    val canUseLegacy: StateFlow<Boolean> = c.settings.flow.map { it.canUseLegacyReceiptOcr }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     var state by mutableStateOf<ReceiptUiState>(ReceiptUiState.Idle)
         private set
@@ -65,8 +61,6 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
     private var job: Job? = null
     private var photos = emptyList<ReceiptPhoto>()
     private var photoId = 0L
-    private var retryLegacy = false
-    private val legacyTexts = mutableMapOf<Long, String>()
     private val photoFile: File get() = File(File(getApplication<Application>().cacheDir, "receipts"), "receipt.jpg")
 
     fun cameraUri(): Uri {
@@ -83,7 +77,7 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
             photoNotTaken()
             return
         }
-        state = ReceiptUiState.Working(ReceiptStep.PREPARING, canCancel = false)
+        state = ReceiptUiState.Working("Подготавливаем фото…", canCancel = false)
         job = viewModelScope.launch {
             try {
                 val photo = try {
@@ -94,7 +88,6 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
                 if (photos.withIndex().any { it.index != replaceIndex && it.value.jpeg.contentEquals(photo.jpeg) }) {
                     throw ReceiptException("Этот снимок уже добавлен")
                 }
-                if (replaceId != null) legacyTexts.remove(replaceId)
                 photos = if (replaceIndex == null) photos + photo else photos.toMutableList().apply { set(replaceIndex, photo) }
                 returnToPhotos()
             } catch (e: CancellationException) {
@@ -115,7 +108,6 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removePhoto(index: Int) {
         if (state !is ReceiptUiState.Photos || index !in photos.indices) return
-        legacyTexts.remove(photos[index].id)
         photos = photos.filterIndexed { i, _ -> i != index }
         returnToPhotos()
     }
@@ -127,23 +119,14 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
         returnToPhotos()
     }
 
-    fun parsePhotos(legacy: Boolean = false) {
+    fun parsePhotos() {
         if (state !is ReceiptUiState.Photos && state !is ReceiptUiState.Failed) return
         if (photos.isEmpty()) return
-        retryLegacy = legacy
-        state = ReceiptUiState.Working(if (legacy) ReceiptStep.READING else ReceiptStep.VISION)
-        val frames = photos
+        state = ReceiptUiState.Working("Распознаём чек…")
+        val frames = photos.map { it.jpeg }
         job = viewModelScope.launch {
             try {
-                val onStep: (ReceiptStep) -> Unit = { state = ReceiptUiState.Working(it) }
-                val review = if (legacy) {
-                    val texts = frames.map { frame ->
-                        legacyTexts[frame.id] ?: c.receipts.recognize(frame.jpeg, onStep).also { legacyTexts[frame.id] = it }
-                    }
-                    c.receipts.parseParts(texts, onStep)
-                } else {
-                    c.receipts.scanPhotos(frames.map { it.jpeg }, onStep)
-                }
+                val review = c.receipts.scanPhotos(frames)
                 state = ReceiptUiState.Review(review)
             } catch (e: CancellationException) {
                 throw e
@@ -154,7 +137,7 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun retry() {
-        if ((state as? ReceiptUiState.Failed)?.canRetry == true) parsePhotos(retryLegacy)
+        if ((state as? ReceiptUiState.Failed)?.canRetry == true) parsePhotos()
     }
 
     fun cancelRecognition() {
@@ -172,7 +155,7 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
     fun fillManually() {
         if (state !is ReceiptUiState.Failed) return
         val draft = EntryDraft(listOf(EntryRow.empty()), rawText = "", origin = EntryOrigin.MANUAL)
-        state = ReceiptUiState.Review(ReceiptReview(draft, emptyList(), ""))
+        state = ReceiptUiState.Review(ReceiptReview(draft, emptyList()))
     }
 
     fun editReview(row: EntryRow) {
@@ -214,7 +197,6 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
         job?.cancel()
         job = null
         photos = emptyList()
-        legacyTexts.clear()
         state = ReceiptUiState.Idle
     }
 }

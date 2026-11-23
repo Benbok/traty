@@ -20,11 +20,11 @@ class ReceiptDraftTest {
     )
     private val lines = listOf(ReceiptLine("Молоко", 8999, 1000, "шт"), ReceiptLine("Хлеб", 8000, 2000, "шт"))
 
-    private fun build(parsed: ParsedReceipt, printed: Long?, rules: List<Rule> = emptyList(), places: List<String> = emptyList()) =
-        ReceiptDraft.build(parsed, printed, cats, rules, places, today, "текст")
+    private fun build(parsed: ParsedReceipt, rules: List<Rule> = emptyList(), places: List<String> = emptyList()) =
+        ReceiptDraft.build(parsed, cats, rules, places, today)
 
-    @Test fun oneExpenseWithItems_printedTotalWins() {
-        val r = build(ParsedReceipt("Пятёрочка", "2026-11-15", 16000, "продукты", lines), printed = 16999)
+    @Test fun oneExpenseWithItems_keepsPrintedTotal() {
+        val r = build(ParsedReceipt("Пятёрочка", "2026-11-15", 16999, "продукты", lines))
         val row = r.draft.rows.single()
         assertEquals(EntryOrigin.PHOTO, r.draft.origin)
         assertEquals("169.99", row.amountText)
@@ -34,28 +34,29 @@ class ReceiptDraftTest {
         assertEquals(listOf("Молоко", "Хлеб"), row.items.map { it.name })
         assertEquals(listOf("89.99", "80"), row.items.map { it.priceText })
         assertEquals(listOf("1", "2"), row.items.map { it.qtyText })
-        assertTrue(r.notices.single().contains("Взят итог из чека"))
+        assertTrue(r.notices.isEmpty())
     }
 
-    @Test fun noTotals_sumOfItems() {
-        val r = build(ParsedReceipt(null, null, null, null, lines), printed = null)
-        assertEquals("169.99", r.draft.rows.single().amountText)
+    @Test fun missingDateAndTotalStayBlank() {
+        val r = build(ParsedReceipt(null, null, null, null, lines))
+        assertEquals("", r.draft.rows.single().amountText)
+        assertEquals("", r.draft.rows.single().dateText)
         assertEquals(DefaultCategories.OTHER, r.draft.rows.single().category)
-        assertTrue(r.notices.single().contains("сложена из цен"))
+        assertTrue(r.notices.any { it.contains("Итог чека не прочитался") })
     }
 
-    @Test fun unknownCategory_isNotCreated_andFutureDateReplaced() {
-        val r = build(ParsedReceipt("Леруа", "2027-01-01", 100, "Стройматериалы", emptyList()), printed = null)
+    @Test fun unknownCategoryIsNotCreated() {
+        val r = build(ParsedReceipt("Леруа", "2026-11-15", 100, "Стройматериалы", emptyList()))
         val row = r.draft.rows.single()
         assertEquals(DefaultCategories.OTHER, row.category)
         assertEquals(null, row.suggestedCategory)
-        assertEquals(today.toString(), row.dateText)
-        assertEquals(2, r.notices.size)
+        assertEquals("2026-11-15", row.dateText)
+        assertEquals(1, r.notices.size)
     }
 
     @Test fun imageDateInFutureStaysBlank() {
         val parsed = ParsedReceipt(null, "2096-11-23", 100, null, lines)
-        val r = ReceiptDraft.build(parsed, null, cats, emptyList(), emptyList(), today, "", fromImages = true)
+        val r = ReceiptDraft.build(parsed, cats, emptyList(), emptyList(), today)
         assertEquals("", r.draft.rows.single().dateText)
         assertTrue(r.notices.any { it.contains("будуще") })
     }
@@ -63,7 +64,6 @@ class ReceiptDraftTest {
     @Test fun ruleByStoreBeatsAi_andPlaceSnapsToKnown() {
         val r = build(
             ParsedReceipt("пятерочка", null, 100, "Продукты", lines),
-            printed = null,
             rules = listOf(Rule(pattern = "пятёрочка", categoryId = 2)),
             places = listOf("Пятёрочка"),
         )

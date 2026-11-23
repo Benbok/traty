@@ -11,7 +11,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.my.traty.capture.SaveResult
@@ -31,15 +30,13 @@ fun ReceiptOverlay(
     val retake = rememberRetakeReceiptPhoto(vm)
     val state = vm.state
     if (state == ReceiptUiState.Idle) return
-    val canUseLegacy by vm.canUseLegacy.collectAsStateWithLifecycle()
     Surface(Modifier.fillMaxSize(), color = TratyTheme.colors.background) {
         ReceiptReviewScreen(
             state = state,
             categories = categories,
             onClose = vm::close,
             onRetry = vm::retry,
-            onParse = { vm.parsePhotos() },
-            onLegacy = if (canUseLegacy) ({ vm.parsePhotos(legacy = true) }) else null,
+            onParse = vm::parsePhotos,
             onCancelRecognition = vm::cancelRecognition,
             onFillManually = vm::fillManually,
             onMovePhoto = vm::movePhoto,

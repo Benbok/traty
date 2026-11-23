@@ -37,7 +37,6 @@ internal fun ReceiptPhotosContent(
     onRemove: (Int) -> Unit,
     onMove: (Int, Int) -> Unit,
     onParse: () -> Unit,
-    onLegacy: (() -> Unit)?,
     photoButton: @Composable ((String) -> Unit) -> Unit,
     retakeButton: @Composable (Long, (String) -> Unit) -> Unit,
     modifier: Modifier = Modifier,
@@ -72,9 +71,6 @@ internal fun ReceiptPhotosContent(
                         style = TratyTheme.typography.bodySmall,
                         color = TratyTheme.colors.onSurfaceVariant,
                     )
-                    if (onLegacy != null) {
-                        TratyTextButton(onClick = onLegacy) { Text("Отправить фото в Yandex Vision") }
-                    }
                 }
             }
         }

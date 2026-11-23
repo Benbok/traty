@@ -81,7 +81,7 @@ internal object ReceiptVisionParsing {
         return amount.movePointRight(scale).setScale(0, RoundingMode.HALF_UP).longValueExact()
     }
 
-    private fun invalid(): Nothing = throw ReceiptException(ReceiptParsing.BAD_ANSWER)
+    private fun invalid(): Nothing = throw ReceiptException(BAD_RECEIPT_ANSWER)
 
     private val decimal = Regex("-?\\d{1,16}(?:\\.\\d{1,8})?")
     private val maxAmount = BigDecimal("100000000")

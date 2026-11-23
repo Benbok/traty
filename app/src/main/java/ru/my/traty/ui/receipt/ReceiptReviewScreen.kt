@@ -48,7 +48,6 @@ fun ReceiptReviewScreen(
     onReturnToPhotos: () -> Unit,
     onCancelRecognition: () -> Unit,
     onFillManually: () -> Unit,
-    onLegacy: (() -> Unit)?,
     photoButton: @Composable ((String) -> Unit) -> Unit,
     retakeButton: @Composable (Long, (String) -> Unit) -> Unit,
 ) {
@@ -76,7 +75,7 @@ fun ReceiptReviewScreen(
         val content = Modifier.padding(pad).consumeWindowInsets(pad).fillMaxSize()
         when (state) {
             is ReceiptUiState.Photos -> ReceiptPhotosContent(
-                state.photos, onRemovePhoto, onMovePhoto, onParse, onLegacy, photoButton, retakeButton, content,
+                state.photos, onRemovePhoto, onMovePhoto, onParse, photoButton, retakeButton, content,
             )
             is ReceiptUiState.Review -> ReceiptReviewContent(state, categories, onEdit, onSave, content)
             is ReceiptUiState.Working -> ReceiptWaiting(state, onCancelRecognition, content)
@@ -102,7 +101,6 @@ private fun ReceiptReviewContent(
         ReceiptForm(
             row = row,
             notices = review.notices,
-            receiptText = review.receiptText,
             balance = balance,
             categories = categories,
             onChange = onEdit,
@@ -136,7 +134,7 @@ private fun ReceiptWaiting(state: ReceiptUiState.Working, onCancel: () -> Unit, 
             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md),
         ) {
             CircularProgressIndicator(color = TratyTheme.colors.primary)
-            Text(state.step.title, style = TratyTheme.typography.bodyLarge, color = TratyTheme.colors.onSurface)
+            Text(state.title, style = TratyTheme.typography.bodyLarge, color = TratyTheme.colors.onSurface)
             if (state.canCancel) TratyTextButton(onClick = onCancel) { Text("Отменить") }
         }
     }

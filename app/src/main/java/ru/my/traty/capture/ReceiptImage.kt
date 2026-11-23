@@ -12,10 +12,7 @@ import ru.my.traty.ai.receipt.ReceiptException
 import java.io.ByteArrayOutputStream
 import kotlin.math.max
 
-/**
- * Фото чека для Vision OCR: не больше [MAX_SIDE] точек по длинной стороне (OCR принимает до 20 Мп и 10 МБ,
- * а камера снимает по 50 Мп), повёрнуто по EXIF, в JPEG. Мелкий шрифт кассовой ленты на 2560 точках ещё читается.
- */
+/** Готовит JPEG для DeepSeek, учитывает поворот EXIF и ограничивает размер каждого кадра. */
 object ReceiptImage {
     const val MAX_SIDE = 2560
     private const val QUALITY = 88

@@ -7,48 +7,30 @@ import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.DefaultCategories
 import ru.my.traty.data.Places
 import ru.my.traty.data.Rule
-import ru.my.traty.data.items.ItemsCheck
 import ru.my.traty.data.items.ItemNames
 import ru.my.traty.data.sameName
 import java.math.BigDecimal
 import java.time.LocalDate
 
-/**
- * Чек, готовый к проверке: одна трата с товарами. [notices] — что человеку стоит проверить глазами,
- * [receiptText] — распознанный текст чека (показывается на экране проверки по кнопке).
- */
+/** Одна покупка с товарами, готовая к подтверждению. */
 data class ReceiptReview(
     val draft: EntryDraft,
     val notices: List<String>,
-    val receiptText: String,
 )
 
-/**
- * Собирает черновик траты из разобранного чека. Сумму выбирает приложение:
- * итог, напечатанный в чеке ([printedTotal], найден без ИИ) → итог из ответа ИИ → сумма цен товаров.
- */
+/** Собирает редактируемый черновик из распознанных строк. */
 object ReceiptDraft {
-    /** Дата из чека старше этого срока — скорее ошибка распознавания: ставится сегодняшняя. */
-    private const val MAX_AGE_DAYS = 366L
-
     fun build(
         parsed: ParsedReceipt,
-        printedTotal: Long?,
         categories: List<CategoryWithSubs>,
         rules: List<Rule>,
         knownPlaces: Collection<String>,
         today: LocalDate,
-        receiptText: String,
-        fromImages: Boolean = false,
     ): ReceiptReview {
         val notices = mutableListOf<String>()
-        val day = if (fromImages) imageDay(parsed.date, today, notices) else dayOf(parsed.date, today, notices)
-        val total = if (fromImages && parsed.totalKopecks == null) {
-            notices += "Итог чека не прочитался. Введите его перед сохранением"
-            null
-        } else {
-            totalOf(parsed, printedTotal, notices)
-        }
+        val day = imageDay(parsed.date, today, notices)
+        val total = parsed.totalKopecks
+        if (total == null) notices += "Итог чека не прочитался. Введите его перед сохранением"
         val category = parsed.category
             ?.let { name -> categories.firstOrNull { sameName(it.category.name, name) }?.category?.name }
             ?: DefaultCategories.OTHER
@@ -57,7 +39,7 @@ object ReceiptDraft {
         val ruled = RuleMatcher.apply(listOf(entry), rules, categories).single()
         val items = parsed.lines.map(::draftItem)
         if (items.isEmpty()) notices += "Товары в чеке не распознаны: добавьте их вручную или переснимите чек"
-        if (fromImages && items.any { it.name.isBlank() || it.priceText.isBlank() }) {
+        if (items.any { it.name.isBlank() || it.priceText.isBlank() }) {
             notices += "В некоторых строках отсутствует название или сумма. Проверьте эти позиции"
         }
         val row = EntryRow.fromParsed(ruled.entry, categories, today).copy(
@@ -67,21 +49,7 @@ object ReceiptDraft {
             items = items,
             suggestedCategory = null,
         )
-        return ReceiptReview(EntryDraft(listOf(row), rawText = "", origin = EntryOrigin.PHOTO), notices, receiptText)
-    }
-
-    private fun totalOf(parsed: ParsedReceipt, printed: Long?, notices: MutableList<String>): Long? {
-        val fromAi = parsed.totalKopecks
-        if (printed != null) {
-            if (fromAi != null && fromAi != printed) {
-                notices += "ИИ прочитал итог как ${rub(fromAi)}, а в чеке напечатано ${rub(printed)}. Взят итог из чека"
-            }
-            return printed
-        }
-        if (fromAi != null) return fromAi
-        val sum = ItemsCheck.totalOf(parsed.lines.map { it.priceKopecks })
-        notices += if (sum != null) "Итог в чеке не найден: сумма сложена из цен товаров" else "Итог в чеке не найден: введите сумму"
-        return sum
+        return ReceiptReview(EntryDraft(listOf(row), rawText = "", origin = EntryOrigin.PHOTO), notices)
     }
 
     private fun imageDay(date: String?, today: LocalDate, notices: MutableList<String>): LocalDate? {
@@ -91,15 +59,6 @@ object ReceiptDraft {
         } else if (parsed.isAfter(today)) {
             notices += "Прочитана дата в будущем. Проверьте дату покупки"
             return null
-        }
-        return parsed
-    }
-
-    private fun dayOf(date: String?, today: LocalDate, notices: MutableList<String>): LocalDate {
-        val parsed = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return today
-        if (parsed.isAfter(today) || parsed.isBefore(today.minusDays(MAX_AGE_DAYS))) {
-            notices += "Дата в чеке прочиталась как $parsed — поставлена сегодняшняя, поправьте, если нужно"
-            return today
         }
         return parsed
     }
@@ -117,5 +76,4 @@ object ReceiptDraft {
         )
     }
 
-    private fun rub(kopecks: Long) = "${kopecksToText(kopecks)} ₽"
 }

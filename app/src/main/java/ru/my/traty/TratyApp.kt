@@ -45,7 +45,6 @@ import ru.my.traty.data.update.UpdateRepository
 import ru.my.traty.data.update.installedVersionOf
 import ru.my.traty.data.whatsnew.WhatsNewRepository
 import ru.my.traty.data.SettingsRepository
-import ru.my.traty.data.canUseLegacyReceiptOcr
 import ru.my.traty.speech.GigaAmRuntime
 import ru.my.traty.speech.ModelManager
 import java.io.File
@@ -133,14 +132,10 @@ class AppContainer(
     val appVersion: String = installedVersionOf(context)
 
     /** Фото чека → черновик траты с товарами, независимо от выбранного ИИ для голоса. */
-    val receipts = ReceiptScanner(
-        db, settings,
-        llmFor = { config -> if (config.canUseLegacyReceiptOcr) receiptLlm(config) else null },
-        visionFor = { config -> (receiptLlm(config) as? DeepSeekClient)?.let(::DeepSeekReceiptExtractor) },
-    )
-
-    private fun receiptLlm(config: AppSettings): LlmClient? =
-        llm(config.copy(provider = LlmProvider.DEEPSEEK, deepseekModel = RECEIPT_VISION_MODEL))
+    val receipts = ReceiptScanner(db, settings, visionFor = { config ->
+        val client = llm(config.copy(provider = LlmProvider.DEEPSEEK, deepseekModel = RECEIPT_VISION_MODEL))
+        (client as? DeepSeekClient)?.let(::DeepSeekReceiptExtractor)
+    })
     val debtRemoval = DebtPaymentRemoval(db)
     val expenseEdits = ExpenseEdits(db, debtRemoval)
     val budgets = BudgetRepository(db)

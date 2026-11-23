@@ -3,32 +3,16 @@ package ru.my.traty.capture
 import ru.my.traty.ai.receipt.ParsedReceipt
 import ru.my.traty.ai.receipt.ReceiptException
 import ru.my.traty.ai.receipt.ReceiptLine
-import ru.my.traty.ai.receipt.ReceiptText
 import ru.my.traty.data.sameName
 
 /** Части одного чека, снятые сверху вниз. Повторы ищутся между снимками, не внутри них. */
 object ReceiptParts {
     const val MAX_PHOTOS = 10
-    const val MAX_CHARS = 32_000
 
     data class Merged(val receipt: ParsedReceipt, val removed: Int, val notices: List<String>)
 
-    /** Не обрезаем длинный чек молча: иначе конец с товарами и итогом потеряется. */
-    fun clean(texts: List<String>): List<String> {
-        if (texts.isEmpty() || texts.size > MAX_PHOTOS) throw ReceiptException("Добавьте от 1 до $MAX_PHOTOS снимков одного чека")
-        val cleaned = texts.map(ReceiptText::clean)
-        if (cleaned.any { it.length < 10 }) throw ReceiptException("На одном из снимков не нашлось текста чека. Удалите его и переснимите ближе")
-        if (cleaned.sumOf { it.length } > MAX_CHARS) throw ReceiptException("Слишком много текста. Удалите лишние снимки или повторы одного участка чека")
-        return cleaned
-    }
-
-    fun merge(
-        parts: List<ParsedReceipt>,
-        texts: List<String> = emptyList(),
-        keepAmbiguousOverlap: Boolean = false,
-    ): Merged {
+    fun merge(parts: List<ParsedReceipt>): Merged {
         require(parts.isNotEmpty())
-        require(texts.isEmpty() || texts.size == parts.size)
         if (parts.mapNotNull { it.date }.distinct().size > 1) {
             throw ReceiptException("На снимках разные даты покупки. Проверьте, что это части одного чека")
         }
@@ -37,21 +21,14 @@ object ReceiptParts {
         var removed = 0
         parts.forEachIndexed { index, part ->
             val incoming = part.lines
-            // Только одинаковый текст всего снимка позволяет убрать повтор не у стыка:
-            // одинаковый товар в середине чека сам по себе не доказывает повтор снимка.
-            val repeatedPhoto = texts.isNotEmpty() && texts.take(index).any { key(it) == key(texts[index]) }
-            val previous = if (keepAmbiguousOverlap) parts.getOrNull(index - 1)?.lines.orEmpty() else lines
+            val previous = parts.getOrNull(index - 1)?.lines.orEmpty()
             val overlaps = (minOf(previous.size, incoming.size) downTo 1).asSequence().filter { size ->
                 (0 until size).all { same(previous[previous.size - size + it], incoming[it]) }
             }.take(2).toList()
             val possibleOverlap = overlaps.firstOrNull() ?: 0
-            val ambiguous = keepAmbiguousOverlap && possibleOverlap > 0 &&
+            val ambiguous = possibleOverlap > 0 &&
                 (overlaps.size > 1 || incoming.take(possibleOverlap).all { same(incoming.first(), it) })
-            val overlap = when {
-                repeatedPhoto -> incoming.size
-                ambiguous -> 0
-                else -> possibleOverlap
-            }
+            val overlap = if (ambiguous) 0 else possibleOverlap
             if (ambiguous) {
                 notices += "На стыке снимков ${index} и ${index + 1} есть одинаковые товары. Проверьте, сколько строк оставить"
             } else if (index > 0 && incoming.isNotEmpty() && overlap == 0) {

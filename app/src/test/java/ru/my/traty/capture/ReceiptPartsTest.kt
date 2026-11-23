@@ -16,28 +16,27 @@ class ReceiptPartsTest {
         ParsedReceipt("Пятёрочка", "2026-11-17", total, "Продукты", lines.toList())
 
     @Test fun overlappingThreePhotosBecomeOneOrderedPurchase() {
-        val r = ReceiptParts.merge(listOf(part(milk, bread), part(bread, cheese), part(cheese, total = 28499)))
-        assertEquals(listOf(milk, bread, cheese), r.receipt.lines)
-        assertEquals(28499L, r.receipt.totalKopecks)
-        assertEquals(2, r.removed)
+        val sugar = ReceiptLine("Сахар", 2_000)
+        val coffee = ReceiptLine("Кофе", 5_000)
+        val r = ReceiptParts.merge(listOf(
+            part(milk, bread, cheese),
+            part(bread, cheese, sugar),
+            part(cheese, sugar, coffee, total = 35_499),
+        ))
+        assertEquals(listOf(milk, bread, cheese, sugar, coffee), r.receipt.lines)
+        assertEquals(35_499L, r.receipt.totalKopecks)
+        assertEquals(4, r.removed)
     }
 
-    @Test fun repeatedRowsInsidePhotoArePreservedWithMultiplicityAtBoundary() {
+    @Test fun repeatedRowsArePreservedWhenOnlyOneProductMatchesAtTheBoundary() {
         val r = ReceiptParts.merge(listOf(part(milk, bread, bread), part(bread, bread, cheese)))
-        assertEquals(listOf(milk, bread, bread, cheese), r.receipt.lines)
-        assertEquals(2, r.removed)
+        assertEquals(listOf(milk, bread, bread, bread, bread, cheese), r.receipt.lines)
+        assertEquals(0, r.removed)
     }
 
     @Test fun sameProductInAnotherPlaceIsNotGloballyDeduplicated() {
-        val r = ReceiptParts.merge(listOf(part(milk, bread), part(bread, cheese, milk)))
+        val r = ReceiptParts.merge(listOf(part(milk, bread, cheese), part(bread, cheese, milk)))
         assertEquals(listOf(milk, bread, cheese, milk), r.receipt.lines)
-    }
-
-    @Test fun repeatedNonAdjacentPhotoIsSkippedOnlyWithMatchingFullText() {
-        val texts = listOf("Молоко 3,2% 89,99", "Хлеб 45,00", "МОЛОКО 3.2% 89.99")
-        val r = ReceiptParts.merge(listOf(part(milk), part(bread), part(milk)), texts)
-        assertEquals(listOf(milk, bread), r.receipt.lines)
-        assertEquals(1, r.removed)
     }
 
     @Test fun identicalItemWithoutRepeatedPhotoTextIsRetainedAwayFromBoundary() {
@@ -61,7 +60,7 @@ class ReceiptPartsTest {
     @Test fun casingQuotesYoAndDecimalSeparatorDoNotCreateDuplicates() {
         val first = milk.copy(name = "Молоко «Алёнка» 3,2%")
         val second = milk.copy(name = "МОЛОКО Аленка 3.2%")
-        assertEquals(1, ReceiptParts.merge(listOf(part(first), part(second))).receipt.lines.size)
+        assertEquals(2, ReceiptParts.merge(listOf(part(first, bread), part(second, bread))).receipt.lines.size)
     }
 
     @Test fun numericDifferencesAndLongNameSuffixesAreNotIgnored() {
@@ -77,12 +76,12 @@ class ReceiptPartsTest {
     }
 
     @Test fun totalsAreNeverAddedAcrossPhotos() {
-        val r = ReceiptParts.merge(listOf(part(milk, total = 8999), part(milk, bread, total = 13499)))
+        val r = ReceiptParts.merge(listOf(part(milk, bread, total = 13499), part(milk, bread, total = 13499)))
         assertEquals(13499L, r.receipt.totalKopecks)
         assertEquals(listOf(milk, bread), r.receipt.lines)
     }
 
-    @Test fun missingTotalStaysNullForDraftToSumMergedLinesOnce() {
+    @Test fun missingTotalStaysNull() {
         assertEquals(null, ReceiptParts.merge(listOf(part(milk, bread), part(bread, cheese))).receipt.totalKopecks)
     }
 
@@ -90,23 +89,4 @@ class ReceiptPartsTest {
         ReceiptParts.merge(listOf(part(milk), part(bread).copy(date = "2026-11-16")))
     }
 
-    @Test fun cleaningPreservesLongReceiptAndStripsPersonalDataOnEveryPhoto() {
-        val text = "Молоко 89.99\n".repeat(700) + "Кассир: Иванова\nФН 12345678\nИТОГ 62993"
-        val clean = ReceiptParts.clean(listOf(text, "Хлеб 45.00\nКассир: Петрова"))
-        assertTrue(clean.first().length > 8000)
-        assertTrue(clean.first().endsWith("ИТОГ 62993"))
-        assertTrue(clean.none { it.contains("Кассир") || it.contains("Иванова") || it.contains("Петрова") || it.contains("12345678") })
-    }
-
-    @Test(expected = ReceiptException::class) fun oversizedInputIsRejectedRatherThanTruncated() {
-        ReceiptParts.clean(listOf("а".repeat(ReceiptParts.MAX_CHARS + 1)))
-    }
-
-    @Test(expected = ReceiptException::class) fun emptyPhotoIsRejected() {
-        ReceiptParts.clean(listOf("Молоко 89.99", "  "))
-    }
-
-    @Test(expected = ReceiptException::class) fun tooManyPhotosAreRejected() {
-        ReceiptParts.clean(List(ReceiptParts.MAX_PHOTOS + 1) { "Молоко 89.99" })
-    }
 }

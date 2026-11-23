@@ -1,30 +1,28 @@
 package ru.my.traty.ai.receipt
 
-import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.my.traty.ai.LlmHttpException
 import java.io.IOException
+import java.net.SocketTimeoutException
 
 class ReceiptErrorsTest {
-    @Test fun keyRejected_namesTheService() {
-        val ocr = ReceiptErrors.text(ReceiptServiceFailure(ReceiptService.OCR, LlmHttpException(403, "x")))
-        val parse = ReceiptErrors.text(ReceiptServiceFailure(ReceiptService.PARSE, LlmHttpException(401, "x")))
-        assertTrue(ocr.startsWith("Яндекс") && ocr.contains("ai.vision.user"))
-        assertEquals("DeepSeek не принял ключ. Проверьте его в настройках ИИ", parse)
+    @Test fun errorsIdentifyDeepSeekAndHideProviderResponseBody() {
+        val detail = "sensitive provider response"
+        for (code in listOf(400, 401, 403, 503)) {
+            val message = ReceiptErrors.text(LlmHttpException(code, detail))
+            assertTrue(message.contains("DeepSeek"))
+            assertFalse(message.contains(detail))
+        }
+        assertFalse(ReceiptErrors.text(IllegalArgumentException(detail)).contains(detail))
     }
 
-    @Test fun noNetwork_namesTheService() {
-        val text = ReceiptErrors.text(ReceiptServiceFailure(ReceiptService.PARSE, IOException("timeout")))
-        assertTrue(text.contains("DeepSeek"))
-    }
-
-    @Test fun badPhotoOnlyForOcr() {
-        assertTrue(ReceiptErrors.text(ReceiptServiceFailure(ReceiptService.OCR, LlmHttpException(400, "x"))).contains("Переснимите"))
-        assertTrue(ReceiptErrors.text(ReceiptServiceFailure(ReceiptService.PARSE, LlmHttpException(400, "x"))).contains("ошибкой 400"))
-    }
-
-    @Test fun ownMessagesPassThrough() {
-        assertEquals("Фото слишком большое", ReceiptErrors.text(ReceiptException("Фото слишком большое")))
+    @Test fun transientFailuresAndInvalidResponsesCanBeRetried() {
+        assertTrue(ReceiptErrors.isRetryable(IOException()))
+        assertTrue(ReceiptErrors.isRetryable(LlmHttpException(503, "")))
+        assertTrue(ReceiptErrors.isRetryable(ReceiptException(BAD_RECEIPT_ANSWER)))
+        assertFalse(ReceiptErrors.isRetryable(LlmHttpException(403, "")))
+        assertTrue(ReceiptErrors.text(SocketTimeoutException()).contains("не успел"))
     }
 }

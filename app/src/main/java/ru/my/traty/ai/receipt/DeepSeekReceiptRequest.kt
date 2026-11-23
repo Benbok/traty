@@ -104,7 +104,7 @@ private fun receiptAnswer(response: Response, startedAt: Long): String {
         choice.getValue("message").jsonObject.getValue("content").jsonPrimitive.content.trim()
     }.getOrNull()?.takeIf { it.isNotEmpty() }
     receiptDiagnostic(startedAt, if (content == null) "invalid_response" else "response_received", payload?.get("usage") as? JsonObject)
-    return content ?: throw ReceiptException(ReceiptParsing.BAD_ANSWER)
+    return content ?: throw ReceiptException(BAD_RECEIPT_ANSWER)
 }
 
 /** Локальная диагностика, включаемая только через системный уровень логирования для тега. */

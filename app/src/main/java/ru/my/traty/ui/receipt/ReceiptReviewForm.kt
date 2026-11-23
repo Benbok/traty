@@ -9,31 +9,24 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import ru.my.traty.capture.EntryRow
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.items.ItemNames
 import ru.my.traty.data.items.ItemsBalance
 import ru.my.traty.ui.designsystem.components.TratyAmountTextField
 import ru.my.traty.ui.designsystem.components.TratyCard
-import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 import ru.my.traty.ui.formatRub
 import ru.my.traty.ui.home.CategoryPicker
 import ru.my.traty.ui.home.DateField
 import ru.my.traty.ui.home.ExpenseItemsCard
 
-/** Поля проверки чека: что исправить, сумма, магазин, категория, дата, товары и распознанный текст. */
+/** Поля проверки чека: что исправить, сумма, магазин, категория, дата, товары. */
 @Composable
 internal fun ReceiptForm(
     row: EntryRow,
     notices: List<String>,
-    receiptText: String,
     balance: ItemsBalance?,
     categories: List<CategoryWithSubs>,
     onChange: (EntryRow) -> Unit,
@@ -68,7 +61,6 @@ internal fun ReceiptForm(
                 }
             }
         }
-        if (receiptText.isNotBlank()) item(key = "text") { ReceiptTextCard(receiptText) }
     }
 }
 
@@ -116,26 +108,4 @@ private fun MismatchHint(b: ItemsBalance) {
         color = TratyTheme.colors.expense,
         modifier = Modifier.padding(horizontal = TratyTheme.spacing.xs),
     )
-}
-
-/** Распознанный текст чека по кнопке: видно, что прочитал Яндекс, если товары разобрались странно. */
-@Composable
-private fun ReceiptTextCard(text: String) {
-    var open by rememberSaveable { mutableStateOf(false) }
-    Column {
-        TratyTextButton(onClick = { open = !open }) {
-            Text(if (open) "Скрыть распознанный текст" else "Показать распознанный текст")
-        }
-        if (open) {
-            TratyCard(Modifier.fillMaxWidth(), backgroundColor = TratyTheme.colors.surfaceContainer) {
-                Text(
-                    text,
-                    style = TratyTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = TratyTheme.colors.onSurface,
-                    modifier = Modifier.padding(TratyTheme.spacing.md),
-                )
-            }
-        }
-    }
 }

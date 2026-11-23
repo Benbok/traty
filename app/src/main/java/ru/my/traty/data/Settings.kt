@@ -87,9 +87,6 @@ data class AppSettings(
 val AppSettings.canScanReceipts: Boolean
     get() = deepseekKey.isNotBlank()
 
-val AppSettings.canUseLegacyReceiptOcr: Boolean
-    get() = canScanReceipts && yandexKey.isNotBlank() && yandexFolderId.isNotBlank()
-
 internal fun encodeLines(lines: List<String>): String =
     lines.map { it.replace('\n', ' ').trim() }.filter { it.isNotEmpty() }.joinToString("\n")
 
