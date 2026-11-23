@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import ru.my.traty.capture.EntryRow
 import ru.my.traty.data.CategoryWithSubs
+import ru.my.traty.data.items.ItemNames
 import ru.my.traty.data.items.ItemsBalance
 import ru.my.traty.ui.designsystem.components.TratyAmountTextField
 import ru.my.traty.ui.designsystem.components.TratyCard
@@ -52,19 +53,22 @@ internal fun ReceiptForm(
                     items = row.items,
                     totalKopecks = row.kopecks(),
                     enabled = true,
+                    receiptDetails = true,
                     onChange = { onChange(row.copy(items = it)) },
                 )
-                if (balance?.needsAttention == true) MismatchHint(balance)
+                if (balance != null && balance.differenceKopecks != 0L && row.items.isNotEmpty()) MismatchHint(balance)
+                val inconsistent = row.items.filter { it.hasReceiptPriceMismatch() }
+                if (inconsistent.isNotEmpty()) {
+                    val names = inconsistent.joinToString(", ") { ItemNames.normalize(it.name) ?: "позиция без названия" }
+                    Text(
+                        "Сумма позиции отличается от расчёта по цене, количеству и скидке. Сверьте с чеком: $names",
+                        style = TratyTheme.typography.bodySmall,
+                        color = TratyTheme.colors.expense,
+                    )
+                }
             }
         }
-        item(key = "privacy") {
-            Text(
-                "Фото ушло в Yandex Vision OCR, текст чека без кассира и номеров кассы — в DeepSeek. На телефоне фото не хранится.",
-                style = TratyTheme.typography.bodySmall,
-                color = TratyTheme.colors.onSurfaceVariant,
-            )
-        }
-        item(key = "text") { ReceiptTextCard(receiptText) }
+        if (receiptText.isNotBlank()) item(key = "text") { ReceiptTextCard(receiptText) }
     }
 }
 
@@ -107,7 +111,7 @@ private fun MismatchHint(b: ItemsBalance) {
     val diff = formatRub(kotlin.math.abs(b.differenceKopecks))
     Text(
         if (b.differenceKopecks < 0) "Товары дороже итога на $diff: проверьте цены, где-то могла не учесться скидка"
-        else "Товары дешевле итога на $diff: возможно, какая-то строка чека не распозналась — добавьте её",
+        else "Сумма распознанных позиций меньше итога на $diff. Проверьте цены и пропущенные строки",
         style = TratyTheme.typography.bodySmall,
         color = TratyTheme.colors.expense,
         modifier = Modifier.padding(horizontal = TratyTheme.spacing.xs),

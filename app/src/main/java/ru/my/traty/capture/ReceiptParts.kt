@@ -22,7 +22,11 @@ object ReceiptParts {
         return cleaned
     }
 
-    fun merge(parts: List<ParsedReceipt>, texts: List<String> = emptyList()): Merged {
+    fun merge(
+        parts: List<ParsedReceipt>,
+        texts: List<String> = emptyList(),
+        keepAmbiguousOverlap: Boolean = false,
+    ): Merged {
         require(parts.isNotEmpty())
         require(texts.isEmpty() || texts.size == parts.size)
         if (parts.mapNotNull { it.date }.distinct().size > 1) {
@@ -36,11 +40,21 @@ object ReceiptParts {
             // Только одинаковый текст всего снимка позволяет убрать повтор не у стыка:
             // одинаковый товар в середине чека сам по себе не доказывает повтор снимка.
             val repeatedPhoto = texts.isNotEmpty() && texts.take(index).any { key(it) == key(texts[index]) }
-            val overlap = if (repeatedPhoto) incoming.size else
-                (minOf(lines.size, incoming.size) downTo 1).firstOrNull { size ->
-                    (0 until size).all { same(lines[lines.size - size + it], incoming[it]) }
-                } ?: 0
-            if (index > 0 && incoming.isNotEmpty() && overlap == 0) {
+            val previous = if (keepAmbiguousOverlap) parts.getOrNull(index - 1)?.lines.orEmpty() else lines
+            val overlaps = (minOf(previous.size, incoming.size) downTo 1).asSequence().filter { size ->
+                (0 until size).all { same(previous[previous.size - size + it], incoming[it]) }
+            }.take(2).toList()
+            val possibleOverlap = overlaps.firstOrNull() ?: 0
+            val ambiguous = keepAmbiguousOverlap && possibleOverlap > 0 &&
+                (overlaps.size > 1 || incoming.take(possibleOverlap).all { same(incoming.first(), it) })
+            val overlap = when {
+                repeatedPhoto -> incoming.size
+                ambiguous -> 0
+                else -> possibleOverlap
+            }
+            if (ambiguous) {
+                notices += "На стыке снимков ${index} и ${index + 1} есть одинаковые товары. Проверьте, сколько строк оставить"
+            } else if (index > 0 && incoming.isNotEmpty() && overlap == 0) {
                 notices += "Между снимками ${index} и ${index + 1} не найдено совпадение товаров: проверьте стык на пропуски и повторы"
             }
             removed += overlap
@@ -65,7 +79,8 @@ object ReceiptParts {
     private fun same(a: ReceiptLine, b: ReceiptLine): Boolean =
         a.priceKopecks != null && a.priceKopecks == b.priceKopecks &&
             a.quantityMilli == b.quantityMilli && a.pack == b.pack &&
-            key(a.unit.orEmpty()) == key(b.unit.orEmpty()) && key(a.name) == key(b.name)
+            a.unitPriceKopecks == b.unitPriceKopecks && a.discountKopecks == b.discountKopecks &&
+            key(a.unit.orEmpty()) == key(b.unit.orEmpty()) && key(a.name).let { it.isNotEmpty() && it == key(b.name) }
 
     // В отличие от названия категории, товар сравнивается целиком, без ограничения в 40 символов.
     private val tokens = Regex("\\p{L}+|\\d+(?:[.,]\\d+)?")

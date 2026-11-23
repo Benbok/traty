@@ -24,6 +24,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
+import ru.my.traty.capture.summary
 import ru.my.traty.ui.budget.BudgetScreen
 import ru.my.traty.ui.weekly.WeeklyTasksScreen
 import ru.my.traty.ui.assistant.AssistantScreen
@@ -311,7 +312,10 @@ fun TratyRoot(
         }
 
         // Чек по фото: ожидание разбора и обязательная проверка перед сохранением
-        ReceiptOverlay(categories = categories, onSave = { vm.saveEntry(it) })
+        ReceiptOverlay(categories = categories, onSaved = { result ->
+            vm.ruleOffer = result.ruleOffer
+            vm.message = result.summary()
+        })
 
         // Знакомство поверх всего. Пока проверяем, показывать ли его, — пустой фон, чтобы лента не мелькнула
         when (onboardingVisible) {

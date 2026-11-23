@@ -8,6 +8,7 @@ import ru.my.traty.data.DefaultCategories
 import ru.my.traty.data.Places
 import ru.my.traty.data.Rule
 import ru.my.traty.data.items.ItemsCheck
+import ru.my.traty.data.items.ItemNames
 import ru.my.traty.data.sameName
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -38,20 +39,30 @@ object ReceiptDraft {
         knownPlaces: Collection<String>,
         today: LocalDate,
         receiptText: String,
+        fromImages: Boolean = false,
     ): ReceiptReview {
         val notices = mutableListOf<String>()
-        val day = dayOf(parsed.date, today, notices)
-        val total = totalOf(parsed, printedTotal, notices)
+        val day = if (fromImages) imageDay(parsed.date, today, notices) else dayOf(parsed.date, today, notices)
+        val total = if (fromImages && parsed.totalKopecks == null) {
+            notices += "Итог чека не прочитался. Введите его перед сохранением"
+            null
+        } else {
+            totalOf(parsed, printedTotal, notices)
+        }
         val category = parsed.category
             ?.let { name -> categories.firstOrNull { sameName(it.category.name, name) }?.category?.name }
             ?: DefaultCategories.OTHER
-        val entry = ParsedEntry(type = "expense", amount = 0.0, category = category, place = parsed.place, date = day.toString())
+        val entry = ParsedEntry(type = "expense", amount = 0.0, category = category, place = parsed.place, date = day?.toString())
         // Свои правила «магазин → категория» сильнее выбора ИИ
         val ruled = RuleMatcher.apply(listOf(entry), rules, categories).single()
         val items = parsed.lines.map(::draftItem)
         if (items.isEmpty()) notices += "Товары в чеке не распознаны: добавьте их вручную или переснимите чек"
+        if (fromImages && items.any { it.name.isBlank() || it.priceText.isBlank() }) {
+            notices += "В некоторых строках отсутствует название или сумма. Проверьте эти позиции"
+        }
         val row = EntryRow.fromParsed(ruled.entry, categories, today).copy(
             amountText = total?.let(::kopecksToText).orEmpty(),
+            dateText = day?.toString().orEmpty(),
             place = Places.canonical(parsed.place, knownPlaces)?.let { PlaceSnap.snap(it, knownPlaces) ?: it }.orEmpty(),
             items = items,
             suggestedCategory = null,
@@ -73,6 +84,17 @@ object ReceiptDraft {
         return sum
     }
 
+    private fun imageDay(date: String?, today: LocalDate, notices: MutableList<String>): LocalDate? {
+        val parsed = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        if (parsed == null) {
+            notices += "Дата покупки не прочиталась. Укажите её перед сохранением"
+        } else if (parsed.isAfter(today)) {
+            notices += "Прочитана дата в будущем. Проверьте дату покупки"
+            return null
+        }
+        return parsed
+    }
+
     private fun dayOf(date: String?, today: LocalDate, notices: MutableList<String>): LocalDate {
         val parsed = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return today
         if (parsed.isAfter(today) || parsed.isBefore(today.minusDays(MAX_AGE_DAYS))) {
@@ -85,11 +107,13 @@ object ReceiptDraft {
     private fun draftItem(l: ReceiptLine): DraftItem {
         val (name, pack) = DraftItem.splitPack(l.name, l.pack)
         return DraftItem(
-            name = name,
+            name = ItemNames.normalize(name).orEmpty(),
             priceText = l.priceKopecks?.let(::kopecksToText).orEmpty(),
             qtyText = l.quantityMilli?.let { BigDecimal(it).movePointLeft(3).stripTrailingZeros().toPlainString() }.orEmpty(),
             unit = l.unit.orEmpty(),
             packText = pack?.text().orEmpty(),
+            unitPriceText = l.unitPriceKopecks?.let(::kopecksToText).orEmpty(),
+            discountText = l.discountKopecks?.let(::kopecksToText).orEmpty(),
         )
     }
 

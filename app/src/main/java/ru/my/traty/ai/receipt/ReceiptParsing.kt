@@ -22,6 +22,8 @@ data class ReceiptLine(
     val quantityMilli: Long? = null,
     val unit: String? = null,
     val pack: Pack? = null,
+    val unitPriceKopecks: Long? = null,
+    val discountKopecks: Long? = null,
 )
 
 /** Чек после разбора ИИ: деньги уже в копейках, ничего не досчитано за ИИ. */

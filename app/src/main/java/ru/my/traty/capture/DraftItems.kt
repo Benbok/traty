@@ -7,6 +7,7 @@ import ru.my.traty.data.items.ItemMeasure
 import ru.my.traty.data.items.Pack
 import ru.my.traty.data.items.PackSize
 import java.math.BigDecimal
+import java.math.RoundingMode
 import kotlin.math.roundToLong
 
 /**
@@ -21,8 +22,21 @@ data class DraftItem(
     val qtyText: String = "",
     val unit: String = "",
     val packText: String = "",
+    val unitPriceText: String = "",
+    val discountText: String = "",
 ) {
-    fun priceKopecks(): Long? = parsePositiveKopecks(priceText)
+    fun priceKopecks(): Long? = parseKopecks(priceText)
+
+    /** Сверка с явно указанной разбивкой. Напечатанная сумма остаётся основным значением. */
+    fun hasReceiptPriceMismatch(): Boolean {
+        val paid = priceKopecks() ?: return false
+        val quantity = quantityMilli() ?: return false
+        val unitPrice = parseKopecks(unitPriceText) ?: return false
+        val discount = if (discountText.isBlank()) 0L else parseKopecks(discountText) ?: return false
+        val expected = BigDecimal(unitPrice).multiply(BigDecimal(quantity)).movePointLeft(3)
+            .setScale(0, RoundingMode.HALF_UP).subtract(BigDecimal(discount))
+        return expected.subtract(BigDecimal(paid)).abs() > BigDecimal.ONE
+    }
 
     /** «2» → 2000, «1,5» → 1500; пусто или ноль — null. */
     fun quantityMilli(): Long? {

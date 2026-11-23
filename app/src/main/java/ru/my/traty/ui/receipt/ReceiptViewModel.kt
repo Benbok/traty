@@ -1,6 +1,8 @@
 package ru.my.traty.ui.receipt
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,39 +23,50 @@ import kotlinx.coroutines.withContext
 import ru.my.traty.TratyApp
 import ru.my.traty.ai.receipt.ReceiptErrors
 import ru.my.traty.ai.receipt.ReceiptException
-import ru.my.traty.ai.receipt.ReceiptText
 import ru.my.traty.ai.receipt.isRetryable
+import ru.my.traty.capture.EntryDraft
+import ru.my.traty.capture.EntryOrigin
+import ru.my.traty.capture.EntryRow
 import ru.my.traty.capture.ReceiptImage
 import ru.my.traty.capture.ReceiptParts
 import ru.my.traty.capture.ReceiptReview
 import ru.my.traty.capture.ReceiptStep
+import ru.my.traty.capture.SaveResult
 import ru.my.traty.data.canScanReceipts
+import ru.my.traty.data.canUseLegacyReceiptOcr
+import ru.my.traty.data.items.ItemNames
 import java.io.File
 
-/** Что показывает экран чека. [Idle] — экран закрыт. */
+class ReceiptPhoto(val id: Long, val jpeg: ByteArray, val thumbnail: Bitmap)
+
 sealed interface ReceiptUiState {
     data object Idle : ReceiptUiState
-    data class Photos(val texts: List<String>) : ReceiptUiState
-    data class Working(val step: ReceiptStep) : ReceiptUiState
-    data class Review(val review: ReceiptReview) : ReceiptUiState
+    data class Photos(val photos: List<ReceiptPhoto>) : ReceiptUiState
+    data class Working(val step: ReceiptStep, val canCancel: Boolean = true) : ReceiptUiState
+    data class Review(
+        val review: ReceiptReview,
+        val saving: Boolean = false,
+        val saveError: String? = null,
+    ) : ReceiptUiState
     data class Failed(val message: String, val canRetry: Boolean = false) : ReceiptUiState
 }
 
-/** Части чека остаются в памяти до общей проверки. Сохраняется одна трата по кнопке пользователя. */
 class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
     private val c = (app as TratyApp).container
 
     val canScan: StateFlow<Boolean> = c.settings.flow.map { it.canScanReceipts }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    val canUseLegacy: StateFlow<Boolean> = c.settings.flow.map { it.canUseLegacyReceiptOcr }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     var state by mutableStateOf<ReceiptUiState>(ReceiptUiState.Idle)
         private set
 
     private var job: Job? = null
-    private var texts = emptyList<String>()
-    // Только неудачно прочитанный снимок. Успешные фото сразу освобождаются, остаётся текст.
-    private var lastJpeg: ByteArray? = null
-    private var retryParsing = false
+    private var photos = emptyList<ReceiptPhoto>()
+    private var photoId = 0L
+    private var retryLegacy = false
+    private val legacyTexts = mutableMapOf<Long, String>()
     private val photoFile: File get() = File(File(getApplication<Application>().cacheDir, "receipts"), "receipt.jpg")
 
     fun cameraUri(): Uri {
@@ -62,53 +75,75 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
         return FileProvider.getUriForFile(app, "${app.packageName}.receipts", file)
     }
 
-    /** Новый снимок добавляется к текущему чеку; ошибка не теряет уже прочитанные части. */
-    fun scan(uri: Uri) {
-        if (state is ReceiptUiState.Working || texts.size >= ReceiptParts.MAX_PHOTOS) return
-        lastJpeg = null
-        readPhoto {
-            try {
-                ReceiptImage.prepare(getApplication(), uri).also { lastJpeg = it }
-            } finally {
-                withContext(Dispatchers.IO + NonCancellable) { runCatching { photoFile.delete() } }
-            }
+    fun scan(uri: Uri, replaceId: Long? = null) {
+        val replaceIndex = if (replaceId == null) null else photos.indexOfFirst { it.id == replaceId }
+        if (state is ReceiptUiState.Working) return
+        if (replaceIndex == null && photos.size >= ReceiptParts.MAX_PHOTOS) return
+        if (replaceIndex != null && replaceIndex !in photos.indices) {
+            photoNotTaken()
+            return
         }
-    }
-
-    private fun readPhoto(photo: suspend () -> ByteArray) {
-        retryParsing = false
-        job?.cancel()
-        state = ReceiptUiState.Working(ReceiptStep.READING)
+        state = ReceiptUiState.Working(ReceiptStep.PREPARING, canCancel = false)
         job = viewModelScope.launch {
             try {
-                val text = c.receipts.recognize(photo())
-                if (ReceiptText.clean(text).length < 10) {
-                    throw ReceiptException("На фото не нашлось текста чека. Переснимите ближе и при хорошем свете")
+                val photo = try {
+                    preparePhoto(uri, ++photoId)
+                } finally {
+                    withContext(Dispatchers.IO + NonCancellable) { photoFile.delete() }
                 }
-                texts = texts + text
-                lastJpeg = null
-                state = ReceiptUiState.Photos(texts)
+                if (photos.withIndex().any { it.index != replaceIndex && it.value.jpeg.contentEquals(photo.jpeg) }) {
+                    throw ReceiptException("Этот снимок уже добавлен")
+                }
+                if (replaceId != null) legacyTexts.remove(replaceId)
+                photos = if (replaceIndex == null) photos + photo else photos.toMutableList().apply { set(replaceIndex, photo) }
+                returnToPhotos()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                state = ReceiptUiState.Failed(ReceiptErrors.text(e), lastJpeg != null && ReceiptErrors.isRetryable(e))
+                state = ReceiptUiState.Failed(ReceiptErrors.text(e))
             }
         }
     }
 
-    fun removePhoto(index: Int) {
-        if (state !is ReceiptUiState.Photos) return
-        texts = texts.filterIndexed { i, _ -> i != index }
-        state = ReceiptUiState.Photos(texts)
+    private suspend fun preparePhoto(uri: Uri, id: Long): ReceiptPhoto = withContext(Dispatchers.IO) {
+        val jpeg = ReceiptImage.prepare(getApplication(), uri)
+        val thumbnail = BitmapFactory.decodeByteArray(
+            jpeg, 0, jpeg.size, BitmapFactory.Options().apply { inSampleSize = 8 },
+        ) ?: throw ReceiptException("Фото не открылось, попробуйте ещё раз")
+        ReceiptPhoto(id, jpeg, thumbnail)
     }
 
-    fun parsePhotos() {
-        if (state is ReceiptUiState.Working || texts.isEmpty()) return
-        retryParsing = true
-        state = ReceiptUiState.Working(ReceiptStep.PARSING)
+    fun removePhoto(index: Int) {
+        if (state !is ReceiptUiState.Photos || index !in photos.indices) return
+        legacyTexts.remove(photos[index].id)
+        photos = photos.filterIndexed { i, _ -> i != index }
+        returnToPhotos()
+    }
+
+    fun movePhoto(index: Int, offset: Int) {
+        val destination = index + offset
+        if (state !is ReceiptUiState.Photos || index !in photos.indices || destination !in photos.indices) return
+        photos = photos.toMutableList().apply { add(destination, removeAt(index)) }
+        returnToPhotos()
+    }
+
+    fun parsePhotos(legacy: Boolean = false) {
+        if (state !is ReceiptUiState.Photos && state !is ReceiptUiState.Failed) return
+        if (photos.isEmpty()) return
+        retryLegacy = legacy
+        state = ReceiptUiState.Working(if (legacy) ReceiptStep.READING else ReceiptStep.VISION)
+        val frames = photos
         job = viewModelScope.launch {
             try {
-                val review = c.receipts.parseParts(texts)
+                val onStep: (ReceiptStep) -> Unit = { state = ReceiptUiState.Working(it) }
+                val review = if (legacy) {
+                    val texts = frames.map { frame ->
+                        legacyTexts[frame.id] ?: c.receipts.recognize(frame.jpeg, onStep).also { legacyTexts[frame.id] = it }
+                    }
+                    c.receipts.parseParts(texts, onStep)
+                } else {
+                    c.receipts.scanPhotos(frames.map { it.jpeg }, onStep)
+                }
                 state = ReceiptUiState.Review(review)
             } catch (e: CancellationException) {
                 throw e
@@ -118,29 +153,68 @@ class ReceiptViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Ошибка разбора повторяет только DeepSeek, ошибка чтения — только последний снимок. */
     fun retry() {
-        if (state !is ReceiptUiState.Failed) return
-        if (retryParsing) parsePhotos() else lastJpeg?.let { jpeg -> readPhoto { jpeg } }
+        if ((state as? ReceiptUiState.Failed)?.canRetry == true) parsePhotos(retryLegacy)
+    }
+
+    fun cancelRecognition() {
+        if ((state as? ReceiptUiState.Working)?.canCancel != true) return
+        job?.cancel()
+        job = null
+        returnToPhotos()
     }
 
     fun returnToPhotos() {
-        if (state is ReceiptUiState.Working) return
-        lastJpeg = null
-        retryParsing = false
-        state = ReceiptUiState.Photos(texts)
+        if ((state as? ReceiptUiState.Review)?.saving == true) return
+        state = ReceiptUiState.Photos(photos)
+    }
+
+    fun fillManually() {
+        if (state !is ReceiptUiState.Failed) return
+        val draft = EntryDraft(listOf(EntryRow.empty()), rawText = "", origin = EntryOrigin.MANUAL)
+        state = ReceiptUiState.Review(ReceiptReview(draft, emptyList(), ""))
+    }
+
+    fun editReview(row: EntryRow) {
+        val current = state as? ReceiptUiState.Review ?: return
+        if (current.saving) return
+        val draft = current.review.draft.copy(rows = listOf(row))
+        state = current.copy(review = current.review.copy(draft = draft), saveError = null)
+    }
+
+    fun submit(onSaved: (SaveResult) -> Unit) {
+        val current = state as? ReceiptUiState.Review ?: return
+        if (current.saving) return
+        val draft = current.review.draft
+        val row = draft.rows.single()
+        if (row.kopecks() == null || row.dateText.isBlank() || row.items.any { ItemNames.normalize(it.name) == null }) return
+        state = current.copy(saving = true, saveError = null)
+        viewModelScope.launch {
+            val result = try {
+                c.quickEntry.save(draft).takeIf { it.saved.count == 1 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            if (result == null) {
+                state = current.copy(saveError = "Не удалось сохранить чек. Попробуйте ещё раз")
+            } else {
+                close()
+                onSaved(result)
+            }
+        }
     }
 
     fun photoNotTaken() {
-        viewModelScope.launch(Dispatchers.IO) { runCatching { photoFile.delete() } }
+        viewModelScope.launch(Dispatchers.IO) { photoFile.delete() }
     }
 
     fun close() {
         job?.cancel()
         job = null
-        lastJpeg = null
-        texts = emptyList()
-        retryParsing = false
+        photos = emptyList()
+        legacyTexts.clear()
         state = ReceiptUiState.Idle
     }
 }

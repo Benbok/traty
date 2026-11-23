@@ -28,7 +28,7 @@ class ExpenseItemRepository(private val db: AppDatabase) {
 
     /**
      * Заменяет позиции траты целиком: порядок берётся из списка, пустые названия отбрасываются,
-     * названия приводятся к одному виду, неположительные цены и количества считаются не названными.
+     * названия приводятся к одному виду, отрицательные цены и неположительные количества считаются не названными.
      */
     suspend fun replace(expenseId: Long, items: List<ExpenseItem>) = db.withTransaction {
         dao.deleteFor(expenseId)
@@ -50,7 +50,7 @@ class ExpenseItemRepository(private val db: AppDatabase) {
             val name = if (pack != null) ItemNames.normalize(PackSize.strip(raw)) ?: raw else raw
             item.copy(
                 name = name,
-                priceKopecks = item.priceKopecks?.takeIf { it > 0 },
+                priceKopecks = item.priceKopecks?.takeIf { it >= 0 },
                 quantityMilli = quantity,
                 unit = unit,
                 packMilli = pack?.milli,

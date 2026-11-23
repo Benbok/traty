@@ -19,7 +19,7 @@ import kotlin.math.max
 object ReceiptImage {
     const val MAX_SIDE = 2560
     private const val QUALITY = 88
-    private const val MAX_BYTES = 9 * 1024 * 1024
+    const val MAX_BYTES = 1024 * 1024
 
     suspend fun prepare(context: Context, uri: Uri): ByteArray = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
@@ -34,11 +34,19 @@ object ReceiptImage {
         } ?: throw ReceiptException("Фото не открылось, попробуйте ещё раз")
         val rotation = resolver.openInputStream(uri)?.use { exifRotation(ExifInterface(it)) } ?: 0
         val scaled = scaleAndRotate(decoded, rotation)
-        val out = ByteArrayOutputStream()
-        scaled.compress(Bitmap.CompressFormat.JPEG, QUALITY, out)
-        if (scaled !== decoded) scaled.recycle()
-        decoded.recycle()
-        out.toByteArray().also { if (it.size > MAX_BYTES) throw ReceiptException("Фото слишком большое") }
+        try {
+            val out = ByteArrayOutputStream()
+            for (quality in QUALITY downTo 58 step 10) {
+                out.reset()
+                if (scaled.compress(Bitmap.CompressFormat.JPEG, quality, out) && out.size() <= MAX_BYTES) {
+                    return@withContext out.toByteArray()
+                }
+            }
+            throw ReceiptException("Фото слишком большое. Снимите чек ближе или разделите его на части")
+        } finally {
+            if (scaled !== decoded) scaled.recycle()
+            decoded.recycle()
+        }
     }
 
     /** Степень двойки, чтобы декодировать не крупнее, чем нужно (экономит память). */

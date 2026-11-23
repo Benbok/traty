@@ -53,6 +53,13 @@ class ReceiptDraftTest {
         assertEquals(2, r.notices.size)
     }
 
+    @Test fun imageDateInFutureStaysBlank() {
+        val parsed = ParsedReceipt(null, "2096-11-23", 100, null, lines)
+        val r = ReceiptDraft.build(parsed, null, cats, emptyList(), emptyList(), today, "", fromImages = true)
+        assertEquals("", r.draft.rows.single().dateText)
+        assertTrue(r.notices.any { it.contains("будуще") })
+    }
+
     @Test fun ruleByStoreBeatsAi_andPlaceSnapsToKnown() {
         val r = build(
             ParsedReceipt("пятерочка", null, 100, "Продукты", lines),

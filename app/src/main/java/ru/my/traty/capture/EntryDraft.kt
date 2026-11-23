@@ -12,6 +12,8 @@ import ru.my.traty.data.IncomeSources
 import ru.my.traty.data.Places
 import ru.my.traty.data.normalizeName
 import ru.my.traty.data.sameName
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.LocalDate
 import kotlin.math.roundToLong
 
@@ -118,12 +120,17 @@ private val NBSP: Char = 0x00A0.toChar()
 private val NNBSP: Char = 0x202F.toChar()
 private val spaceLike = Regex("[\\s$NBSP$NNBSP]")
 
-internal fun parsePositiveKopecks(text: String): Long? {
-    val amount = text.replace(spaceLike, "").replace(',', '.').toDoubleOrNull() ?: return null
-    if (!amount.isFinite() || amount <= 0) return null
-    return (amount * 100).roundToLong().takeIf { it > 0 }
+private val MAX_ROUNDABLE_RUBLES = BigDecimal(Long.MAX_VALUE).movePointLeft(2) + BigDecimal("0.005")
+
+internal fun parsePositiveKopecks(text: String): Long? = parseKopecks(text)?.takeIf { it > 0 }
+
+internal fun parseKopecks(text: String): Long? {
+    val amount = text.replace(spaceLike, "").replace(',', '.').toBigDecimalOrNull() ?: return null
+    if (amount.signum() == 0) return 0
+    if (amount < BigDecimal("0.005") || amount >= MAX_ROUNDABLE_RUBLES) return null
+    return amount.movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact()
 }
 
 /** 25000 → «250», 25050 → «250.5»: текст для поля суммы. */
 internal fun kopecksToText(kopecks: Long): String =
-    java.math.BigDecimal(kopecks).movePointLeft(2).stripTrailingZeros().toPlainString()
+    BigDecimal(kopecks).movePointLeft(2).stripTrailingZeros().toPlainString()

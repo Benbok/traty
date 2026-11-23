@@ -56,6 +56,9 @@ android {
 
     defaultConfig {
         applicationId = "ru.my.traty"
+        if (providers.gradleProperty("receiptSmoke").isPresent) {
+            testInstrumentationRunner = "ru.my.traty.receiptsmoke.DeepSeekReceiptSmoke"
+        }
         minSdk = 26
         targetSdk = 35
         // В CI версия берётся из тега (v0.2 → 0.2), номер сборки — из счётчика запусков.

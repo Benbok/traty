@@ -83,13 +83,12 @@ data class AppSettings(
     val updateDismissedVersion: String = "",
 )
 
-/**
- * Фото чеков: текст с фото читает Yandex Vision OCR (API-ключ и ID каталога Yandex Cloud),
- * товары из текста раскладывает DeepSeek. Кнопка доступна, когда заполнены все пять полей обоих сервисов.
- */
+/** Распознавание фото использует собственную модель DeepSeek Flash. */
 val AppSettings.canScanReceipts: Boolean
-    get() = deepseekKey.isNotBlank() && deepseekModel.isNotBlank() &&
-        yandexKey.isNotBlank() && yandexFolderId.isNotBlank() && yandexModel.isNotBlank()
+    get() = deepseekKey.isNotBlank()
+
+val AppSettings.canUseLegacyReceiptOcr: Boolean
+    get() = canScanReceipts && yandexKey.isNotBlank() && yandexFolderId.isNotBlank()
 
 internal fun encodeLines(lines: List<String>): String =
     lines.map { it.replace('\n', ' ').trim() }.filter { it.isNotEmpty() }.joinToString("\n")

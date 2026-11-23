@@ -16,6 +16,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import ru.my.traty.ai.receipt.requestReceiptVision
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.LlmProvider
 import java.util.concurrent.TimeUnit
@@ -81,6 +82,9 @@ class DeepSeekClient(
     private val timeoutSeconds: Long = LlmRetry.DEFAULT_TIMEOUT_SECONDS,
 ) : LlmClient {
     override val name = "DeepSeek"
+
+    internal suspend fun completeReceiptImages(system: String, user: String, photos: List<ByteArray>): String =
+        requestReceiptVision(apiKey, system, user, photos)
 
     override suspend fun complete(system: String, user: String, jsonMode: Boolean): String =
         withContext(Dispatchers.IO) {

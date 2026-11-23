@@ -44,7 +44,7 @@ fun ReceiptCameraEntry(
             onHandled()
             when {
                 !settings.canScanReceipts ->
-                    error = "Для распознавания чеков заполните все поля DeepSeek и Yandex в «Настройки → ИИ»."
+                    error = "Для распознавания чеков сохраните ключ DeepSeek в «Настройки → ИИ»."
                 pendingUri != null || vm.state != ReceiptUiState.Idle ->
                     error = "Сначала завершите или закройте текущий чек."
                 else -> {

@@ -31,6 +31,7 @@ internal fun ExpenseItemsCard(
     items: List<DraftItem>,
     totalKopecks: Long?,
     enabled: Boolean,
+    receiptDetails: Boolean = false,
     onChange: (List<DraftItem>) -> Unit,
 ) {
     // null — шторка закрыта, -1 — новый товар, иначе номер товара
@@ -71,6 +72,7 @@ internal fun ExpenseItemsCard(
     editing?.let { index ->
         ItemEditSheet(
             initial = items.getOrNull(index) ?: DraftItem(""),
+            receiptDetails = receiptDetails,
             isNew = index < 0,
             onDismiss = { editing = null },
             onDone = { edited ->
@@ -96,7 +98,7 @@ private fun ItemRow(item: DraftItem, enabled: Boolean, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
     ) {
         Column(Modifier.weight(1f)) {
-            Text(item.name, style = TratyTheme.typography.bodyMedium, color = TratyTheme.colors.onSurface)
+            Text(item.name.ifBlank { "Название не распознано" }, style = TratyTheme.typography.bodyMedium, color = TratyTheme.colors.onSurface)
             val qty = item.amountText()
             if (qty != null) {
                 Text(qty, style = TratyTheme.typography.bodySmall, color = TratyTheme.colors.onSurfaceVariant)

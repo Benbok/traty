@@ -11,12 +11,13 @@ object ReceiptErrors {
         e is LlmHttpException && (e.code == 401 || e.code == 403) -> when (step) {
             ReceiptService.OCR ->
                 "Яндекс не принял ключ. Проверьте API-ключ и ID каталога, а у сервисного аккаунта — роль ai.vision.user"
-            ReceiptService.PARSE -> "DeepSeek не принял ключ. Проверьте его в настройках ИИ"
+            ReceiptService.PARSE, ReceiptService.VISION -> "DeepSeek не принял ключ. Проверьте его в настройках ИИ"
         }
         e is LlmHttpException && e.code == 402 -> "На счёте DeepSeek закончились деньги"
         e is LlmHttpException && e.code == 429 -> "${step.title} просит подождать: слишком много запросов. Попробуйте через минуту"
         e is LlmHttpException && e.code == 400 && step == ReceiptService.OCR -> "Яндекс не смог прочитать фото. Переснимите чек ближе и ровнее"
         e is LlmHttpException -> "${step.title} ответил ошибкой ${e.code}. Попробуйте ещё раз"
+        e is java.io.InterruptedIOException -> "${step.title} не успел ответить. Попробуйте ещё раз или снимите чек по частям"
         e is IOException -> "Нет связи с сервисом ${step.title}. Проверьте интернет и попробуйте ещё раз"
         e is ReceiptException || e is IllegalArgumentException -> e.message ?: "Не получилось разобрать чек"
         else -> "Не получилось разобрать чек. Попробуйте ещё раз"
@@ -42,6 +43,7 @@ fun ReceiptErrors.isRetryable(e: Throwable): Boolean {
 enum class ReceiptService(val title: String) {
     OCR("Яндекс"),
     PARSE("DeepSeek"),
+    VISION("DeepSeek"),
 }
 
 /** Ошибка сервиса на шаге [service]: по ней экран говорит, кто не ответил — Яндекс или DeepSeek. */

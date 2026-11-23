@@ -10,7 +10,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import ru.my.traty.ai.DeepSeekClient
 import ru.my.traty.ai.LlmClient
+import ru.my.traty.ai.receipt.DeepSeekReceiptExtractor
+import ru.my.traty.ai.receipt.RECEIPT_VISION_MODEL
 import ru.my.traty.ai.clientFor
 import ru.my.traty.capture.PendingParseWork
 import ru.my.traty.capture.QuickEntry
@@ -22,6 +25,7 @@ import ru.my.traty.data.ExpenseEdits
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.CategoryRepository
 import ru.my.traty.data.IncomeRepository
+import ru.my.traty.data.LlmProvider
 import ru.my.traty.data.PendingStatus
 import ru.my.traty.data.ReconciliationRepository
 import ru.my.traty.backup.FullBackupImporter
@@ -41,6 +45,7 @@ import ru.my.traty.data.update.UpdateRepository
 import ru.my.traty.data.update.installedVersionOf
 import ru.my.traty.data.whatsnew.WhatsNewRepository
 import ru.my.traty.data.SettingsRepository
+import ru.my.traty.data.canUseLegacyReceiptOcr
 import ru.my.traty.speech.GigaAmRuntime
 import ru.my.traty.speech.ModelManager
 import java.io.File
@@ -127,8 +132,15 @@ class AppContainer(
     val fullBackupImporter = FullBackupImporter(backups, settings)
     val appVersion: String = installedVersionOf(context)
 
-    /** Фото чека → черновик траты с товарами. Только Яндекс, независимо от выбранного ИИ для голоса. */
-    val receipts = ReceiptScanner(db, settings)
+    /** Фото чека → черновик траты с товарами, независимо от выбранного ИИ для голоса. */
+    val receipts = ReceiptScanner(
+        db, settings,
+        llmFor = { config -> if (config.canUseLegacyReceiptOcr) receiptLlm(config) else null },
+        visionFor = { config -> (receiptLlm(config) as? DeepSeekClient)?.let(::DeepSeekReceiptExtractor) },
+    )
+
+    private fun receiptLlm(config: AppSettings): LlmClient? =
+        llm(config.copy(provider = LlmProvider.DEEPSEEK, deepseekModel = RECEIPT_VISION_MODEL))
     val debtRemoval = DebtPaymentRemoval(db)
     val expenseEdits = ExpenseEdits(db, debtRemoval)
     val budgets = BudgetRepository(db)

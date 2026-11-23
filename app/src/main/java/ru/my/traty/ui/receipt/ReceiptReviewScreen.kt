@@ -17,20 +17,17 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
-import ru.my.traty.capture.EntryDraft
-import ru.my.traty.capture.ReceiptReview
+import ru.my.traty.capture.EntryRow
 import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.items.ItemsCheck
+import ru.my.traty.data.items.ItemNames
 import ru.my.traty.ui.designsystem.components.TratyButton
 import ru.my.traty.ui.designsystem.components.TratyHeaderCard
 import ru.my.traty.ui.designsystem.components.TratyOutlinedButton
+import ru.my.traty.ui.designsystem.components.TratyTextButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 /**
@@ -42,32 +39,48 @@ fun ReceiptReviewScreen(
     state: ReceiptUiState,
     categories: List<CategoryWithSubs>,
     onClose: () -> Unit,
-    onSave: (EntryDraft) -> Unit,
+    onEdit: (EntryRow) -> Unit,
+    onSave: () -> Unit,
     onRetry: () -> Unit = {},
     onParse: () -> Unit = {},
-    onRemovePhoto: (Int) -> Unit = {},
-    onReturnToPhotos: () -> Unit = {},
-    photoButton: @Composable ((String) -> Unit) -> Unit = {},
+    onRemovePhoto: (Int) -> Unit,
+    onMovePhoto: (Int, Int) -> Unit,
+    onReturnToPhotos: () -> Unit,
+    onCancelRecognition: () -> Unit,
+    onFillManually: () -> Unit,
+    onLegacy: (() -> Unit)?,
+    photoButton: @Composable ((String) -> Unit) -> Unit,
+    retakeButton: @Composable (Long, (String) -> Unit) -> Unit,
 ) {
-    BackHandler(onBack = onClose)
+    val onBack = when (state) {
+        is ReceiptUiState.Working -> onCancelRecognition
+        is ReceiptUiState.Review -> onReturnToPhotos
+        else -> onClose
+    }
+    BackHandler(onBack = onBack)
     Scaffold(
         containerColor = TratyTheme.colors.background,
         topBar = {
             TratyHeaderCard(
                 modifier = Modifier.statusBarsPadding(),
                 title = if (state is ReceiptUiState.Review) "Проверьте чек" else "Чек по фото",
-                subtitle = "Яндекс читает фото, DeepSeek — товары, сумму сверяет приложение",
+                subtitle = when (state) {
+                    is ReceiptUiState.Review -> "Проверьте позиции и итог перед сохранением"
+                    else -> "Съёмка и распознавание"
+                },
                 icon = Icons.AutoMirrored.Filled.ReceiptLong,
-                onBack = onClose,
+                onBack = onBack,
             )
         },
     ) { pad ->
         val content = Modifier.padding(pad).consumeWindowInsets(pad).fillMaxSize()
         when (state) {
-            is ReceiptUiState.Photos -> ReceiptPhotosContent(state.texts, onRemovePhoto, onParse, photoButton, content)
-            is ReceiptUiState.Review -> ReceiptReviewContent(state.review, categories, onSave, content)
-            is ReceiptUiState.Working -> ReceiptWaiting(state.step.title, content)
-            is ReceiptUiState.Failed -> ReceiptFailed(state, onRetry, onReturnToPhotos, onClose, content)
+            is ReceiptUiState.Photos -> ReceiptPhotosContent(
+                state.photos, onRemovePhoto, onMovePhoto, onParse, onLegacy, photoButton, retakeButton, content,
+            )
+            is ReceiptUiState.Review -> ReceiptReviewContent(state, categories, onEdit, onSave, content)
+            is ReceiptUiState.Working -> ReceiptWaiting(state, onCancelRecognition, content)
+            is ReceiptUiState.Failed -> ReceiptFailed(state, onRetry, onReturnToPhotos, onFillManually, content)
             ReceiptUiState.Idle -> Unit
         }
     }
@@ -75,12 +88,14 @@ fun ReceiptReviewScreen(
 
 @Composable
 private fun ReceiptReviewContent(
-    review: ReceiptReview,
+    state: ReceiptUiState.Review,
     categories: List<CategoryWithSubs>,
-    onSave: (EntryDraft) -> Unit,
+    onEdit: (EntryRow) -> Unit,
+    onSave: () -> Unit,
     modifier: Modifier,
 ) {
-    var row by remember(review) { mutableStateOf(review.draft.rows.single()) }
+    val review = state.review
+    val row = review.draft.rows.single()
     val total = row.kopecks()
     val balance = total?.let { ItemsCheck.balance(it, row.items.map { item -> item.priceKopecks() }) }
     Column(modifier.imePadding()) {
@@ -90,42 +105,45 @@ private fun ReceiptReviewContent(
             receiptText = review.receiptText,
             balance = balance,
             categories = categories,
-            onChange = { row = it },
+            onChange = onEdit,
             modifier = Modifier.weight(1f),
         )
+        state.saveError?.let {
+            Text(it, color = TratyTheme.colors.expense, modifier = Modifier.padding(horizontal = TratyTheme.spacing.lg))
+        }
         TratyButton(
-            onClick = { onSave(review.draft.copy(rows = listOf(row))) },
-            enabled = total != null,
+            onClick = onSave,
+            enabled = !state.saving && total != null && row.dateText.isNotBlank() && row.items.all { ItemNames.normalize(it.name) != null },
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(horizontal = TratyTheme.spacing.lg, vertical = TratyTheme.spacing.sm),
         ) {
-            Text(if (balance?.needsAttention == true) "Сохранить с расхождением" else "Сохранить")
+            Text(when {
+                state.saving -> "Сохраняем…"
+                balance != null && balance.differenceKopecks != 0L && row.items.isNotEmpty() -> "Сохранить с расхождением"
+                else -> "Сохранить"
+            })
         }
     }
 }
 
 @Composable
-private fun ReceiptWaiting(step: String, modifier: Modifier) {
+private fun ReceiptWaiting(state: ReceiptUiState.Working, onCancel: () -> Unit, modifier: Modifier) {
     Box(modifier, contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.md),
         ) {
             CircularProgressIndicator(color = TratyTheme.colors.primary)
-            Text(step, style = TratyTheme.typography.bodyLarge, color = TratyTheme.colors.onSurface)
-            Text(
-                "Обычно это занимает 5–15 секунд",
-                style = TratyTheme.typography.bodySmall,
-                color = TratyTheme.colors.onSurfaceVariant,
-            )
+            Text(state.step.title, style = TratyTheme.typography.bodyLarge, color = TratyTheme.colors.onSurface)
+            if (state.canCancel) TratyTextButton(onClick = onCancel) { Text("Отменить") }
         }
     }
 }
 
 @Composable
-private fun ReceiptFailed(failed: ReceiptUiState.Failed, onRetry: () -> Unit, onPhotos: () -> Unit, onClose: () -> Unit, modifier: Modifier) {
+private fun ReceiptFailed(failed: ReceiptUiState.Failed, onRetry: () -> Unit, onPhotos: () -> Unit, onFillManually: () -> Unit, modifier: Modifier) {
     Box(modifier.padding(TratyTheme.spacing.xl), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -143,7 +161,7 @@ private fun ReceiptFailed(failed: ReceiptUiState.Failed, onRetry: () -> Unit, on
                 TratyButton(onClick = onRetry) { Text("Повторить") }
             }
             TratyOutlinedButton(onClick = onPhotos) { Text("Вернуться к снимкам") }
-            TratyOutlinedButton(onClick = onClose) { Text(if (failed.canRetry) "Отменить" else "Закрыть") }
+            TratyTextButton(onClick = onFillManually) { Text("Заполнить вручную") }
         }
     }
 }

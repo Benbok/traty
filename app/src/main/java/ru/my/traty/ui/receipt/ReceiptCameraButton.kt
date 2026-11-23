@@ -43,7 +43,7 @@ import ru.my.traty.ui.designsystem.components.tratyPressFeedback
 import ru.my.traty.ui.designsystem.components.TratyTonalButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
-/** Вход в добавление чека; доступен только при заполненных настройках обоих сервисов. */
+/** Вход в добавление чека. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReceiptCameraButton(
@@ -101,7 +101,7 @@ fun ReceiptCameraButton(
             TratyTonalButton(onClick = takePhoto, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Filled.PhotoCamera, null, Modifier.size(20.dp))
                 Spacer(Modifier.width(TratyTheme.spacing.sm))
-                Text(if ((vm.state as? ReceiptUiState.Photos)?.texts?.isNotEmpty() == true) "Снять ещё часть" else "Сфотографировать")
+                Text("Добавить фото")
             }
             TratyOutlinedButton(onClick = pickPhoto, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Filled.PhotoLibrary, null, Modifier.size(20.dp))

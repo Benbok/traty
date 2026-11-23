@@ -17,7 +17,7 @@ import ru.my.traty.ai.receipt.ReceiptException
 import ru.my.traty.ai.receipt.ReceiptOcr
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.ExpenseSource
-import ru.my.traty.data.canScanReceipts
+import ru.my.traty.data.canUseLegacyReceiptOcr
 import java.time.ZoneOffset
 
 /** Фото чека → одна трата с товарами; в ИИ не уходят кассир и номера кассы; без проверки ничего не сохраняется. */
@@ -157,25 +157,25 @@ class ReceiptScannerTest {
     }
 
     @Test
-    fun everyAiFieldIsRequiredAndWhitespaceIsNotConfigured() {
+    fun legacyOcrRequiresKeysAndFolderButNotVoiceModels() {
         val configured = AppSettings(yandexKey = "k", yandexFolderId = "folder", deepseekKey = "d")
-        assertTrue(configured.canScanReceipts)
+        assertTrue(configured.canUseLegacyReceiptOcr)
         for (blank in listOf("", " ", "\t\n")) {
-            assertFalse(configured.copy(deepseekKey = blank).canScanReceipts)
-            assertFalse(configured.copy(deepseekModel = blank).canScanReceipts)
-            assertFalse(configured.copy(yandexKey = blank).canScanReceipts)
-            assertFalse(configured.copy(yandexFolderId = blank).canScanReceipts)
-            assertFalse(configured.copy(yandexModel = blank).canScanReceipts)
+            assertFalse(configured.copy(deepseekKey = blank).canUseLegacyReceiptOcr)
+            assertTrue(configured.copy(deepseekModel = blank).canUseLegacyReceiptOcr)
+            assertFalse(configured.copy(yandexKey = blank).canUseLegacyReceiptOcr)
+            assertFalse(configured.copy(yandexFolderId = blank).canUseLegacyReceiptOcr)
+            assertTrue(configured.copy(yandexModel = blank).canUseLegacyReceiptOcr)
         }
-        assertTrue(configured.copy(provider = ru.my.traty.data.LlmProvider.OFFLINE).canScanReceipts)
+        assertTrue(configured.copy(provider = ru.my.traty.data.LlmProvider.OFFLINE).canUseLegacyReceiptOcr)
     }
 
     @Test
     fun withoutYandexOrDeepSeekKeysNoScanning() {
-        assertFalse(AppSettings(yandexKey = "k").canScanReceipts)
-        assertFalse(AppSettings(yandexKey = "k", yandexFolderId = "b1g").canScanReceipts)
-        assertFalse(AppSettings(yandexFolderId = "b1g", deepseekKey = "d").canScanReceipts)
-        assertTrue(AppSettings(yandexKey = "k", yandexFolderId = "b1g", deepseekKey = "d").canScanReceipts)
+        assertFalse(AppSettings(yandexKey = "k").canUseLegacyReceiptOcr)
+        assertFalse(AppSettings(yandexKey = "k", yandexFolderId = "b1g").canUseLegacyReceiptOcr)
+        assertFalse(AppSettings(yandexFolderId = "b1g", deepseekKey = "d").canUseLegacyReceiptOcr)
+        assertTrue(AppSettings(yandexKey = "k", yandexFolderId = "b1g", deepseekKey = "d").canUseLegacyReceiptOcr)
     }
 }
 

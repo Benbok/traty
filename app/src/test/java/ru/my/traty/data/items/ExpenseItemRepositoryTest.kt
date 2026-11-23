@@ -61,12 +61,16 @@ class ExpenseItemRepositoryTest {
     }
 
     @Test
-    fun nonPositivePriceMeansNotNamed() = runTest {
+    fun onlyNegativePriceMeansNotNamed() = runTest {
         val e = eldorado()
-        repo.replace(e.id, listOf(ExpenseItem(name = "пакет", priceKopecks = 0, quantityMilli = -1)))
-        val item = repo.getFor(e.id).single()
-        assertNull(item.priceKopecks)
-        assertNull(item.quantityMilli)
+        repo.replace(e.id, listOf(
+            ExpenseItem(name = "пакет", priceKopecks = 0, quantityMilli = -1),
+            ExpenseItem(name = "коробка", priceKopecks = -1),
+        ))
+        val items = repo.getFor(e.id)
+        assertEquals(0L, items.first().priceKopecks)
+        assertNull(items.first().quantityMilli)
+        assertNull(items.last().priceKopecks)
     }
 
     @Test

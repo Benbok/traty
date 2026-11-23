@@ -2,6 +2,7 @@ package ru.my.traty.capture
 
 import ru.my.traty.ai.LlmClient
 import ru.my.traty.ai.receipt.NetworkRetry
+import ru.my.traty.ai.receipt.ReceiptImageExtractor
 import ru.my.traty.ai.receipt.ReceiptOcr
 import ru.my.traty.ai.receipt.ReceiptException
 import ru.my.traty.ai.receipt.ReceiptParsing
@@ -9,11 +10,12 @@ import ru.my.traty.ai.receipt.ReceiptPrompt
 import ru.my.traty.ai.receipt.ReceiptService
 import ru.my.traty.ai.receipt.ReceiptServiceFailure
 import ru.my.traty.ai.receipt.ReceiptText
-import ru.my.traty.ai.receipt.receiptLlmFor
 import ru.my.traty.ai.receipt.receiptOcrFor
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.AppSettings
+import ru.my.traty.data.CategoryWithSubs
 import ru.my.traty.data.SettingsRepository
+import ru.my.traty.data.canScanReceipts
 import ru.my.traty.data.selectable
 import kotlinx.coroutines.CancellationException
 import java.time.LocalDate
@@ -21,6 +23,8 @@ import java.time.ZoneId
 
 /** Что сейчас делает разбор чека: показывается на экране ожидания. */
 enum class ReceiptStep(val title: String) {
+    PREPARING("Подготавливаем фото…"),
+    VISION("Распознаём чек…"),
     READING("Читаю текст с фото…"),
     PARSING("Раскладываю чек по товарам…"),
 }
@@ -35,8 +39,28 @@ class ReceiptScanner(
     private val settings: SettingsRepository,
     private val zone: ZoneId = ZoneId.systemDefault(),
     private val ocrFor: (AppSettings) -> ReceiptOcr? = ::receiptOcrFor,
-    private val llmFor: (AppSettings) -> LlmClient? = ::receiptLlmFor,
+    private val llmFor: (AppSettings) -> LlmClient?,
+    private val visionFor: (AppSettings) -> ReceiptImageExtractor? = { null },
 ) {
+    suspend fun scanPhotos(photos: List<ByteArray>, onStep: (ReceiptStep) -> Unit = {}): ReceiptReview {
+        require(photos.size in 1..ReceiptParts.MAX_PHOTOS)
+        require(photos.all { it.isNotEmpty() && it.size <= ReceiptImage.MAX_BYTES })
+        val config = settings.current()
+        require(config.canScanReceipts) { "Заполните ключ DeepSeek в настройках ИИ" }
+        val extractor = visionFor(config) ?: throw ReceiptException("Распознавание фото DeepSeek недоступно")
+        onStep(ReceiptStep.VISION)
+        val cats = db.categories().getActiveWithSubs().selectable()
+        val parts = step(ReceiptService.VISION) { extractor.extract(photos, cats.map { it.category.name }) }
+        val merged = ReceiptParts.merge(parts, keepAmbiguousOverlap = true)
+        val unreadable = parts.mapIndexedNotNull { index, part ->
+            if (part.lines.isEmpty() && part.totalKopecks == null && part.date == null && part.place == null) index + 1 else null
+        }
+        val review = review(merged, null, cats, LocalDate.now(zone), "", fromImages = true)
+        if (unreadable.isEmpty()) return review
+        val message = "На снимках ${unreadable.joinToString(", ")} не распознаны данные чека. Проверьте кадры"
+        return review.copy(notices = listOf(message) + review.notices)
+    }
+
     /** Весь путь сразу: фото → текст → черновик. */
     suspend fun scan(jpeg: ByteArray, onStep: (ReceiptStep) -> Unit = {}): ReceiptReview =
         parse(recognize(jpeg, onStep), onStep)
@@ -89,14 +113,29 @@ class ReceiptScanner(
         }
         val parts = if (multiple) ReceiptParsing.decodeParts(answer, cleaned.size) else listOf(ReceiptParsing.decode(answer))
         val merged = ReceiptParts.merge(parts, cleaned)
+        return review(
+            merged, totals.singleOrNull(), cats, today,
+            if (multiple) ReceiptPrompt.partsUser(cleaned) else cleaned.single(),
+        )
+    }
+
+    private suspend fun review(
+        merged: ReceiptParts.Merged,
+        printedTotal: Long?,
+        cats: List<CategoryWithSubs>,
+        today: LocalDate,
+        receiptText: String,
+        fromImages: Boolean = false,
+    ): ReceiptReview {
         val review = ReceiptDraft.build(
             parsed = merged.receipt,
-            printedTotal = totals.singleOrNull(),
+            printedTotal = printedTotal,
             categories = cats,
             rules = db.rules().getAll(),
             knownPlaces = db.expenses().distinctPlaces(),
             today = today,
-            receiptText = if (multiple) ReceiptPrompt.partsUser(cleaned) else cleaned.single(),
+            receiptText = receiptText,
+            fromImages = fromImages,
         )
         return review.copy(notices = merged.notices + review.notices)
     }

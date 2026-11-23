@@ -2,6 +2,8 @@ package ru.my.traty.capture
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.my.traty.ai.ParsedEntry
 import ru.my.traty.ai.ParsedItem
@@ -26,6 +28,19 @@ class DraftItemTest {
         assertNull(e.priceKopecks)
         assertNull(e.quantityMilli)
         assertNull(e.unit)
+    }
+
+    @Test
+    fun receiptDiscountCheckLeavesThePrintedAmountIntact() {
+        val item = DraftItem("Кофе", priceText = "200", qtyText = "2", unitPriceText = "100", discountText = "30")
+        assertTrue(item.hasReceiptPriceMismatch())
+        assertEquals(20_000L, item.toExpenseItem().priceKopecks)
+        assertFalse(item.copy(priceText = "170").hasReceiptPriceMismatch())
+    }
+
+    @Test
+    fun freeReceiptItemKeepsItsZeroPrice() {
+        assertEquals(0L, DraftItem("Пакет", priceText = "0").toExpenseItem().priceKopecks)
     }
 
     @Test
