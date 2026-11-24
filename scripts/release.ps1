@@ -74,13 +74,13 @@ if ((Git rev-parse -q --verify "refs/tags/$tag").Code -eq 0) { Fail "Tag $tag al
 if (-not (Test-Path '.github/workflows/release.yml')) { Fail 'No .github/workflows/release.yml in this commit' }
 
 Step 'Checking that the Room schema for the current DB version is committed'
-$dbText = Get-Content 'app/src/main/java/ru/my/traty/data/Database.kt' -Raw
-if ($dbText -match 'version\s*=\s*(\d+)\s*,\s*\r?\n\s*exportSchema') {
+$dbText = Get-Content 'app/src/main/java/ru/my/traty/data/DbVersion.kt' -Raw
+if ($dbText -match '\bconst\s+val\s+DB_SCHEMA_VERSION\s*=\s*(\d+)\b') {
     $dbVersion = $Matches[1]
     $schema = "app/schemas/ru.my.traty.data.AppDatabase/$dbVersion.json"
     if ((Git ls-files --error-unmatch $schema).Code -ne 0) { Fail "Schema $schema is not committed (DB version $dbVersion)" }
 } else {
-    Write-Host 'WARNING: could not read DB version from Database.kt, schema check skipped' -ForegroundColor Yellow
+    Fail 'Could not read DB_SCHEMA_VERSION from DbVersion.kt'
 }
 
 $notes = ''

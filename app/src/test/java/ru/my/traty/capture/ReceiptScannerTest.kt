@@ -17,6 +17,7 @@ import ru.my.traty.ai.receipt.ReceiptLine
 import ru.my.traty.data.AppSettings
 import ru.my.traty.data.ExpenseSource
 import ru.my.traty.data.LlmProvider
+import ru.my.traty.data.PortableSettings
 import ru.my.traty.data.SettingsRepository
 import ru.my.traty.data.canScanReceipts
 import ru.my.traty.data.secure.AesGcmSecretCipher
@@ -33,7 +34,7 @@ class ReceiptScannerTest {
 
     @Test fun availabilityDependsOnlyOnSavedDeepSeekKey() {
         assertTrue(AppSettings(provider = LlmProvider.OFFLINE, deepseekKey = "d", deepseekModel = "").canScanReceipts)
-        assertFalse(AppSettings(deepseekKey = " \t", yandexKey = "y", yandexFolderId = "folder").canScanReceipts)
+        assertFalse(AppSettings(deepseekKey = " \t").canScanReceipts)
     }
 
     @Test fun twoFramesProduceOnePurchaseOnlyWhenConfirmed() = runTest {
@@ -53,7 +54,6 @@ class ReceiptScannerTest {
         }
         val scanner = ReceiptScanner(app.container.db, settings, visionFor = {
             assertEquals("test", it.deepseekKey)
-            assertTrue(it.yandexKey.isEmpty())
             extractor
         })
         val review = scanner.scanPhotos(frames)
@@ -64,6 +64,13 @@ class ReceiptScannerTest {
         assertEquals(ExpenseSource.PHOTO, purchase.source)
         assertEquals(17_000L, purchase.amountKopecks)
         assertEquals(listOf(2_500L, 4_000L, 8_000L, 2_500L), app.container.expenseItems.getFor(id).map { it.priceKopecks })
+    }
+
+    @Test fun restoringRetiredProviderUsesOfflineMode() = runTest {
+        settings.save(AppSettings(provider = LlmProvider.DEEPSEEK, deepseekKey = "test"))
+        settings.restore(PortableSettings(provider = "YANDEX"))
+        assertEquals(LlmProvider.OFFLINE, settings.current().provider)
+        assertEquals("test", settings.current().deepseekKey)
     }
 
     @Test fun emptyFramesNeverReachTheExtractor() = runTest {

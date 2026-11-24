@@ -109,11 +109,11 @@ class FullBackupReaderTest {
     @Test
     fun portableSettingsHaveNoSecrets() {
         val s = AppSettings(
-            themeMode = ThemeMode.DARK, provider = LlmProvider.YANDEX, periodStartDay = 25,
-            deepseekKey = "sk-SECRET", yandexKey = "AQVN-SECRET", yandexFolderId = "b1g-SECRET",
+            themeMode = ThemeMode.DARK, provider = LlmProvider.DEEPSEEK, periodStartDay = 25,
+            deepseekKey = "sk-SECRET",
         ).portable()
         assertEquals("DARK", s.themeMode)
-        assertEquals("YANDEX", s.provider)
+        assertEquals("DEEPSEEK", s.provider)
         assertEquals(25, s.periodStartDay)
         assertFalse(FullBackupWriter.json.encodeToString(PortableSettings.serializer(), s).contains("SECRET"))
     }

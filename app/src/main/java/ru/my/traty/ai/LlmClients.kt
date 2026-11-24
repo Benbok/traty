@@ -108,49 +108,9 @@ class DeepSeekClient(
         }
 }
 
-/** YandexGPT через Foundation Models API (Yandex Cloud / AI Studio). */
-class YandexGptClient(
-    private val apiKey: String,
-    private val folderId: String,
-    private val model: String,
-    private val timeoutSeconds: Long = LlmRetry.DEFAULT_TIMEOUT_SECONDS,
-) : LlmClient {
-    override val name = "YandexGPT"
-
-    override suspend fun complete(system: String, user: String, jsonMode: Boolean): String =
-        withContext(Dispatchers.IO) {
-            require(apiKey.isNotBlank() && folderId.isNotBlank()) {
-                "Не указан API-ключ или ID каталога Yandex Cloud (Настройки)"
-            }
-            val body = buildJsonObject {
-                put("modelUri", "gpt://$folderId/$model")
-                putJsonObject("completionOptions") {
-                    put("stream", false)
-                    put("temperature", 0.1)
-                    put("maxTokens", "800")
-                }
-                putJsonArray("messages") {
-                    addJsonObject { put("role", "system"); put("text", system) }
-                    addJsonObject { put("role", "user"); put("text", user) }
-                }
-            }
-            val resp = postJson(
-                "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
-                body,
-                mapOf("Authorization" to "Api-Key $apiKey", "x-folder-id" to folderId),
-                timeoutSeconds,
-            )
-            resp.textAt(name) {
-                it["result"]?.jsonObject?.get("alternatives")?.jsonArray?.firstOrNull()
-                    ?.jsonObject?.get("message")?.jsonObject?.get("text")?.jsonPrimitive?.content
-            }
-        }
-}
-
 /** null — значит выбран режим без ИИ. */
 fun clientFor(s: AppSettings, timeoutSeconds: Long = LlmRetry.DEFAULT_TIMEOUT_SECONDS): LlmClient? = when (s.provider) {
     LlmProvider.DEEPSEEK -> DeepSeekClient(s.deepseekKey, s.deepseekModel, timeoutSeconds)
-    LlmProvider.YANDEX -> YandexGptClient(s.yandexKey, s.yandexFolderId, s.yandexModel, timeoutSeconds)
     LlmProvider.OFFLINE -> null
 }
 

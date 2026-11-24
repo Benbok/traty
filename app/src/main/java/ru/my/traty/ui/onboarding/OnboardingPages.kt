@@ -87,7 +87,7 @@ internal fun PlanPage() = OnboardingPageLayout(
 internal fun AssistantPage() = OnboardingPageLayout(
     title = "Спросите своими словами",
     body = "На вкладке «ИИ» можно спросить голосом или текстом. Цифры считает приложение по вашим записям, " +
-        "ИИ только объясняет их. Для вопросов нужен ключ DeepSeek или YandexGPT, его можно добавить позже.",
+        "ИИ только объясняет их. Для вопросов нужен ключ DeepSeek, его можно добавить позже.",
 ) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         ExampleBubble("Сколько я потратил на такси в октябре?", mine = true)

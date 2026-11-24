@@ -209,7 +209,7 @@ class FullBackupRoundTripTest {
     @Test
     fun noSecretsInFile() = runTest {
         fillAllTables(source)
-        val settings = AppSettings(deepseekKey = "sk-deepseek-SECRET", yandexKey = "AQVN-yandex-SECRET", yandexFolderId = "b1g-folder-SECRET")
+        val settings = AppSettings(deepseekKey = "sk-deepseek-SECRET")
         val text = FullBackupWriter.encode(export(source, settings))
         assertFalse(text.contains("SECRET"))
         assertFalse(text.contains("deepseekKey"))

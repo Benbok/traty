@@ -77,7 +77,7 @@ class FullBackupWriterTest {
     @Test
     fun noSecretsInFile() {
         val text = FullBackupWriter.encode(
-            file(snapshot, AppSettings(deepseekKey = "sk-SECRET", yandexKey = "AQVN-SECRET", yandexFolderId = "b1g-SECRET"))
+            file(snapshot, AppSettings(deepseekKey = "sk-SECRET"))
         )
         assertFalse(text.contains("SECRET"))
         assertFalse(text.contains("Key\""))

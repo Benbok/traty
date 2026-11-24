@@ -30,9 +30,12 @@ enum class ThemeMode(val title: String) {
 
 enum class LlmProvider(val title: String) {
     DEEPSEEK("DeepSeek"),
-    YANDEX("YandexGPT"),
     OFFLINE("Без ИИ (простой разбор)"),
 }
+
+// Старый выбор провайдера не должен включать отправку данных в другой сервис.
+private fun providerFromStorage(value: String?): LlmProvider? =
+    if (value == "YANDEX") LlmProvider.OFFLINE else enumOrNull<LlmProvider>(value)
 
 enum class VoiceEngine(val title: String) {
     GIGAAM("GigaAM (на телефоне, без интернета)"),
@@ -48,9 +51,6 @@ data class AppSettings(
     val provider: LlmProvider = LlmProvider.DEEPSEEK,
     val deepseekKey: String = "",
     val deepseekModel: String = "deepseek-chat",
-    val yandexKey: String = "",
-    val yandexFolderId: String = "",
-    val yandexModel: String = "yandexgpt-lite/latest",
     /** День месяца (1..28), с которого начинается расчётный период. */
     val periodStartDay: Int = MIN_PERIOD_START_DAY,
     /** Последний день (epoch day), в который карточка сверки скрыта кнопкой «Напомнить завтра»; 0 - нет. */
@@ -117,9 +117,7 @@ class SettingsRepository(
         val provider = stringPreferencesKey("provider")
         val dsKey = stringPreferencesKey("deepseek_key")
         val dsModel = stringPreferencesKey("deepseek_model")
-        val yaKey = stringPreferencesKey("yandex_key")
-        val yaFolder = stringPreferencesKey("yandex_folder")
-        val yaModel = stringPreferencesKey("yandex_model")
+        val legacyYandexKey = stringPreferencesKey("yandex_key")
         val periodStartDay = intPreferencesKey("period_start_day")
         val reconcileSnooze = longPreferencesKey("reconcile_snooze_until")
         val calculatorLines = stringPreferencesKey("calculator_lines")
@@ -146,12 +144,9 @@ class SettingsRepository(
             themeMode = p[K.themeMode]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: d.themeMode,
             dynamicColor = p[K.dynamicColor] ?: d.dynamicColor,
             holidayDecor = p[K.holidayDecor] ?: d.holidayDecor,
-            provider = p[K.provider]?.let { runCatching { LlmProvider.valueOf(it) }.getOrNull() } ?: d.provider,
+            provider = providerFromStorage(p[K.provider]) ?: d.provider,
             deepseekKey = secrets.open(p[K.dsKey]),
             deepseekModel = p[K.dsModel] ?: d.deepseekModel,
-            yandexKey = secrets.open(p[K.yaKey]),
-            yandexFolderId = p[K.yaFolder] ?: "",
-            yandexModel = p[K.yaModel] ?: d.yandexModel,
             periodStartDay = (p[K.periodStartDay] ?: d.periodStartDay)
                 .coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY),
             reconcileSnoozeUntilEpochDay = (p[K.reconcileSnooze] ?: 0L).coerceAtLeast(0L),
@@ -182,9 +177,6 @@ class SettingsRepository(
             p[K.provider] = s.provider.name
             p[K.dsKey] = secrets.seal(s.deepseekKey.trim())
             p[K.dsModel] = s.deepseekModel.trim()
-            p[K.yaKey] = secrets.seal(s.yandexKey.trim())
-            p[K.yaFolder] = s.yandexFolderId.trim()
-            p[K.yaModel] = s.yandexModel.trim()
             p[K.periodStartDay] = s.periodStartDay.coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY)
         }
     }
@@ -198,9 +190,8 @@ class SettingsRepository(
             enumOrNull<ThemeMode>(s.themeMode)?.let { p[K.themeMode] = it.name }
             s.dynamicColor?.let { p[K.dynamicColor] = it }
             s.holidayDecor?.let { p[K.holidayDecor] = it }
-            enumOrNull<LlmProvider>(s.provider)?.let { p[K.provider] = it.name }
+            providerFromStorage(s.provider)?.let { p[K.provider] = it.name }
             s.deepseekModel?.trim()?.takeIf { it.isNotEmpty() }?.let { p[K.dsModel] = it }
-            s.yandexModel?.trim()?.takeIf { it.isNotEmpty() }?.let { p[K.yaModel] = it }
             s.periodStartDay?.let { p[K.periodStartDay] = it.coerceIn(MIN_PERIOD_START_DAY, MAX_PERIOD_START_DAY) }
             s.calculatorLines?.let { p[K.calculatorLines] = encodeLines(it) }
             enumOrNull<VoiceEngine>(s.voiceEngine)?.let { p[K.voiceEngine] = it.name }
@@ -217,7 +208,7 @@ class SettingsRepository(
     /** Перешифровывает ключи, сохранённые старыми версиями открытым текстом. */
     suspend fun upgradeStoredSecrets() {
         context.dataStore.edit { p ->
-            for (key in listOf(K.dsKey, K.yaKey)) {
+            for (key in listOf(K.dsKey, K.legacyYandexKey)) {
                 val stored = p[key]
                 if (secrets.needsUpgrade(stored)) p[key] = secrets.seal(stored!!)
             }

@@ -51,7 +51,7 @@ import ru.my.traty.ui.designsystem.components.TratyOutlinedButton
 import ru.my.traty.ui.designsystem.theme.TratyTheme
 
 /**
- * Экран настроек разбора фраз и подключения ИИ-моделей (DeepSeek, YandexGPT, офлайн).
+ * Экран настроек разбора фраз и подключения ИИ-моделей (DeepSeek и офлайн).
  */
 @Composable
 fun AiSettingsScreen(
@@ -139,7 +139,6 @@ fun AiSettingsScreen(
                                 )
                                 val subtitle = when (p) {
                                     LlmProvider.DEEPSEEK -> "Точный и экономичный разбор через DeepSeek API"
-                                    LlmProvider.YANDEX -> "Российская языковая модель YandexGPT"
                                     LlmProvider.OFFLINE -> "Работает без интернета по регулярным выражениям"
                                 }
                                 Text(
@@ -174,42 +173,6 @@ fun AiSettingsScreen(
                         value = s.deepseekModel,
                         onValueChange = { s = s.copy(deepseekModel = it) },
                         label = { Text("Модель") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = TratyTheme.shapes.small,
-                    )
-                }
-            }
-
-            // Секция: YandexGPT
-            TratyCard(
-                modifier = Modifier.fillMaxWidth(),
-                backgroundColor = TratyTheme.colors.surface,
-            ) {
-                Column(
-                    Modifier.padding(TratyTheme.spacing.lg),
-                    verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
-                ) {
-                    Text("Параметры YandexGPT", style = TratyTheme.typography.titleMedium)
-                    Text(
-                        "Сервисный аккаунт и каталог в Yandex Cloud",
-                        style = TratyTheme.typography.bodySmall,
-                        color = TratyTheme.colors.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(TratyTheme.spacing.xxs))
-                    AiSecretField("API-ключ Yandex Cloud", s.yandexKey) { s = s.copy(yandexKey = it) }
-                    OutlinedTextField(
-                        value = s.yandexFolderId,
-                        onValueChange = { s = s.copy(yandexFolderId = it) },
-                        label = { Text("ID каталога (folder id)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = TratyTheme.shapes.small,
-                    )
-                    OutlinedTextField(
-                        value = s.yandexModel,
-                        onValueChange = { s = s.copy(yandexModel = it) },
-                        label = { Text("Модель (напр. yandexgpt-lite/latest)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = TratyTheme.shapes.small,

@@ -17,7 +17,7 @@ import ru.my.traty.ui.receipt.ReceiptCameraButton
 
 /**
  * Низ ленты «Траты»: микрофон по центру, справа от него кнопка «Чек»
- * (только когда заполнены все поля DeepSeek и Yandex). Во время записи и разбора камера недоступна.
+ * (при сохранённом API-ключе DeepSeek). Во время записи и разбора камера недоступна.
  */
 @Composable
 internal fun HomeCaptureBar(mic: HomeMic, busy: Boolean, onError: (String) -> Unit) {

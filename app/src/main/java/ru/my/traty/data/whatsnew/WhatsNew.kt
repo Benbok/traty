@@ -13,6 +13,14 @@ data class WhatsNewEntry(val version: String, val items: List<WhatsNewItem>)
 object WhatsNew {
     val entries: List<WhatsNewEntry> = listOf(
         WhatsNewEntry(
+            version = "0.3.9",
+            items = listOf(
+                WhatsNewItem("DeepSeek распознаёт чеки по фото. Для кнопки «Чек» достаточно ключа DeepSeek.", "receipt"),
+                WhatsNewItem("Кадры длинного чека можно просмотреть, переставить и переснять. Перед сохранением приложение сверяет суммы товаров с итогом.", "receipt"),
+                WhatsNewItem("Для помощника и разбора фраз доступны DeepSeek и режим «Без ИИ». Если раньше был выбран Яндекс, приложение переключится в режим «Без ИИ».", "assistant"),
+            ),
+        ),
+        WhatsNewEntry(
             version = "0.3.8",
             items = listOf(
                 WhatsNewItem("В «Графиках» видно, как менялись траты по дням, неделям и месяцам. Выберите две категории, чтобы сравнить их на общей шкале. В режиме «Доходы» можно сравнить источники.", "stats"),

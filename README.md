@@ -46,7 +46,7 @@ ai-sage/GigaAM-v3; модель детектора пауз `silero_vad.onnx` л
 ---
 
 Kotlin + Jetpack Compose + Room. Ввод голосом или текстом («кофе 250 и такси 400»),
-разбор фразы через DeepSeek или YandexGPT, экран подтверждения, статистика по
+разбор фразы через DeepSeek, экран подтверждения, статистика по
 категориям с сравнением с прошлым месяцем, ИИ-комментарий к месяцу, экспорт в CSV.
 
 
@@ -126,8 +126,6 @@ Android Studio. Удобный вариант: писать в VS Code, сбор
 
 Вкладка **Настройки**:
 - **DeepSeek**: API-ключ, модель `deepseek-chat`.
-- **YandexGPT**: API-ключ сервисного аккаунта (роль `ai.languageModels.user`) и **ID каталога**
-  (folder id) из консоли Yandex Cloud. Модель: `yandexgpt-lite/latest` или `yandexgpt/latest`.
 - Кнопка **Проверить** отправляет тестовую фразу и показывает результат.
 
 Ключи хранятся в приватном хранилище приложения на телефоне; в коде их нет.
@@ -144,7 +142,7 @@ app/src/main/java/ru/my/traty/
 ├── data/IncomeSources.kt            — источники дохода (зарплата, дежурства, прочее)
 ├── data/Settings.kt     — ключи, выбор модели, день начала расчётного периода (DataStore)
 ├── data/period/BillingPeriod.kt     — границы периода (календарный месяц или «от зарплаты до зарплаты»)
-├── ai/LlmClients.kt     — клиенты DeepSeek и YandexGPT
+├── ai/LlmClients.kt     — клиент DeepSeek
 ├── ai/ExpenseParsing.kt — промпт разбора, JSON → траты, офлайн-разбор без ИИ
 ├── ai/IncomeParsing.kt  — разбор доходов из текста и голоса
 ├── backup/              — экспорт и импорт CSV (CsvBackup, CsvImporter)

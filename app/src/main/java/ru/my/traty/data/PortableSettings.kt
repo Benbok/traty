@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 /**
  * Настройки, которые переносятся на другой телефон вместе с полной резервной копией.
  *
- * Сюда намеренно не входят ключи ИИ и ID каталога Yandex Cloud (CLAUDE.md §4: секреты только через SecretCodec),
+ * Сюда намеренно не входят ключи ИИ (CLAUDE.md §4: секреты только через SecretCodec),
  * а также служебное состояние этого телефона: отложенная сверка, скрытые карточки, проверка обновлений,
  * показанное знакомство. Все поля необязательные: в копии старой версии чего-то может не быть,
  * и тогда нынешнее значение не трогается.
@@ -17,7 +17,6 @@ data class PortableSettings(
     val holidayDecor: Boolean? = null,
     val provider: String? = null,
     val deepseekModel: String? = null,
-    val yandexModel: String? = null,
     val periodStartDay: Int? = null,
     val calculatorLines: List<String>? = null,
     val voiceEngine: String? = null,
@@ -36,7 +35,6 @@ fun AppSettings.portable(): PortableSettings = PortableSettings(
     holidayDecor = holidayDecor,
     provider = provider.name,
     deepseekModel = deepseekModel,
-    yandexModel = yandexModel,
     periodStartDay = periodStartDay,
     calculatorLines = calculatorLines,
     voiceEngine = voiceEngine.name,

@@ -140,7 +140,7 @@ fun SettingsScreen(
                 Text("Разбор фраз и ИИ", style = TratyTheme.typography.titleMedium)
                 Spacer(Modifier.height(TratyTheme.spacing.xs))
                 Text(
-                    "Текущий режим: ${saved.provider.title}. Подключение нейросетей (DeepSeek, YandexGPT) и ввод API-ключей для умного распознавания текста и голоса.",
+                    "Текущий режим: ${saved.provider.title}. Подключение DeepSeek и ввод API-ключа для умного распознавания текста и голоса.",
                     style = TratyTheme.typography.bodySmall,
                     color = TratyTheme.colors.onSurfaceVariant,
                 )
