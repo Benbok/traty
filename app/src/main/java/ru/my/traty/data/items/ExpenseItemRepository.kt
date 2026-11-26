@@ -26,6 +26,12 @@ class ExpenseItemRepository(private val db: AppDatabase) {
 
     suspend fun getSales(from: Long, to: Long): List<ItemSale> = dao.getSales(from, to)
 
+    suspend fun getSalesForCategory(categoryId: Long, from: Long, to: Long): List<ItemSale> =
+        dao.getSalesForCategory(categoryId, from, to)
+
+    fun observeCategoryIdsWithItems(from: Long, to: Long): Flow<Set<Long>> =
+        dao.observeCategoryIdsWithItems(from, to).map { it.toSet() }
+
     /**
      * Заменяет позиции траты целиком: порядок берётся из списка, пустые названия отбрасываются,
      * названия приводятся к одному виду, отрицательные цены и неположительные количества считаются не названными.

@@ -1,20 +1,30 @@
 package ru.my.traty.ui.stats
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.my.traty.data.BreakdownGroup
@@ -38,10 +48,11 @@ internal fun groupKey(categoryId: Long, mode: BreakdownMode, g: BreakdownGroup) 
 private const val EXPENSES_SHOWN = 30
 
 /**
- * Состав раскрытой категории. Переключатель «Подкатегории / Магазины / Траты» показывает только те способы,
- * что имеют смысл: у «Авто» с бензином и мойкой есть подкатегории, у «Продуктов» — магазины.
- * Нажатие на подкатегорию или магазин открывает его траты.
+ * Состав раскрытой категории:
+ * - Компактный сегментированный переключатель «Подкатегории / Магазины / Траты».
+ * - Кнопка «Товары ›», открывающая аналитику покупок по чекам.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CategoryBreakdownView(
     breakdown: CategoryBreakdown,
@@ -51,14 +62,28 @@ internal fun CategoryBreakdownView(
     onToggleGroup: (BreakdownGroup) -> Unit,
     onOpenExpense: (ExpenseWithCategory) -> Unit,
     labels: Map<Long, List<ExpenseLabelHit>>,
+    hasItems: Boolean = false,
+    onOpenItems: () -> Unit = {},
 ) {
     Column(Modifier.fillMaxWidth().padding(start = 48.dp)) {
-        if (breakdown.modes.size > 1) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
-                modifier = Modifier.padding(vertical = TratyTheme.spacing.xxs),
+        if (breakdown.modes.size > 1 || hasItems) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xs),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = TratyTheme.spacing.xs),
             ) {
-                breakdown.modes.forEach { m -> ModeChip(m.title, selected = m == mode, onClick = { onMode(m) }) }
+                if (breakdown.modes.size > 1) {
+                    CategorySegmentedSwitch(
+                        modes = breakdown.modes,
+                        selected = mode,
+                        onSelect = onMode,
+                    )
+                }
+                if (hasItems) {
+                    CategoryItemsButton(onClick = onOpenItems)
+                }
             }
         }
         if (mode == BreakdownMode.EXPENSES) {
@@ -69,6 +94,95 @@ internal fun CategoryBreakdownView(
                 BreakdownGroupRow(group = g, categoryTotal = breakdown.total, expanded = open, onClick = { onToggleGroup(g) })
                 if (open) Column(Modifier.padding(start = TratyTheme.spacing.md)) { ExpenseList(g.expenses, mode, onOpenExpense, labels) }
             }
+        }
+    }
+}
+
+/** Компактный сегментированный переключатель режимов: Подкатегории / Магазины / Траты. */
+@Composable
+private fun CategorySegmentedSwitch(
+    modes: List<BreakdownMode>,
+    selected: BreakdownMode,
+    onSelect: (BreakdownMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = TratyTheme.shapes.small,
+        color = TratyTheme.colors.surfaceContainer,
+        modifier = modifier,
+    ) {
+        Row(
+            modifier = Modifier.padding(TratyTheme.spacing.xxs),
+            horizontalArrangement = Arrangement.spacedBy(TratyTheme.spacing.xxs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            modes.forEach { m ->
+                val isSelected = m == selected
+                Surface(
+                    shape = TratyTheme.shapes.extraSmall,
+                    color = if (isSelected) TratyTheme.colors.primaryContainer else Color.Transparent,
+                    border = if (isSelected) BorderStroke(1.dp, TratyTheme.colors.primary.copy(alpha = 0.25f)) else null,
+                    modifier = Modifier
+                        .clip(TratyTheme.shapes.extraSmall)
+                        .clickable { onSelect(m) },
+                ) {
+                    Text(
+                        text = m.title,
+                        style = TratyTheme.typography.labelMedium,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (isSelected) TratyTheme.colors.primary else TratyTheme.colors.onSurfaceVariant,
+                        modifier = Modifier.padding(
+                            horizontal = TratyTheme.spacing.sm,
+                            vertical = TratyTheme.spacing.xs,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Кнопка открытия аналитики товаров категории со стрелкой перехода. */
+@Composable
+private fun CategoryItemsButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = TratyTheme.shapes.small,
+        color = TratyTheme.colors.surfaceContainer,
+        border = BorderStroke(1.dp, TratyTheme.colors.borderSubtle),
+        modifier = modifier
+            .clip(TratyTheme.shapes.small)
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(
+                horizontal = TratyTheme.spacing.sm,
+                vertical = TratyTheme.spacing.xs,
+            ),
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
+                contentDescription = null,
+                tint = TratyTheme.colors.primary,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(TratyTheme.spacing.xs))
+            Text(
+                text = "Товары",
+                style = TratyTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+                color = TratyTheme.colors.onSurface,
+            )
+            Spacer(Modifier.width(TratyTheme.spacing.xxs))
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = TratyTheme.colors.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }

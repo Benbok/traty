@@ -47,6 +47,12 @@ interface ExpenseItemDao {
     @Query("$SALES WHERE e.timestamp >= :from AND e.timestamp < :to ORDER BY e.timestamp, i.position")
     suspend fun getSales(from: Long, to: Long): List<ItemSale>
 
+    @Query("$SALES WHERE e.categoryId = :categoryId AND e.timestamp >= :from AND e.timestamp < :to ORDER BY e.timestamp, i.position")
+    suspend fun getSalesForCategory(categoryId: Long, from: Long, to: Long): List<ItemSale>
+
+    @Query("SELECT DISTINCT e.categoryId FROM expense_items i JOIN expenses e ON e.id = i.expenseId WHERE e.timestamp >= :from AND e.timestamp < :to")
+    fun observeCategoryIdsWithItems(from: Long, to: Long): Flow<List<Long>>
+
     @Query("$SALES WHERE e.timestamp >= :from AND e.timestamp < :to ORDER BY e.timestamp, i.position")
     fun observeSales(from: Long, to: Long): Flow<List<ItemSale>>
 }

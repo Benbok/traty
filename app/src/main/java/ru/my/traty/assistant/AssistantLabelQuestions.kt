@@ -10,7 +10,7 @@ internal object AssistantLabelQuestions {
     private val aliases = mapOf(
         ExpenseLabel.IMPULSIVE to Regex("""(?<![\p{L}])импульсивн\p{L}*(?![\p{L}])"""),
         ExpenseLabel.LARGE to Regex("""(?<![\p{L}])необычно\s+крупн\p{L}*(?![\p{L}])"""),
-        ExpenseLabel.FREQUENT to Regex("""(?<![\p{L}])част(?:ая|ые|ую|ой|ых|ыми|ым)\b(?=\s+(?:трат|покупк|расход))|метк\p{L}*\s*[«"„]?част\p{L}*"""),
+        ExpenseLabel.FREQUENT to Regex("""(?<![\p{L}])част(?:ая|ые|ую|ой|ых|ыми|ым)(?![\p{L}])(?=\s+(?:трат|покупк|расход))|метк\p{L}*\s*[«"„]?част\p{L}*"""),
         ExpenseLabel.SUBSCRIPTION to Regex("""(?<![\p{L}])похож\p{L}*\s+на\s+подписк\p{L}*(?![\p{L}])"""),
         ExpenseLabel.NEW_PLACE to Regex("""(?<![\p{L}])нов(?:ое|ом|ого|ому|ые|ых|ыми|ым)\s+мест\p{L}*(?![\p{L}])"""),
     )
@@ -22,7 +22,7 @@ internal object AssistantLabelQuestions {
     private val labelPrefix = Regex("""(?<![\p{L}])(?:с\s+)?метк\p{L}*(?![\p{L}])""")
     private val listWords = Regex("""(?<![\p{L}])(?:покажи\p{L}*|список|перечисли\p{L}*|какие|когда)(?![\p{L}])""")
     private val allPurchases = Regex("""(?<![\p{L}])все\s+(?:\p{L}+\s+){0,3}(?:покупк|трат|расход)\p{L}*(?![\p{L}])""")
-    private val dateFollowUp = Regex("""^а\s+(?:в|за|с|по|вчера|сегодня)\b""")
+    private val dateFollowUp = Regex("""^а\s+(?:в|за|с|по|вчера|сегодня)(?![\p{L}])""")
 
     private fun withoutLabels(text: String) = aliases.values.fold(text) { result, alias ->
         alias.replace(result, " ")

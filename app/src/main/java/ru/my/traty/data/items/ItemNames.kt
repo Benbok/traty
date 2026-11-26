@@ -16,7 +16,7 @@ object ItemNames {
         SearchText.fold(PackSize.strip(name)).split(split).filter { it.isNotEmpty() }.joinToString(" ") { RussianStemmer.stem(it) }
 
     private val percentage = Regex("""\d+(?:[.,]\d+)?\s*%""")
-    private val processing = Regex("""\b(?:ультрапастеризованн|пастеризованн|стерилизованн)\p{L}*\b""", RegexOption.IGNORE_CASE)
+    private val processing = Regex("""(?<!\p{L})(?:ультрапастеризованн|пастеризованн|стерилизованн)\p{L}*(?!\p{L})""", RegexOption.IGNORE_CASE)
 
     /** Для рейтинга объединяем фасовки и технологические уточнения одного вида товара. */
     fun familyName(name: String): String {

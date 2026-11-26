@@ -3,6 +3,7 @@ package ru.my.traty.data.items
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -94,5 +95,21 @@ class ExpenseItemRepositoryTest {
         assertTrue(repo.getSales(6_000, 10_000).isEmpty())
         val totals = ItemTotals.byProduct(sales, place = "эльдорадо")
         assertEquals(4_500_000L, totals.sumOf { it.totalKopecks })
+    }
+
+    @Test
+    fun categoryFilterSeparatesSalesAndObservingIds() = runTest {
+        val foodId = db.categories().getAllWithSubs().single { it.category.name == "Продукты" }.category.id
+        val e1 = eldorado(ts = 5_000)
+        repo.replace(e1.id, listOf(ExpenseItem(name = "Телефон", priceKopecks = 4_000_000)))
+        val e2 = Expense(amountKopecks = 10_000, categoryId = foodId, place = "Магнит", timestamp = 6_000)
+            .let { it.copy(id = db.expenses().insert(it)) }
+        repo.replace(e2.id, listOf(ExpenseItem(name = "Молоко", priceKopecks = 10_000)))
+
+        val techSales = repo.getSalesForCategory(techId, 0, 10_000)
+        assertEquals(listOf("Телефон"), techSales.map { it.name })
+
+        val ids = repo.observeCategoryIdsWithItems(0, 10_000).first()
+        assertEquals(setOf(techId, foodId), ids)
     }
 }

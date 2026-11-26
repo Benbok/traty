@@ -19,6 +19,7 @@ import ru.my.traty.capture.PendingParseWork
 import ru.my.traty.capture.QuickEntry
 import ru.my.traty.capture.ReceiptScanner
 import ru.my.traty.capture.debugEntryLog
+import ru.my.traty.capture.debugReceiptLog
 import ru.my.traty.data.search.SearchRepository
 import ru.my.traty.data.AppDatabase
 import ru.my.traty.data.ExpenseEdits
@@ -131,10 +132,12 @@ class AppContainer(
     val fullBackupImporter = FullBackupImporter(backups, settings)
     val appVersion: String = installedVersionOf(context)
 
+    private val receiptDebugLog = debugReceiptLog(context)
+
     /** Фото чека → черновик траты с товарами, независимо от выбранного ИИ для голоса. */
     val receipts = ReceiptScanner(db, settings, visionFor = { config ->
         val client = llm(config.copy(provider = LlmProvider.DEEPSEEK, deepseekModel = RECEIPT_VISION_MODEL))
-        (client as? DeepSeekClient)?.let(::DeepSeekReceiptExtractor)
+        (client as? DeepSeekClient)?.let { DeepSeekReceiptExtractor(it, receiptDebugLog) }
     })
     val debtRemoval = DebtPaymentRemoval(db)
     val expenseEdits = ExpenseEdits(db, debtRemoval)

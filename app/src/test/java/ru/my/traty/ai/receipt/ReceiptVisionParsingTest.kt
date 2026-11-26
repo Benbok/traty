@@ -68,5 +68,31 @@ class ReceiptVisionParsingTest {
         assertEquals(9, merged.receipt.lines.size)
     }
 
+    @Test fun ignoresNumericPackWithoutFailingReceipt() {
+        val result = decode(
+            """{"store":"Магнит","date":null,"currency":"RUB","category":"Продукты","total":841.33,"items":[
+                {"name":"ПОСИДЕЛКИНО печенье овсяное классич. 320г","qty":1,"unit":"шт","pack":0.32,"unit_price":119.99,"discount":30,"sum":89.99},
+                {"name":"HEINZ Кетчуп томатный 550г д/п «Петропро","qty":1,"unit":"шт","pack":"550 г","unit_price":239.99,"discount":47,"sum":192.99}
+            ]}""",
+        )
+        assertEquals(2, result.lines.size)
+        assertNull(result.lines[0].pack)
+        assertEquals(550_000L, result.lines[1].pack?.milli)
+        assertEquals("г", result.lines[1].pack?.unit)
+    }
+
+    @Test fun logsExactFieldReasonWhenInvalid() {
+        val logged = mutableListOf<String>()
+        val error = runCatching {
+            ReceiptVisionParsing.decode(
+                """{"parts":[{"items":[{"name":"Хлеб","sum":"40"}]}]}""",
+                expectedCount = 1,
+                debugLog = { logged += it },
+            )
+        }.exceptionOrNull()
+        assertEquals(BAD_RECEIPT_ANSWER, error?.message)
+        assertEquals(listOf("parse_failed: parts[0].items[0].sum is string instead of number: \"40\""), logged)
+    }
+
     private fun decode(part: String) = ReceiptVisionParsing.decode("""{"parts":[$part]}""", 1).single()
 }

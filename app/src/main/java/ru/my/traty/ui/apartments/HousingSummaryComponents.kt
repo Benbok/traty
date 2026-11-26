@@ -106,6 +106,20 @@ internal fun ApartmentSummaryCard(
     }
 }
 
+internal fun meterSummarySubtitle(
+    meter: Meter,
+    resource: ResourceType = ResourceType.valueOf(meter.resource),
+): String {
+    val serial = meter.serialNumber?.trim()?.takeIf { it.isNotEmpty() }?.let {
+        if (it.startsWith("№")) it else "№ $it"
+    }
+    return listOfNotNull(
+        "Архив".takeIf { meter.archived },
+        resource.title,
+        serial,
+    ).joinToString(" · ")
+}
+
 @Composable
 internal fun MeterSummaryCard(
     value: Meter,
@@ -123,7 +137,7 @@ internal fun MeterSummaryCard(
                 Column(Modifier.weight(1f)) {
                     Text(value.name, style = TratyTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
-                        if (value.archived) "Архив · ${resource.title}" else resource.title,
+                        meterSummarySubtitle(value, resource),
                         style = TratyTheme.typography.bodySmall,
                         color = TratyTheme.colors.onSurfaceVariant,
                     )

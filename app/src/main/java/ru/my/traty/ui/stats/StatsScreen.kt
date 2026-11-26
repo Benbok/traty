@@ -31,6 +31,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,6 +63,7 @@ import ru.my.traty.data.period.CumulativeSpending
 import ru.my.traty.data.period.PaceVsPrevious
 import ru.my.traty.data.period.SpendingPaces
 import ru.my.traty.ui.MainViewModel
+import ru.my.traty.ui.charts.customChartRange
 import ru.my.traty.ui.charts.components.DateRangePickerModal
 import ru.my.traty.ui.designsystem.components.AmountSize
 import ru.my.traty.ui.designsystem.components.TratyAmountText
@@ -98,6 +100,7 @@ fun StatsScreen(
     vm: MainViewModel,
     rangeVm: StatsRangeViewModel = viewModel(),
     debtsVm: StatsDebtsViewModel = viewModel(),
+    itemsVm: ItemGroupsViewModel = viewModel(),
     onOpenBudget: () -> Unit = {},
     onOpenDebts: () -> Unit = {},
     onOpenDebt: (Long) -> Unit = {},
@@ -153,6 +156,23 @@ fun StatsScreen(
     val prevSum = prev.sumOf { it.total }
     val expenses = if (custom) customExpenses else periodExpenses
     val breakdowns = remember(expenses) { CategoryBreakdowns.build(expenses) }
+    val periodWindow = remember(period, range) {
+        val zone = ZoneId.systemDefault()
+        range?.let {
+            val cr = customChartRange(it.first, it.second, zone)
+            cr.startMillis to cr.endMillis
+        } ?: (period.startMillis(zone) to period.endMillisExclusive(zone))
+    }
+    LaunchedEffect(periodWindow) { itemsVm.setWindow(periodWindow.first, periodWindow.second) }
+    val categoriesWithItems by itemsVm.categoriesWithItems.collectAsStateWithLifecycle()
+    val itemsSheet by itemsVm.sheet.collectAsStateWithLifecycle()
+    val periodLabel = range?.let {
+        when {
+            it.first == it.second -> formatDateWithWeekday(it.first)
+            spanOf(it) == StatsSpan.WEEK -> "Неделя: ${formatDateSpan(it.first, it.second)}"
+            else -> "${formatDate(it.first)} — ${formatDate(it.second)}"
+        }
+    } ?: formatPeriod(period, settings.periodStartDay)
 
     // Средняя в день и прогноз на конец периода по текущему темпу (прогноз — пока период не кончился)
     val paceEnd = range?.second ?: period.endDate
@@ -219,14 +239,7 @@ fun StatsScreen(
 
         item(key = "month-picker", contentType = "month-picker") {
             TratyMonthPicker(
-                periodLabel = range?.let {
-                    when {
-                        it.first == it.second -> formatDateWithWeekday(it.first)
-                        spanOf(it) == StatsSpan.WEEK -> "Неделя: ${formatDateSpan(it.first, it.second)}"
-                        else -> "${formatDate(it.first)} — ${formatDate(it.second)}"
-                    }
-                }
-                    ?: formatPeriod(period, settings.periodStartDay),
+                periodLabel = periodLabel,
                 totalKopecks = sum,
                 onPrev = if (custom) { { rangeVm.shift(-1) } } else vm::prevBillingPeriod,
                 onNext = if (custom) { { rangeVm.shift(1) } } else vm::nextBillingPeriod,
@@ -414,6 +427,17 @@ fun StatsScreen(
                             expandedGroups = if (k in expandedGroups) expandedGroups - k else expandedGroups + k
                         },
                         onOpenExpense = { vm.editing = it },
+                        hasItems = t.categoryId in categoriesWithItems,
+                        onOpenItems = {
+                            itemsVm.open(
+                                categoryId = t.categoryId,
+                                categoryName = t.name,
+                                categoryEmoji = t.emoji,
+                                periodLabel = periodLabel,
+                                fromMillis = periodWindow.first,
+                                toMillis = periodWindow.second,
+                            )
+                        },
                     )
                 }
             }
@@ -502,6 +526,16 @@ fun StatsScreen(
             range = range,
             onSelected = rangeVm::setRange,
             onDismiss = { showRangePicker = false },
+        )
+    }
+
+    itemsSheet?.let { sheet ->
+        ItemGroupsSheet(
+            state = sheet,
+            onQueryChange = itemsVm::updateQuery,
+            onSelectGroup = itemsVm::selectGroup,
+            onClearSelection = itemsVm::clearSelection,
+            onDismiss = itemsVm::close,
         )
     }
 }
